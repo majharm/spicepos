@@ -4363,6 +4363,14 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, pos_record_admin_heartbeat($staff["user"] ?? null, pos_ip(), $body));
     }
 
+    if ($path === "sync/status" && $method === "POST") {
+      $staff = pos_staff_session();
+      if (!$staff) pos_send(401, ["error" => "Sign in required"]);
+      if (is_file(__DIR__ . "/pos-master-live.php")) require_once __DIR__ . "/pos-master-live.php";
+      $reported = pos_report_sync_status($staff, is_array($body) ? $body : []);
+      pos_send(!empty($reported["ok"]) ? 200 : 400, $reported);
+    }
+
     $auth = pos_require_master($path);
 
     if (strpos($path, "master/online-store") === 0) {

@@ -8,6 +8,7 @@ let panelFlash = "";
 let dashRange = "30";
 let liveTimer = 0;
 let bizTimer = 0;
+let syncTimer = 0;
 let bizMapView = null;
 let liveState = { q: "", presence: "all", category: "", plan: "", sort: "activity", page: 1 };
 let masterNotices = [];
@@ -212,7 +213,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "live", "ipmap", "bizmap", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
+  main: ["dash", "live", "ipmap", "bizmap", "sync", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support"],
   advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
@@ -228,6 +229,7 @@ const PAGE_HINTS = {
   live: "Online only after a real click or keypress",
   ipmap: "Website visitors plotted by address",
   bizmap: "Business admins plotted by approximate IP location",
+  sync: "Bills, payments, and stock waiting on each shop's devices",
   profile: "Your name, address, password, and preferences",
   biz: "Shops, plans, and module permissions",
   users: "Passwords and locked accounts",
@@ -301,6 +303,7 @@ const MASTER_PAGES = [
   { tab: "live", title: "Live active users", keywords: "online offline session heartbeat" },
   { tab: "ipmap", title: "Website traffic map", keywords: "ip geolocation map website traffic visitors country city globe" },
   { tab: "bizmap", title: "Business admin map", keywords: "business admin online offline heartbeat map country state city" },
+  { tab: "sync", title: "Offline sync", keywords: "offline sync pending conflict device invoice stock payment" },
   { tab: "profile", title: "My profile", keywords: "password name email address timezone language" },
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
   { tab: "users", title: "Users", keywords: "password unlock login" },
@@ -597,6 +600,11 @@ function stopBizPoll() {
   bizTimer = 0;
   bizMapView?.destroy?.();
   bizMapView = null;
+}
+
+function stopSyncPoll() {
+  if (syncTimer) clearInterval(syncTimer);
+  syncTimer = 0;
 }
 
 function growthMarkup(item) {
@@ -2244,11 +2252,13 @@ function bindAlertsForm(alerts) {
 async function render() {
   stopLivePoll();
   stopBizPoll();
+  stopSyncPoll();
   const titles = {
     dash: "Overview",
     live: "Live active users",
     ipmap: "Website traffic map",
     bizmap: "Business admin map",
+    sync: "Offline sync",
     profile: "My profile",
     biz: "Business management",
     fees: "Plan fees",
@@ -2631,6 +2641,42 @@ async function render() {
       bizTimer = setInterval(() => {
         if (tab !== "bizmap" || document.hidden) return;
         api("/api/master/biz-traffic").then((next) => bizMapView?.update(next)).catch(() => {});
+      }, 30000);
+    } else if (tab === "sync") {
+      const cell = (value) => attr(value).replaceAll(">", "&gt;");
+      const paintSync = (data) => {
+        if (tab !== "sync") return;
+        const rows = Array.isArray(data?.businesses) ? data.businesses : [];
+        const pending = rows.reduce((sum, row) => sum + (Number(row.pending) || 0), 0);
+        const conflicts = rows.reduce((sum, row) => sum + (Number(row.conflicts) || 0), 0);
+        const bodyRows = rows.map((row) => {
+          const when = row.reportedAt ? cell(String(row.reportedAt).replace("T", " ").slice(0, 16)) : "Not reported";
+          const trouble = row.lastError ? ` title="${attr(row.lastError)}"` : "";
+          return `<tr>
+            <td>${cell(row.name)}</td>
+            <td>${Number(row.devices) || 0}</td>
+            <td>${Number(row.pending) || 0}</td>
+            <td${trouble}>${Number(row.conflicts) || 0}</td>
+            <td>${when}</td>
+          </tr>`;
+        }).join("");
+        body.innerHTML = masterDesk(
+          "Businesses",
+          "Offline sync",
+          data?.note || "Bills, payments, and stock stay on the device until the cloud accepts them.",
+          [
+            { label: "Waiting", value: pending },
+            { label: "Conflicts", value: conflicts },
+          ],
+          `<div class="table-wrap"><table class="master-data data"><thead><tr>
+            <th>Business</th><th>Devices</th><th>Waiting</th><th>Conflicts</th><th>Last report</th>
+          </tr></thead><tbody>${bodyRows || `<tr><td colspan="5">No shops yet.</td></tr>`}</tbody></table></div>`,
+        );
+      };
+      paintSync(await api("/api/master/sync-status"));
+      syncTimer = setInterval(() => {
+        if (tab !== "sync" || document.hidden) return;
+        api("/api/master/sync-status").then(paintSync).catch(() => {});
       }, 30000);
     } else if (tab === "health") {
       const [health, auditRows] = await Promise.all([

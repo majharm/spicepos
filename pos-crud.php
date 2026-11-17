@@ -1065,6 +1065,12 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $supplierId = $body["supplier_id"] ?? "";
     $lines = $body["lines"] ?? [];
     if (!$supplierId || !is_array($lines) || !$lines) pos_send(400, ["error" => "Supplier and purchase lines are required"]);
+    if (is_file(__DIR__ . "/pos-idempotency.php")) require_once __DIR__ . "/pos-idempotency.php";
+    $idemKey = function_exists("pos_clip_idempotency_key") ? pos_clip_idempotency_key($body["idempotencyKey"] ?? ($body["idempotency_key"] ?? "")) : "";
+    if ($idemKey !== "") {
+      $cached = pos_idempotent_payload(pos_find_idempotent($bid, $idemKey));
+      if (is_array($cached) && !empty($cached["purchase"])) pos_send(200, $cached);
+    }
     if (function_exists("pos_ensure_rate_precision")) pos_ensure_rate_precision();
     require_once __DIR__ . "/pos-accounting.php";
     try {
@@ -1102,7 +1108,9 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         pos_post_purchase_journal($bid, $uid, $purchase);
         return $purchase;
       });
-      pos_send(200, ["ok" => true, "purchase" => $purchase]);
+      $saved = ["ok" => true, "purchase" => $purchase];
+      if ($idemKey !== "" && function_exists("pos_save_idempotent")) pos_save_idempotent($bid, $idemKey, "purchase", (string) ($purchase["id"] ?? ""), $saved);
+      pos_send(200, $saved);
     } catch (Exception $e) {
       pos_send(400, ["error" => $e->getMessage(), "php" => true]);
     }
@@ -1180,6 +1188,12 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
     $itemId = trim((string) ($body["item_id"] ?? ""));
     $kind = strtolower((string) ($body["kind"] ?? "adjustment"));
     if ($itemId === "") pos_send(400, ["error" => "Item and quantity required"]);
+    if (is_file(__DIR__ . "/pos-idempotency.php")) require_once __DIR__ . "/pos-idempotency.php";
+    $idemKey = function_exists("pos_clip_idempotency_key") ? pos_clip_idempotency_key($body["idempotencyKey"] ?? ($body["idempotency_key"] ?? "")) : "";
+    if ($idemKey !== "") {
+      $cached = pos_idempotent_payload(pos_find_idempotent($bid, $idemKey));
+      if (is_array($cached) && !empty($cached["ok"])) pos_send(200, $cached);
+    }
     $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
     if (!$it) pos_send(400, ["error" => "Item not found"]);
     $setOnHand = array_key_exists("set_on_hand", $body) ? $body["set_on_hand"] : null;
@@ -1243,7 +1257,9 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
         } catch (Exception $e2) { /* optional */ }
       }
     }
-    pos_send(200, ["ok" => true, "stock_gm" => (float) $plan["stock"], "applied" => $qty]);
+    $saved = ["ok" => true, "stock_gm" => (float) $plan["stock"], "applied" => $qty];
+    if ($idemKey !== "" && function_exists("pos_save_idempotent")) pos_save_idempotent($bid, $idemKey, "stock", $itemId, $saved);
+    pos_send(200, $saved);
   }
 
   if ($path === "stock/reorder" && $method === "POST") {

@@ -46,13 +46,42 @@ test("stock and missing-customer replies stay on the device as conflicts", () =>
   assert.equal(O.classifySyncFailure("Tea: only 0 in stock"), "conflict");
   assert.equal(O.classifySyncFailure("Unknown item"), "conflict");
   assert.equal(O.classifySyncFailure("Customer not found"), "conflict");
+  assert.equal(O.classifySyncFailure("Item not found"), "conflict");
+  assert.equal(O.classifySyncFailure("Supplier not found"), "conflict");
   assert.equal(O.classifySyncFailure("Could not reach the POS API"), "offline");
 });
 
+test("invoices, payments, purchases, and stock adjustments are local operations", () => {
+  assert.equal(O.operation("/api/checkout", { method: "POST" }), "checkout");
+  assert.equal(O.operation("/api/orders/local-OFF-1/payments", { method: "POST" }), "payment");
+  assert.equal(O.operation("/api/stock/adjust", { method: "POST" }), "stock");
+  assert.equal(O.operation("/api/purchases", { method: "POST" }), "purchase");
+  assert.equal(O.operation("/api/purchases/abc", { method: "PUT" }), "");
+  assert.deepEqual(
+    O.stockDeltas("stock", { item_id: "tea", kind: "damaged", quantity_gm: 2 }, {}),
+    [{ itemId: "tea", qty: -2 }],
+  );
+  assert.deepEqual(
+    O.stockDeltas("purchase", { lines: [{ item_id: "tea", quantity_gm: 3, free_qty: 1 }] }, {}),
+    [{ itemId: "tea", qty: 4 }],
+  );
+  const items = O.applyPendingStock(
+    [{ id: "tea", stock_gm: 5 }],
+    [{ status: "pending", deltas: [{ itemId: "tea", qty: 4 }] }],
+  );
+  assert.equal(items[0].stock_gm, 9);
+});
+
 test("offline replay is wired on the app, both servers, and the installed shell", () => {
-  assert.match(read("index.html"), /pos-offline\.js\?v=20261118off1/);
+  assert.match(read("index.html"), /pos-offline\.js\?v=20261118off2/);
+  assert.match(read("js/pos-offline.js"), /ensureRow/);
+  assert.match(read("js/pos-offline.js"), /\/api\/sync\/status/);
   assert.match(read("server/index.js"), /if \(!req\.body\?\.offlineSync\) await assertApparelSaleStock/);
   assert.match(read("pos-checkout.php"), /empty\(\$body\["offlineSync"\]\)/);
+  assert.match(read("server/tenant.js"), /idempotencyKey/);
+  assert.match(read("pos-crud.php"), /pos_save_idempotent/);
+  assert.match(read("server/master-live.js"), /\/api\/master\/sync-status/);
+  assert.match(read("master.html"), /data-tab="sync"/);
   assert.match(read("sw.js"), /pos-pwa-2/);
   assert.match(read("sw.js"), /pathname\.startsWith\("\/api\/"\)/);
   assert.match(read("js/pos-offline.js"), /indexedDB\.open/);

@@ -4,6 +4,8 @@ import { publicStatus } from "./subscription.js";
 import { platformAudit } from "./audit.js";
 import { masterIpMap } from "./ip-geo.js";
 import { masterBizTraffic } from "./biz-traffic.js";
+import { masterSyncStatus, reportDeviceSync } from "./sync-status.js";
+import { requireMaster } from "./auth.js";
 
 export const ONLINE_WINDOW_MINUTES = 5;
 
@@ -467,6 +469,18 @@ export function registerMasterLive(app) {
   });
   app.get("/api/master/biz-traffic", (_req, res) => {
     masterBizTraffic().then((data) => res.json(data)).catch((err) => res.status(500).json({ error: String(err.message) }));
+  });
+  app.get("/api/master/sync-status", requireMaster, (_req, res) => {
+    masterSyncStatus().then((data) => res.json(data)).catch((err) => res.status(500).json({ error: String(err.message) }));
+  });
+  app.post("/api/sync/status", (req, res) => {
+    if (req.auth?.type !== "staff") {
+      res.status(401).json({ error: "Sign in required" });
+      return;
+    }
+    reportDeviceSync(req.body || {})
+      .then((data) => res.json(data))
+      .catch((err) => res.status(err.status || 500).json({ error: String(err.message) }));
   });
   app.get("/api/master/live-users", (req, res) => {
     listLiveUsers(req.query || {}).then((data) => res.json(data)).catch((err) => res.status(500).json({ error: String(err.message) }));

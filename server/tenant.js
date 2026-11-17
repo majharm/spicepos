@@ -742,6 +742,12 @@ export function registerTenant(app) {
     send(res, async () => {
       const { item_id, quantity_gm, kind, note, reason, barcode, set_on_hand, batch_id } = req.body || {};
       if (!item_id) throw new Error("Item and quantity required");
+      const idemKey = clipIdempotencyKey(req.body?.idempotencyKey || req.body?.idempotency_key);
+      if (idemKey) {
+        await ensureIdempotencyTable();
+        const cached = parseIdempotentPayload(await findIdempotent(query, bid(), idemKey));
+        if (cached?.ok) return cached;
+      }
       const [item] = await query("SELECT * FROM items WHERE id=? AND business_id=?", [item_id, bid()]);
       if (!item) throw new Error("Item not found");
       const plan = globalThis.POSStockDesk.adjustStockQty({
@@ -812,7 +818,9 @@ export function registerTenant(app) {
         }
       }
       await audit("Stock Adjusted", { module: "stock", target_id: item_id, kind: k, qty, reason: why, barcode: code }, req);
-      return { ok: true, stock_gm: plan.stock, applied: qty };
+      const result = { ok: true, stock_gm: plan.stock, applied: qty };
+      if (idemKey) await saveIdempotent(query, bid(), idemKey, "stock", item_id, result);
+      return result;
     }),
   );
 

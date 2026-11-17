@@ -4,6 +4,7 @@ import "../js/footwear.js";
 import "../js/garment-purchase.js";
 import "../js/garment-counter.js";
 import { query, withTransaction } from "./db.js";
+import { clipIdempotencyKey, ensureIdempotencyTable, findIdempotent, parseIdempotentPayload, saveIdempotent } from "./idempotency.js";
 import { bid, authUser } from "./context.js";
 import { recordCreditPurchase, reverseCreditPurchase, reverseCreditSale, recomputeCustomerOutstanding, settleCustomerInvoice, invoiceOpenDueByCustomer, hydrateCustomerOutstandingRows, persistHydratedOutstanding, collectOrderPayment } from "./accounts.js";
 import { postPurchaseJournal, deleteJournalRef } from "./accounting.js";
@@ -1437,7 +1438,16 @@ export function registerCrud(app) {
       res.status(400).json({ error: "Supplier and purchase lines are required" });
       return;
     }
+    const idemKey = clipIdempotencyKey(req.body?.idempotencyKey || req.body?.idempotency_key);
     try {
+      if (idemKey) {
+        await ensureIdempotencyTable();
+        const cached = parseIdempotentPayload(await findIdempotent(query, bid(), idemKey));
+        if (cached?.purchase) {
+          res.json(cached);
+          return;
+        }
+      }
       const purchase = await withTransaction(async (conn) => {
         const [supRows] = await conn.query(
           "SELECT * FROM suppliers WHERE id = ? AND business_id = ?",
@@ -1490,6 +1500,8 @@ export function registerCrud(app) {
           method,
         });
         await postPurchaseJournal(conn, purchase);
+        const saved = { ok: true, purchase };
+        if (idemKey) await saveIdempotent(conn, bid(), idemKey, "purchase", id, saved);
         return purchase;
       });
       res.json({ ok: true, purchase });

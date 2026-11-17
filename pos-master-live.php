@@ -871,12 +871,107 @@ function pos_master_biz_traffic() {
   }
 }
 
+function pos_ensure_sync_status() {
+  static $ready = false;
+  if ($ready) return;
+  pos_q("CREATE TABLE IF NOT EXISTS device_sync_status (
+    device_id VARCHAR(64) NOT NULL PRIMARY KEY,
+    business_id VARCHAR(255) NOT NULL,
+    device_label VARCHAR(40) NULL,
+    pending_count INT NOT NULL DEFAULT 0,
+    conflict_count INT NOT NULL DEFAULT 0,
+    last_sync_at DATETIME NULL,
+    last_error VARCHAR(255) NULL,
+    reported_at DATETIME NOT NULL,
+    KEY idx_sync_business (business_id)
+  )");
+  $ready = true;
+}
+
+function pos_report_sync_status($staff, $body) {
+  $device = trim((string) ($body["deviceId"] ?? ($body["device_id"] ?? "")));
+  if (!preg_match('/^[A-Za-z0-9_-]{8,64}$/', $device)) return ["ok" => false, "error" => "Device id required"];
+  $business = (string) ($staff["user"]["business_id"] ?? ($staff["business_id"] ?? ""));
+  if ($business === "") return ["ok" => false, "error" => "Shop sign in required"];
+  pos_ensure_sync_status();
+  $pending = max(0, min(100000, (int) ($body["pending"] ?? 0)));
+  $conflicts = max(0, min(100000, (int) ($body["conflicts"] ?? 0)));
+  $label = substr(trim(preg_replace('/\s+/', ' ', (string) ($body["deviceLabel"] ?? ""))), 0, 40);
+  $error = substr(trim((string) ($body["lastError"] ?? "")), 0, 255);
+  $last = "";
+  $raw = (string) ($body["lastSyncAt"] ?? "");
+  if ($raw !== "") {
+    $stamp = strtotime($raw);
+    if ($stamp) $last = gmdate("Y-m-d H:i:s", $stamp);
+  }
+  pos_q(
+    "INSERT INTO device_sync_status
+       (device_id, business_id, device_label, pending_count, conflict_count, last_sync_at, last_error, reported_at)
+     VALUES (?,?,?,?,?,NULLIF(?, ''),NULLIF(?, ''),NOW())
+     ON DUPLICATE KEY UPDATE
+       business_id = VALUES(business_id),
+       device_label = VALUES(device_label),
+       pending_count = VALUES(pending_count),
+       conflict_count = VALUES(conflict_count),
+       last_sync_at = VALUES(last_sync_at),
+       last_error = VALUES(last_error),
+       reported_at = NOW()",
+    "sssiiss",
+    [$device, $business, $label, $pending, $conflicts, $last, $error]
+  );
+  return ["ok" => true];
+}
+
+function pos_master_sync_status() {
+  pos_ensure_sync_status();
+  $businesses = pos_q("SELECT id, name FROM businesses ORDER BY name");
+  $devices = pos_q("SELECT * FROM device_sync_status");
+  $rows = [];
+  foreach ($businesses as $business) {
+    $mine = array_values(array_filter($devices, function ($row) use ($business) {
+      return ($row["business_id"] ?? "") === ($business["id"] ?? "");
+    }));
+    $pending = 0;
+    $conflicts = 0;
+    $reported = "";
+    $lastError = "";
+    foreach ($mine as $row) {
+      $pending += (int) ($row["pending_count"] ?? 0);
+      $conflicts += (int) ($row["conflict_count"] ?? 0);
+      $at = (string) ($row["reported_at"] ?? "");
+      if ($at > $reported) $reported = $at;
+      if ($lastError === "" && trim((string) ($row["last_error"] ?? "")) !== "") $lastError = (string) $row["last_error"];
+    }
+    $rows[] = [
+      "id" => $business["id"],
+      "name" => $business["name"] ?? "Shop",
+      "devices" => count($mine),
+      "pending" => $pending,
+      "conflicts" => $conflicts,
+      "lastError" => $lastError,
+      "reportedAt" => $reported !== "" ? $reported : null,
+    ];
+  }
+  usort($rows, function ($a, $b) {
+    $score = ($b["pending"] + $b["conflicts"]) - ($a["pending"] + $a["conflicts"]);
+    if ($score !== 0) return $score;
+    return strcmp((string) $a["name"], (string) $b["name"]);
+  });
+  return [
+    "note" => "Bills, payments, and stock are saved on each device first. Waiting is the count still on that device. Conflicts need a person to look.",
+    "businesses" => $rows,
+  ];
+}
+
 function pos_master_live_dispatch($path, $method, $auth) {
   if ($path === "master/ip-map" && $method === "GET") {
     pos_send(200, pos_master_ip_map());
   }
   if ($path === "master/biz-traffic" && $method === "GET") {
     pos_send(200, pos_master_biz_traffic());
+  }
+  if ($path === "master/sync-status" && $method === "GET") {
+    pos_send(200, pos_master_sync_status());
   }
   if ($path === "master/insights" && $method === "GET") {
     pos_send(200, pos_master_insights($_GET["range"] ?? "30"));

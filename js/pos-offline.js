@@ -1,4 +1,4 @@
-/* Counter bills stay on this device when the network drops, then sync in order. */
+/* Invoices, payments, and stock are saved on this device first, then synced. */
 (function () {
   const DB = "pos-offline";
 
@@ -10,18 +10,59 @@
   function classifySyncFailure(message) {
     const msg = String(message || "");
     if (shouldQueue({ message: msg })) return "offline";
-    if (/only .+ in stock|unknown item|customer not found/i.test(msg)) return "conflict";
+    if (/only .+ in stock|unknown item|customer not found|item not found|supplier not found|not enough stock/i.test(msg)) return "conflict";
     return "error";
+  }
+
+  function operation(path, options) {
+    const method = String(options?.method || "GET").toUpperCase();
+    const clean = String(path || "").split("?")[0];
+    if (method === "POST" && /(^|\/)api\/checkout$/.test(clean)) return "checkout";
+    if (method === "POST" && /\/api\/orders\/[^/]+\/payments$/.test(clean)) return "payment";
+    if (method === "POST" && /(^|\/)api\/stock\/adjust$/.test(clean)) return "stock";
+    if (method === "POST" && /(^|\/)api\/purchases$/.test(clean)) return "purchase";
+    return "";
+  }
+
+  function stockDeltas(kind, payload, snapshot) {
+    if (kind === "checkout") {
+      return (payload?.lines || []).map((line) => ({
+        itemId: line.itemId,
+        qty: -(Number(line.quantity_gm) || 0),
+      }));
+    }
+    if (kind === "stock") {
+      const item = (snapshot?.items || []).find((row) => row.id === payload?.item_id);
+      const onHand = Number(item?.stock_gm) || 0;
+      const name = String(payload?.kind || "adjustment");
+      let qty = Number(payload?.quantity_gm);
+      if (!Number.isFinite(qty)) qty = 0;
+      if (payload?.set_on_hand === 0 || payload?.set_on_hand === "0") qty = -onHand;
+      else if (["damaged", "expired", "returned"].includes(name)) qty = -Math.abs(qty);
+      return [{ itemId: payload?.item_id, qty }];
+    }
+    if (kind === "purchase") {
+      return (payload?.lines || []).map((line) => ({
+        itemId: line.item_id,
+        qty: (Number(line.quantity_gm) || 0) + (Number(line.free_qty) || 0),
+      }));
+    }
+    return [];
+  }
+
+  function pendingDeltas(row) {
+    if (Array.isArray(row?.deltas)) return row.deltas;
+    return stockDeltas("checkout", row?.payload, null);
   }
 
   function applyPendingStock(items, rows) {
     const list = (Array.isArray(items) ? items : []).map((item) => ({ ...item }));
     for (const row of Array.isArray(rows) ? rows : []) {
-      if (!row || row.status === "synced") continue;
-      for (const line of row.payload?.lines || []) {
-        const item = list.find((entry) => entry.id === line.itemId);
+      if (!row || row.status === "synced" || row.status === "conflict") continue;
+      for (const delta of pendingDeltas(row)) {
+        const item = list.find((entry) => entry.id === delta.itemId);
         if (!item) continue;
-        item.stock_gm = (Number(item.stock_gm) || 0) - (Number(line.quantity_gm) || 0);
+        item.stock_gm = (Number(item.stock_gm) || 0) + (Number(delta.qty) || 0);
       }
     }
     return list;
@@ -69,12 +110,6 @@
     };
   }
 
-  function isCheckout(path, options) {
-    const method = String(options?.method || "GET").toUpperCase();
-    const clean = String(path || "").split("?")[0];
-    return method === "POST" && /(^|\/)api\/checkout$/.test(clean);
-  }
-
   function isBootstrap(path, options) {
     const method = String(options?.method || "GET").toUpperCase();
     const clean = String(path || "").split("?")[0];
@@ -85,7 +120,7 @@
     return Boolean(payload && Array.isArray(payload.lines) && payload.lines.length && payload.customerId && payload.idempotencyKey);
   }
 
-  const api = { shouldQueue, classifySyncFailure, applyPendingStock, buildLocalOrder, canQueue };
+  const api = { shouldQueue, classifySyncFailure, applyPendingStock, buildLocalOrder, canQueue, operation, stockDeltas };
   globalThis.POSOffline = api;
   if (typeof document === "undefined" || typeof indexedDB === "undefined") return;
 
@@ -168,36 +203,90 @@
     return { ...data, items: applyPendingStock(data.items, mine) };
   }
 
-  async function enqueue(payload) {
+  function reply(data) {
+    return { res: { ok: true, status: 200, statusText: "OK" }, data, text: "" };
+  }
+
+  function parseBody(options) {
+    try { return JSON.parse(options?.body || "{}"); } catch { return {}; }
+  }
+
+  function makeKey(kind) {
+    const device = String(globalThis.POSDevice?.id?.() || "device").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 24);
+    return `${kind}-${device}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`.slice(0, 80);
+  }
+
+  function rowLabel(row) {
+    if (row?.kind === "stock") return "stock";
+    if (row?.kind === "payment") return "payment";
+    if (row?.kind === "purchase") return row.offlineNumber || "purchase";
+    return row?.offlineNumber || "bill";
+  }
+
+  async function localResult(row) {
+    const snapshot = await overlayData(await readSnapshot().catch(() => null));
+    if (row.kind === "stock") {
+      const item = (snapshot?.items || []).find((entry) => entry.id === row.payload?.item_id);
+      const applied = Number(row.deltas?.[0]?.qty) || 0;
+      return { ok: true, offline: true, stock_gm: Number(item?.stock_gm) || 0, applied };
+    }
+    if (row.kind === "purchase") {
+      return {
+        ok: true,
+        offline: true,
+        purchase: { id: `local-${row.offlineNumber}`, purchase_number: row.offlineNumber, barcode_count: 0 },
+      };
+    }
+    if (row.kind === "payment") {
+      return {
+        ok: true,
+        offline: true,
+        order: {
+          id: row.serverOrderId || `local-${row.offlineNumber}`,
+          order_number: row.offlineNumber,
+          payment_status: "pending_sync",
+          status: "pending_sync",
+          offline: true,
+        },
+      };
+    }
+    return buildLocalOrder(row.payload, row.offlineNumber, snapshot);
+  }
+
+  async function ensureRow(kind, path, payload) {
+    const key = String(payload.idempotencyKey || "");
+    const existing = (await readOutbox()).find((row) => row.idempotencyKey === key);
+    if (existing) return existing;
     const snapshot = await readSnapshot();
-    const existing = (await readOutbox()).find((row) => row.idempotencyKey === payload.idempotencyKey);
-    if (existing) return buildLocalOrder(existing.payload, existing.offlineNumber, snapshot);
     const offlineNumber = await nextOfflineNumber();
     const row = {
-      idempotencyKey: String(payload.idempotencyKey),
+      idempotencyKey: key,
+      kind,
+      path,
       payload,
-      offlineNumber,
+      deltas: stockDeltas(kind, payload, snapshot),
+      offlineNumber: kind === "purchase" ? `PO-${offlineNumber}` : offlineNumber,
       businessId: String(snapshot?.business?.id || ""),
       deviceId: globalThis.POSDevice?.id?.() || "",
       deviceLabel: globalThis.POSDevice?.label?.() || "",
       status: "pending",
       error: "",
       serverNumber: "",
+      serverOrderId: "",
       createdAt: new Date().toISOString(),
     };
     await putOutbox(row);
     paint();
-    return buildLocalOrder(payload, offlineNumber, snapshot);
+    return row;
   }
 
-  function reply(data) {
-    return { res: { ok: true, status: 200, statusText: "OK" }, data, text: "" };
-  }
-
+  let paintGen = 0;
   function paint() {
+    const gen = ++paintGen;
     readOutbox().then((rows) => {
+      if (gen !== paintGen) return;
       const waiting = rows.filter((row) => row.status !== "synced");
-      const recent = rows.filter((row) => row.status === "synced" && Date.now() - Date.parse(row.syncedAt || "") < 20000 && row.serverNumber);
+      const recent = rows.filter((row) => row.held && row.status === "synced" && Date.now() - Date.parse(row.syncedAt || "") < 20000 && row.serverNumber);
       let bar = document.getElementById("pos-sync-note");
       if (!waiting.length && !recent.length) {
         bar?.remove();
@@ -212,69 +301,205 @@
       }
       const conflicts = waiting.filter((row) => row.status === "conflict");
       const pending = waiting.filter((row) => row.status !== "conflict");
-      const numbers = pending.map((row) => row.offlineNumber).join(", ");
-      const conflictText = conflicts.map((row) => `${row.offlineNumber}: ${row.error || "Needs attention"}`).join(" ");
-      const done = recent.map((row) => `${row.offlineNumber} is now ${row.serverNumber}`).join(", ");
+      const labels = pending.map(rowLabel).join(", ");
+      const conflictText = conflicts.map((row) => `${rowLabel(row)}: ${row.error || "Needs attention"}`).join(" ");
+      const done = recent.map((row) => `${rowLabel(row)} is now ${row.serverNumber}`).join(", ");
       bar.textContent = [
-        pending.length ? `${pending.length} bill${pending.length === 1 ? "" : "s"} waiting to sync (${numbers}). They upload when this device is online.` : "",
+        pending.length ? `${pending.length} saved on this device (${labels}). They upload when this device is online.` : "",
         conflictText ? `Conflict ${conflictText}` : "",
         done ? `Synced ${done}.` : "",
       ].filter(Boolean).join(" ");
     }).catch(() => {});
   }
 
-  let syncing = false;
-  async function syncNow() {
-    if (syncing || navigator.onLine === false) return;
+  const inflight = new Set();
+
+  async function paymentPath(row) {
+    const match = String(row.path || "").match(/\/api\/orders\/([^/]+)\/payments$/);
+    const id = match ? decodeURIComponent(match[1]) : "";
+    if (!id.startsWith("local-")) return row.path;
+    const number = id.slice("local-".length);
+    const bill = (await readOutbox()).find((entry) => (entry.kind || "checkout") === "checkout" && entry.offlineNumber === number);
+    if (!bill || bill.status !== "synced" || !bill.serverOrderId) return "";
+    return `/api/orders/${encodeURIComponent(bill.serverOrderId)}/payments`;
+  }
+
+  async function sendOne(row) {
     const orig = api._send;
-    if (typeof orig !== "function") return;
-    syncing = true;
-    let syncedAny = false;
+    if (typeof orig !== "function") return { offline: true };
+    if (row.status === "synced") return { ok: true, reply: reply(await localResult(row)) };
+    if (inflight.has(row.idempotencyKey)) return { waiting: true };
+    inflight.add(row.idempotencyKey);
     try {
       const snapshot = await readSnapshot();
       const currentBusiness = String(snapshot?.business?.id || "");
-      const rows = (await readOutbox()).filter((row) => row.status !== "synced").sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-      for (const row of rows) {
-        if (currentBusiness && row.businessId && row.businessId !== currentBusiness) {
-          row.status = "conflict";
-          row.error = "This bill belongs to another shop on this device.";
-          await putOutbox(row);
-          continue;
-        }
-        const payload = { ...row.payload, offlineSync: true, idempotencyKey: row.idempotencyKey };
-        let result;
-        try {
-          result = await orig("/api/checkout", { method: "POST", body: JSON.stringify(payload) });
-        } catch (err) {
-          if (shouldQueue(err)) break;
-          row.status = classifySyncFailure(err?.message) === "conflict" ? "conflict" : "error";
-          row.error = String(err?.message || "Sync failed");
-          await putOutbox(row);
-          continue;
-        }
-        if (!result?.res?.ok) {
-          const message = result?.data?.error || "Sync failed";
-          const kind = classifySyncFailure(message);
-          if (kind === "offline") break;
-          row.status = kind === "conflict" ? "conflict" : "error";
-          row.error = message;
-          await putOutbox(row);
-          continue;
-        }
-        row.status = "synced";
-        row.error = "";
-        row.serverNumber = result.data?.order?.order_number || "";
-        row.syncedAt = new Date().toISOString();
+      if (currentBusiness && row.businessId && row.businessId !== currentBusiness) {
+        row.status = "conflict";
+        row.error = "This bill belongs to another shop on this device.";
         await putOutbox(row);
-        syncedAny = true;
+        return { conflict: true, error: row.error };
+      }
+      const target = row.kind === "payment" ? await paymentPath(row) : (row.path || "/api/checkout");
+      if (!target) return { waiting: true };
+      const payload = { ...row.payload, idempotencyKey: row.idempotencyKey };
+      if (row.held) payload.offlineSync = true;
+      let result;
+      try {
+        result = await orig(target, { method: "POST", body: JSON.stringify(payload) });
+      } catch (err) {
+        if (shouldQueue(err)) return { offline: true };
+        row.attempts = (Number(row.attempts) || 0) + 1;
+        row.error = String(err?.message || "Sync failed");
+        row.status = classifySyncFailure(row.error) === "conflict" || row.attempts >= 5 ? "conflict" : "pending";
+        await putOutbox(row);
+        return { conflict: row.status === "conflict", error: row.error };
+      }
+      if (!result?.res?.ok) {
+        const message = result?.data?.error || "Sync failed";
+        const failure = classifySyncFailure(message);
+        if (failure === "offline") return { offline: true };
+        row.attempts = (Number(row.attempts) || 0) + 1;
+        row.error = message;
+        row.status = failure === "conflict" || row.attempts >= 5 ? "conflict" : "pending";
+        await putOutbox(row);
+        return { conflict: row.status === "conflict", error: row.error };
+      }
+      row.status = "synced";
+      row.error = "";
+      row.serverNumber = result.data?.order?.order_number || result.data?.purchase?.purchase_number || row.serverNumber || "";
+      row.serverOrderId = result.data?.order?.id || result.data?.purchase?.id || row.serverOrderId || "";
+      row.syncedAt = new Date().toISOString();
+      await putOutbox(row);
+      return { ok: true, reply: result };
+    } finally {
+      inflight.delete(row.idempotencyKey);
+    }
+  }
+
+  function serverReply(row, local) {
+    if (row.kind === "purchase") {
+      return { ok: true, purchase: { id: row.serverOrderId, purchase_number: row.serverNumber || row.offlineNumber, barcode_count: 0 } };
+    }
+    if (row.kind === "stock") return { ok: true, stock_gm: local.stock_gm, applied: local.applied };
+    const order = local.order || {};
+    return {
+      ok: true,
+      order: {
+        ...order,
+        id: row.serverOrderId || order.id,
+        order_number: row.serverNumber || order.order_number,
+      },
+    };
+  }
+
+  async function hold(row) {
+    const stored = (await readOutbox()).find((entry) => entry.idempotencyKey === row.idempotencyKey) || row;
+    if (stored.status !== "synced") {
+      stored.held = true;
+      await putOutbox(stored);
+    }
+    return reply(await localResult(stored));
+  }
+
+  async function flush(row) {
+    if (navigator.onLine === false) return hold(row);
+    const start = Date.now();
+    while (inflight.has(row.idempotencyKey) && Date.now() - start < 25000) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    const fresh = (await readOutbox()).find((entry) => entry.idempotencyKey === row.idempotencyKey) || row;
+    if (fresh.status === "synced") return reply(serverReply(fresh, await localResult(fresh)));
+    const sent = await sendOne(fresh);
+    if (sent?.ok) return sent.reply;
+    if (sent?.offline || sent?.waiting) return hold(fresh);
+    paint();
+    const err = new Error(sent?.error || "Saved on this device. It needs attention before it can sync.");
+    err.posKept = true;
+    throw err;
+  }
+
+  let syncing = false;
+  async function syncNow() {
+    if (syncing || navigator.onLine === false) return;
+    if (typeof api._send !== "function") return;
+    syncing = true;
+    let syncedAny = false;
+    try {
+      const rows = (await readOutbox())
+        .filter((row) => row.status !== "synced" && row.status !== "conflict")
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      for (const row of rows) {
+        const sent = await sendOne(row);
+        if (sent?.offline) break;
+        if (sent?.ok) syncedAny = true;
       }
     } finally {
       syncing = false;
       paint();
     }
+    reportStatus();
     if (syncedAny && typeof globalThis.loadBootstrap === "function") {
       globalThis.loadBootstrap().catch(() => {});
     }
+  }
+
+  let lastReport = 0;
+  async function reportStatus() {
+    const orig = api._send;
+    if (typeof orig !== "function" || navigator.onLine === false) return;
+    if (Date.now() - lastReport < 20000) return;
+    const deviceId = globalThis.POSDevice?.id?.() || "";
+    if (!deviceId) return;
+    lastReport = Date.now();
+    const rows = await readOutbox().catch(() => []);
+    const pending = rows.filter((row) => row.status !== "synced" && row.status !== "conflict").length;
+    const conflicts = rows.filter((row) => row.status === "conflict").length;
+    const last = rows.filter((row) => row.syncedAt).sort((a, b) => String(a.syncedAt).localeCompare(String(b.syncedAt))).pop();
+    try {
+      await orig("/api/sync/status", {
+        method: "POST",
+        body: JSON.stringify({
+          deviceId,
+          deviceLabel: globalThis.POSDevice?.label?.() || "",
+          pending,
+          conflicts,
+          lastSyncAt: last?.syncedAt || "",
+          lastError: rows.find((row) => row.status === "conflict")?.error || "",
+        }),
+      });
+    } catch {
+      lastReport = 0;
+    }
+  }
+
+  async function foldPayment(path, payload) {
+    const match = String(path || "").match(/\/api\/orders\/([^/]+)\/payments$/);
+    const id = match ? decodeURIComponent(match[1]) : "";
+    if (id.startsWith("local-")) {
+      const number = id.slice("local-".length);
+      const bill = (await readOutbox()).find((row) => (row.kind || "checkout") === "checkout" && row.offlineNumber === number);
+      if (!bill) throw new Error("This offline bill is not on this device.");
+      if (bill.status !== "synced" && !inflight.has(bill.idempotencyKey)) {
+        const add = Number(payload.amount ?? payload.amountPaid) || 0;
+        bill.payload = { ...bill.payload, amountPaid: (Number(bill.payload.amountPaid) || 0) + add };
+        await putOutbox(bill);
+        paint();
+        return reply(buildLocalOrder(bill.payload, bill.offlineNumber, await readSnapshot()));
+      }
+      if (bill.serverOrderId) path = `/api/orders/${encodeURIComponent(bill.serverOrderId)}/payments`;
+    }
+    if (!payload.idempotencyKey) payload.idempotencyKey = makeKey("pay");
+    const row = await ensureRow("payment", path, payload);
+    return flush(row);
+  }
+
+  async function saveFirst(kind, path, payload) {
+    if (kind === "checkout" && !canQueue(payload)) return null;
+    if (kind === "stock" && !payload?.item_id) return null;
+    if (kind === "purchase" && (!payload?.supplier_id || !Array.isArray(payload.lines) || !payload.lines.length)) return null;
+    if (!payload.idempotencyKey) payload.idempotencyKey = makeKey(kind === "purchase" ? "po" : kind);
+    const row = await ensureRow(kind, path, payload);
+    return flush(row);
   }
 
   function wrap() {
@@ -294,16 +519,17 @@
           return reply(await overlayData(snap));
         }
       }
-      if (!isCheckout(path, options)) return orig(path, options);
-      let payload = {};
-      try { payload = JSON.parse(options?.body || "{}"); } catch { payload = {}; }
-      if (navigator.onLine === false && canQueue(payload)) return reply(await enqueue(payload));
+      const kind = operation(path, options);
+      if (!kind) return orig(path, options);
+      const payload = parseBody(options);
       try {
-        return await orig(path, options);
+        if (kind === "payment") return await foldPayment(path, payload);
+        const saved = await saveFirst(kind, String(path || "").split("?")[0], payload);
+        if (saved) return saved;
       } catch (err) {
-        if (shouldQueue(err) && canQueue(payload)) return reply(await enqueue(payload));
-        throw err;
+        if (err?.posKept || navigator.onLine === false || /not on this device/i.test(err?.message || "")) throw err;
       }
+      return orig(path, { ...(options || {}), body: JSON.stringify(payload) });
     }
     wrapped.__posOffline = true;
     window.posRequest = wrapped;
@@ -319,7 +545,7 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") syncNow();
     });
-    setInterval(syncNow, 15000);
+    setInterval(() => { syncNow(); reportStatus(); }, 15000);
     syncNow();
   }
 
