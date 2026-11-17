@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261117osr1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261117grw1" />
     <link rel="stylesheet" href="./css/online-store.css?v=20261116storemenu1" />
     <link rel="stylesheet" href="./css/crm.css?v=20261105crm1" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
@@ -2785,7 +2785,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">AI Growth</p>
                 <h3>Business growth dashboard</h3>
-                <p class="lede">What happened, why it happened, what may happen next, and what you should do — from this shop's sales, stock, and customers.</p>
+                <p class="lede">What happened, why it happened, what may happen next, and what you should do — from this shop's sales, stock, customers, and oversold bills.</p>
               </div>
               <div class="items-hero-stats" id="growth-hero-stats"></div>
             </header>
@@ -2804,13 +2804,25 @@
               <a class="btn" id="growth-excel" href="#">Download Excel</a>
             </form>
             <div class="hint" id="growth-hint"></div>
-            <div class="report-grid" id="growth-kpis"></div>
+            <div class="growth-story" id="growth-story"></div>
+            <div class="report-grid growth-kpis" id="growth-kpis"></div>
             <div id="growth-score"></div>
             <article class="growth-panel">
               <h3>AI Business Summary</h3>
               <p id="growth-summary">Open AI Growth after you have sales on this shop.</p>
               <p class="lede" id="growth-opportunity"></p>
               <div id="growth-alerts"></div>
+            </article>
+            <article class="growth-panel growth-oversell" id="growth-oversell-panel">
+              <div class="growth-panel-head">
+                <div>
+                  <p class="items-kicker">Stock shortfall</p>
+                  <h3>Overselling</h3>
+                </div>
+                <button class="btn primary" type="button" data-growth-report="Item-Wise Overselling">Open item report</button>
+              </div>
+              <p class="hint">Sales that went out after the stock on hand reached zero. The amount is the billed share of the short quantity.</p>
+              <div id="growth-oversell"></div>
             </article>
             <article class="growth-panel">
               <h3>Sales &amp; profit</h3>
@@ -3950,7 +3962,7 @@
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261027cust1" defer></script>
     <script src="./js/mobile-app.js?v=20261107profit1" defer></script>
-    <script src="./js/growth.js?v=20261103off1" defer></script>
+    <script src="./js/growth.js?v=20261117grw1" defer></script>
     <script src="./js/offers-ui.js?v=20261116qrmod1" defer></script>
   </body>
 </html>

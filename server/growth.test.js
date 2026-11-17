@@ -77,6 +77,26 @@ test("AI growth analysis writes a shop summary and actions", () => {
   assert.match(out.discount.note, /Discount|offer|month/i);
 });
 
+test("oversold sales become an urgent growth action", () => {
+  const out = analyzeGrowth({
+    ...snap,
+    oversell: {
+      summary: { items: 1, oversoldQty: 3, amount: 150, bills: 1, negative: 1 },
+      lines: [{ product_name: "Assam Tea", customer: "Cafe Nova", invoice: "S-1", sold_qty: 12, stock_before: 9, oversold_qty: 3, amount: 150, sale_date: "2026-11-02", stock_now: -3 }],
+    },
+  });
+  assert.equal(out.kpis.oversoldItems, 1);
+  assert.equal(out.kpis.oversoldAmount, 150);
+  assert.equal(out.oversell.lines[0].name, "Assam Tea");
+  assert.equal(out.oversell.lines[0].oversold, 3);
+  assert.ok(out.actions.some((a) => a.report === "Item-Wise Overselling"));
+  assert.match(out.opportunity, /oversold/i);
+  assert.match(answerGrowthQuestion("Which items were oversold?", out), /Assam Tea/);
+  assert.match(readFileSync(path.join(root, "js/growth.js"), "utf8"), /renderGrowthOversell/);
+  assert.match(readFileSync(path.join(root, "index.html"), "utf8"), /id="growth-oversell"/);
+  assert.match(readFileSync(path.join(root, "pos-growth.php"), "utf8"), /pos_ior_build_rows/);
+});
+
 test("Ask Business AI answers from the same shop snapshot", () => {
   const out = analyzeGrowth(snap);
   assert.match(answerGrowthQuestion("Which products should I reorder?", out), /Rice|Tea|Salt|stock/i);

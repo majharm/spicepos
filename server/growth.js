@@ -1,6 +1,7 @@
 import { query } from "./db.js";
 import { bid } from "./context.js";
 import { createdBeforeDay, createdBetween } from "./sql-time.js";
+import { buildItemOversellReport } from "./item-oversell-report.js";
 
 export function num(value) {
   const n = Number(value);
@@ -36,6 +37,29 @@ export function weekdayName(n) {
 
 function pickTop(rows, key, n = 5) {
   return [...(rows || [])].sort((a, b) => num(b[key]) - num(a[key])).slice(0, n);
+}
+
+export function oversellView(raw = {}) {
+  const summary = raw.summary || {};
+  const lines = (raw.lines || []).slice(0, 8).map((line) => ({
+    name: line.product_name || line.name || "Item",
+    customer: line.customer || "Walk-in",
+    invoice: line.invoice || line.order_number || "",
+    sold: num(line.sold_qty ?? line.sold),
+    before: num(line.stock_before ?? line.before),
+    oversold: num(line.oversold_qty ?? line.oversold),
+    amount: round2(line.amount),
+    date: String(line.sale_date || line.date || "").slice(0, 10),
+    stockNow: num(line.stock_now ?? line.stockNow),
+  }));
+  return {
+    items: num(summary.items),
+    qty: num(summary.oversoldQty ?? summary.qty),
+    amount: round2(summary.amount),
+    bills: num(summary.bills),
+    negative: num(summary.negative),
+    lines,
+  };
 }
 
 export function growthScore(parts) {
@@ -109,7 +133,9 @@ export function analyzeGrowth(snap = {}) {
   const vipCount = snap.vipCount != null ? num(snap.vipCount) : vip.length;
   const customerTotal = snap.customerTotal != null ? num(snap.customerTotal) : customers.length;
   const expenseShare = num(month.takings) ? round2((num(month.expenses) / num(month.takings)) * 100) : 0;
-  const inventoryHealth = Math.max(20, 90 - low.length * 4 - out.length * 8 - dead.length * 2);
+  const oversell = oversellView(snap.oversell);
+  let inventoryHealth = Math.max(20, 90 - low.length * 4 - out.length * 8 - dead.length * 2);
+  if (oversell.items) inventoryHealth = Math.max(20, inventoryHealth - Math.min(24, oversell.items * 3));
   const expenseControl = Math.max(15, 90 - Math.max(0, expenseShare - 8) * 3);
   const retention = customerTotal ? round2((returning / Math.max(1, customerTotal)) * 100) : 0;
   const score = growthScore({
@@ -122,6 +148,16 @@ export function analyzeGrowth(snap = {}) {
   });
 
   const actions = [];
+  if (oversell.items) {
+    actions.push({
+      level: "urgent",
+      title: `${oversell.items} item${oversell.items === 1 ? "" : "s"} oversold`,
+      detail: `${oversell.qty} units sold beyond stock, billed ${inrText(oversell.amount)} on ${oversell.bills} bill${oversell.bills === 1 ? "" : "s"}. ${oversell.lines.slice(0, 3).map((line) => line.name).join(", ")}`,
+      jump: "reports",
+      report: "Item-Wise Overselling",
+      action: "Open report",
+    });
+  }
   if (out.length) {
     actions.push({
       level: "urgent",
@@ -283,6 +319,13 @@ export function analyzeGrowth(snap = {}) {
       text: `${inactiveCount} customers have not purchased in the last 45 days. Send them a re-engagement offer.`,
     });
   }
+  if (oversell.items) {
+    recommendations.push({
+      kind: "oversell",
+      title: "Stop overselling",
+      text: `${oversell.lines[0]?.name || "A product"} sold ${oversell.lines[0]?.oversold || oversell.qty} units without stock. Raise the purchase or hold the bill when stock is short.`,
+    });
+  }
   if (topRev[0] && topRev[1]) {
     recommendations.push({
       kind: "cross",
@@ -349,6 +392,7 @@ export function analyzeGrowth(snap = {}) {
   const next30 = round2(tomorrow * 30);
 
   const alerts = [];
+  if (oversell.items) alerts.push(`${oversell.items} item${oversell.items === 1 ? "" : "s"} sold past the stock on hand this month (${inrText(oversell.amount)}).`);
   if (monthGrowth <= -20) alerts.push(`Sales this month are ${Math.abs(monthGrowth)}% below last month.`);
   if (topCat && monthGrowth < -10) alerts.push(`Watch ${topCat.name} — it is your largest category while overall sales are down.`);
   if (num(month.discount) > 0 && num(month.profit) < num(lastMonth.profit)) {
@@ -364,6 +408,7 @@ export function analyzeGrowth(snap = {}) {
 
   const why = [];
   if (salesGrowth >= 8 && topCat) why.push(`${topCat.name} products generated the highest revenue.`);
+  if (oversell.items) why.push(`${oversell.items} item${oversell.items === 1 ? "" : "s"} were billed after stock ran out.`);
   if (fast.length) why.push(`${fast.length} fast-moving product${fast.length === 1 ? "" : "s"} may go out of stock within a week.`);
   if (bestHour && quietHour && num(bestHour.takings) > num(quietHour.takings) * 1.2) {
     why.push(`${bestHour.label} sales are stronger than ${quietHour.label}. Consider staffing and promotions then.`);
@@ -375,8 +420,9 @@ export function analyzeGrowth(snap = {}) {
       ? `Your sales increased by ${Math.round(salesGrowth)}% this week compared with last week. ${why.join(" ")}`
       : `Your sales are ${Math.abs(Math.round(salesGrowth))}% vs last week. ${why.join(" ")}`;
 
-  const opportunity =
-    out.length || low.length
+  const opportunity = oversell.items
+    ? "Buy or transfer stock for the oversold items before the next bill, and open the item-wise overselling report."
+    : out.length || low.length
       ? "Improve inventory availability for your top products and reorder before they stock out."
       : inactiveCount
         ? "Increase repeat-customer campaigns for shoppers who have gone quiet."
@@ -441,8 +487,13 @@ export function analyzeGrowth(snap = {}) {
       damaged: round2(snap.damageLoss),
       expenses: round2(month.expenses),
       outstanding: round2(snap.outstanding),
+      oversoldItems: oversell.items,
+      oversoldQty: oversell.qty,
+      oversoldAmount: oversell.amount,
       score: score.score,
     },
+    oversell,
+    why,
     products: {
       top: topRev,
       profit: topProfit,
@@ -493,6 +544,7 @@ export function analyzeGrowth(snap = {}) {
       "What should I promote today?",
       "How can I increase my profit?",
       "Which customers should I target?",
+      "Which items were oversold?",
       "Which products are slow-moving?",
       "What should I stop selling?",
       "What should I buy this week?",
@@ -525,6 +577,9 @@ export function growthToSheets(a = {}) {
         ["Damaged / wastage", k.damaged],
         ["Expenses (month)", k.expenses],
         ["Outstanding", k.outstanding],
+        ["Oversold items", k.oversoldItems],
+        ["Oversold quantity", k.oversoldQty],
+        ["Oversold sales", k.oversoldAmount],
         ["Discount note", a.discount?.note || ""],
       ],
     },
@@ -547,6 +602,11 @@ export function growthToSheets(a = {}) {
       name: "Customers",
       headers: ["Name", "Bills", "Takings", "Segment", "Days since"],
       rows: (a.customers?.top || []).map((c) => [c.name, num(c.bills), num(c.takings), c.segment || "", num(c.daysSince)]),
+    },
+    {
+      name: "Overselling",
+      headers: ["Product", "Customer", "Invoice", "Sold", "Stock before", "Oversold", "Amount", "Date"],
+      rows: (a.oversell?.lines || []).map((line) => [line.name, line.customer, line.invoice, line.sold, line.before, line.oversold, line.amount, line.date]),
     },
     {
       name: "Actions",
@@ -585,6 +645,12 @@ export function answerGrowthQuestion(question, analysis) {
   }
   if (/customer|target|repeat|inactive/.test(q)) {
     return a.recommendations.find((r) => r.kind === "retention")?.text || `${a.customers.inactive} inactive customers and ${a.customers.vip} high-value customers.`;
+  }
+  if (/oversell|oversold|sold past|without stock|negative stock/.test(q)) {
+    const line = a.oversell?.lines?.[0];
+    return line
+      ? `${a.oversell.items} item${a.oversell.items === 1 ? "" : "s"} were oversold (${inrText(a.oversell.amount)}). ${line.name} sold ${line.oversold} past the stock on hand on ${line.invoice || line.date}.`
+      : "No item was sold beyond the stock on hand in this range.";
   }
   if (/slow|stop selling|dead/.test(q)) {
     const s = a.products.slow[0] || a.products.dead[0];
@@ -926,6 +992,14 @@ export async function buildGrowthDashboard() {
   thisMonth.expenses = num(expRow?.total);
   lastMonth.customers = num(custStats?.total);
 
+  let oversell = { summary: { items: 0, oversoldQty: 0, amount: 0, bills: 0, negative: 0 }, lines: [] };
+  try {
+    const report = await buildItemOversellReport(tenant, monthStart, today, {});
+    oversell = { summary: report.summary, lines: report.lines || [] };
+  } catch {
+    oversell = { summary: { items: 0, oversoldQty: 0, amount: 0, bills: 0, negative: 0 }, lines: [] };
+  }
+
   const snap = {
     today: thisToday,
     yesterday: thisYest,
@@ -953,6 +1027,7 @@ export async function buildGrowthDashboard() {
     overdueInvoices: num(overdue?.n),
     categories,
     branches,
+    oversell,
   };
 
   const analysis = analyzeGrowth(snap);

@@ -114,7 +114,32 @@ function pos_analyze_growth($snap) {
   $inactiveCount = array_key_exists("inactiveCount", $snap) ? (int) $snap["inactiveCount"] : count($inactive);
   $vipCount = array_key_exists("vipCount", $snap) ? (int) $snap["vipCount"] : count($vip);
   $expenseShare = pos_growth_num($month["takings"] ?? 0) ? pos_growth_round((pos_growth_num($month["expenses"] ?? 0) / pos_growth_num($month["takings"])) * 100) : 0;
+  $oversellRaw = $snap["oversell"] ?? [];
+  $oversellSummary = $oversellRaw["summary"] ?? [];
+  $oversellLines = [];
+  foreach (array_slice($oversellRaw["lines"] ?? [], 0, 8) as $line) {
+    $oversellLines[] = [
+      "name" => $line["product_name"] ?? ($line["name"] ?? "Item"),
+      "customer" => $line["customer"] ?? "Walk-in",
+      "invoice" => $line["invoice"] ?? ($line["order_number"] ?? ""),
+      "sold" => pos_growth_num($line["sold_qty"] ?? ($line["sold"] ?? 0)),
+      "before" => pos_growth_num($line["stock_before"] ?? ($line["before"] ?? 0)),
+      "oversold" => pos_growth_num($line["oversold_qty"] ?? ($line["oversold"] ?? 0)),
+      "amount" => pos_growth_round($line["amount"] ?? 0),
+      "date" => substr((string) ($line["sale_date"] ?? ($line["date"] ?? "")), 0, 10),
+      "stockNow" => pos_growth_num($line["stock_now"] ?? ($line["stockNow"] ?? 0)),
+    ];
+  }
+  $oversell = [
+    "items" => (int) ($oversellSummary["items"] ?? 0),
+    "qty" => pos_growth_num($oversellSummary["oversoldQty"] ?? ($oversellSummary["qty"] ?? 0)),
+    "amount" => pos_growth_round($oversellSummary["amount"] ?? 0),
+    "bills" => (int) ($oversellSummary["bills"] ?? 0),
+    "negative" => (int) ($oversellSummary["negative"] ?? 0),
+    "lines" => $oversellLines,
+  ];
   $inventoryHealth = max(20, 90 - count($low) * 4 - count($out) * 8);
+  if ($oversell["items"]) $inventoryHealth = max(20, $inventoryHealth - min(24, $oversell["items"] * 3));
   $expenseControl = max(15, 90 - max(0, $expenseShare - 8) * 3);
   $retention = $customerTotal ? pos_growth_round(($returning / max(1, $customerTotal)) * 100) : 0;
   $score = pos_growth_score([
@@ -127,6 +152,10 @@ function pos_analyze_growth($snap) {
   ]);
 
   $actions = [];
+  if ($oversell["items"]) {
+    $names = implode(", ", array_slice(array_column($oversellLines, "name"), 0, 3));
+    $actions[] = ["level" => "urgent", "title" => $oversell["items"] . " items oversold", "detail" => $oversell["qty"] . " units sold beyond stock, billed " . pos_growth_inr($oversell["amount"]) . ". " . $names, "jump" => "reports", "report" => "Item-Wise Overselling", "action" => "Open report"];
+  }
   if ($out) $actions[] = ["level" => "urgent", "title" => count($out) . " products out of stock", "detail" => implode(", ", array_slice(array_column($out, "name"), 0, 4)), "jump" => "purchases", "action" => "Reorder"];
   if ($low) $actions[] = ["level" => "urgent", "title" => count($low) . " low-stock items", "detail" => implode(" · ", array_slice(array_map(function ($i) { return $i["name"]; }, $low), 0, 3)), "jump" => "stock", "action" => "View stock"];
   if (pos_growth_num($snap["overdueInvoices"] ?? 0) > 0) {
@@ -171,6 +200,7 @@ function pos_analyze_growth($snap) {
   if ($weakMargin) $recs[] = ["kind" => "profit", "title" => "Increase profit", "text" => $weakMargin[0]["name"] . " has only a " . pos_growth_round($weakMargin[0]["margin"]) . "% margin. A small price adjustment could improve monthly profit."];
   if ($low || $out) $recs[] = ["kind" => "stock", "title" => "Prevent lost sales", "text" => (count($out) + count($low)) . " high-demand products may run out soon. Reorder now."];
   if ($inactiveCount) $recs[] = ["kind" => "retention", "title" => "Customer retention", "text" => $inactiveCount . " customers have not purchased in the last 45 days. Send them a re-engagement offer."];
+  if ($oversell["items"]) $recs[] = ["kind" => "oversell", "title" => "Stop overselling", "text" => ($oversellLines[0]["name"] ?? "A product") . " sold " . ($oversellLines[0]["oversold"] ?? $oversell["qty"]) . " units without stock. Raise the purchase or hold the bill when stock is short."];
   if ($topRev && count($topRev) > 1) $recs[] = ["kind" => "cross", "title" => "Cross-selling", "text" => "Customers purchasing " . $topRev[0]["name"] . " often also buy other fast movers. Suggest " . $topRev[1]["name"] . " during billing."];
 
   $promos = [];
@@ -203,6 +233,7 @@ function pos_analyze_growth($snap) {
 
   $why = [];
   if ($salesGrowth >= 8 && $topCat) $why[] = ($topCat["name"] ?? "One category") . " products generated the highest revenue.";
+  if ($oversell["items"]) $why[] = $oversell["items"] . " items were billed after stock ran out.";
   if ($fast) $why[] = count($fast) . " fast-moving products may go out of stock within a week.";
   if ($bestHour && $quietHour && pos_growth_num($bestHour["takings"] ?? 0) > pos_growth_num($quietHour["takings"] ?? 0) * 1.2) {
     $why[] = ($bestHour["label"] ?? "Peak hours") . " sales are stronger than " . ($quietHour["label"] ?? "slower hours") . ".";
@@ -213,6 +244,7 @@ function pos_analyze_growth($snap) {
     : "Your sales are " . abs($salesGrowth) . "% vs last week. " . implode(" ", $why);
 
   $alerts = [];
+  if ($oversell["items"]) $alerts[] = $oversell["items"] . " items sold past the stock on hand this month (" . pos_growth_inr($oversell["amount"]) . ").";
   if ($monthGrowth <= -20) $alerts[] = "Sales this month are " . abs($monthGrowth) . "% below last month.";
   $branches = $snap["branches"] ?? [];
   if (count($branches) >= 2) {
@@ -237,7 +269,7 @@ function pos_analyze_growth($snap) {
 
   return [
     "summary" => $summary,
-    "opportunity" => ($out || $low) ? "Improve inventory availability for your top products and reorder before they stock out." : ($inactiveCount ? "Increase repeat-customer campaigns for shoppers who have gone quiet." : "Protect margin on high-volume items and keep evening hours fully staffed."),
+    "opportunity" => $oversell["items"] ? "Buy or transfer stock for the oversold items before the next bill, and open the item-wise overselling report." : (($out || $low) ? "Improve inventory availability for your top products and reorder before they stock out." : ($inactiveCount ? "Increase repeat-customer campaigns for shoppers who have gone quiet." : "Protect margin on high-volume items and keep evening hours fully staffed.")),
     "score" => $score,
     "compare" => ["todayVsYesterday" => $todayGrowth, "weekVsLast" => $salesGrowth, "monthVsLast" => $monthGrowth, "yearVsLast" => $yearGrowth],
     "kpis" => [
@@ -255,8 +287,13 @@ function pos_analyze_growth($snap) {
       "damaged" => pos_growth_round($snap["damageLoss"] ?? 0),
       "expenses" => pos_growth_round($month["expenses"] ?? 0),
       "outstanding" => pos_growth_round($snap["outstanding"] ?? 0),
+      "oversoldItems" => $oversell["items"],
+      "oversoldQty" => $oversell["qty"],
+      "oversoldAmount" => $oversell["amount"],
       "score" => $score["score"],
     ],
+    "oversell" => $oversell,
+    "why" => $why,
     "products" => ["top" => $topRev, "profit" => $topProfit, "slow" => array_slice($slow, 0, 8), "dead" => [], "weakMargin" => array_slice($weakMargin, 0, 5)],
     "inventory" => [
       "low" => array_slice($low, 0, 12),
@@ -299,6 +336,7 @@ function pos_analyze_growth($snap) {
       "How can I increase my profit?",
       "Which customers should I target?",
       "Which products are slow-moving?",
+      "Which items were oversold?",
       "What should I stop selling?",
       "What should I buy this week?",
       "How can I increase repeat customers?",
@@ -313,6 +351,12 @@ function pos_growth_ask($question, $analysis) {
   if (preg_match("/profit|margin/", $q) && preg_match("/product|item/", $q)) {
     $p = $a["products"]["profit"][0] ?? null;
     return $p ? $p["name"] . " is among your most profitable lines (" . pos_growth_inr($p["profit"]) . ")." : "Profit by product needs more billed sales with cost recorded.";
+  }
+  if (preg_match("/oversell|oversold|sold past|without stock/", $q)) {
+    $line = $a["oversell"]["lines"][0] ?? null;
+    return $line
+      ? ($a["oversell"]["items"] ?? 0) . " items were oversold (" . pos_growth_inr($a["oversell"]["amount"] ?? 0) . "). " . $line["name"] . " sold " . $line["oversold"] . " past the stock on hand."
+      : "No item was sold beyond the stock on hand in this range.";
   }
   if (preg_match("/reorder|buy this week|out of stock|stock/", $q)) {
     $r = $a["inventory"]["reorders"][0] ?? null;
@@ -611,6 +655,13 @@ function pos_build_growth($bid) {
     "categories" => $categories,
     "branches" => $branches,
   ];
+  try {
+    require_once __DIR__ . "/pos-item-oversell.php";
+    $built = pos_ior_build_rows(pos_ior_select($bid), $monthStart, $today, []);
+    $snap["oversell"] = ["summary" => $built["summary"], "lines" => array_slice($built["lines"], 0, 8)];
+  } catch (Throwable $e) {
+    $snap["oversell"] = ["summary" => ["items" => 0, "oversoldQty" => 0, "amount" => 0, "bills" => 0, "negative" => 0], "lines" => []];
+  }
   $analysis = pos_analyze_growth($snap);
   $analysis["range"] = ["today" => $today, "monthStart" => $monthStart, "weekStart" => $weekStart];
   $analysis["source"] = "shop";

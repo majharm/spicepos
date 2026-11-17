@@ -135,14 +135,67 @@ function renderGrowthKpis(data) {
     ["Damaged / wastage", money(k.damaged), "this month"],
     ["Expenses", money(k.expenses), "this month"],
     ["Outstanding", money(k.outstanding), ""],
+    ["Oversold items", k.oversoldItems || 0, `${k.oversoldQty || 0} qty this month`],
+    ["Oversold sales", money(k.oversoldAmount), "billed without stock"],
     ["Growth score", `${k.score || 0}/100`, ""],
   ];
   $("growth-kpis").innerHTML = cards
+    .map(([label, value, note]) => {
+      const alert = /oversold/i.test(label) && Number(String(value).replace(/[^\d.-]/g, "")) > 0;
+      return `<div class="report-card${alert ? " is-alert" : ""}"><span>${escapeHtml(label)}</span><strong>${value}</strong>${note ? `<em>${escapeHtml(String(note))}</em>` : ""}</div>`;
+    })
+    .join("");
+}
+
+function renderGrowthStory(data) {
+  const f = data.forecast || {};
+  const why = (data.why || []).filter(Boolean).join(" ");
+  const cards = [
+    ["01", "What happened", data.summary || "Open this page after you have sales on this shop."],
+    ["02", "Why it happened", why || (data.alerts || [])[0] || "The latest bills do not show a single cause yet."],
+    ["03", "What may happen next", `If recent bills hold, tomorrow is about ${money(f.tomorrow)}, the next 7 days ${money(f.next7)}, and the next 30 days ${money(f.next30)}.`],
+    ["04", "What you should do", data.opportunity || "Keep the best sellers in stock and review thin-margin items."],
+  ];
+  const host = $("growth-story");
+  if (!host) return;
+  host.innerHTML = cards
     .map(
-      ([label, value, note]) =>
-        `<div class="report-card"><span>${escapeHtml(label)}</span><strong>${value}</strong>${note ? `<em>${escapeHtml(String(note))}</em>` : ""}</div>`,
+      ([step, title, text]) => `<article class="growth-story-card">
+        <span>${step}</span>
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(text)}</p>
+      </article>`,
     )
     .join("");
+}
+
+function renderGrowthOversell(data) {
+  const host = $("growth-oversell");
+  if (!host) return;
+  const block = data.oversell || {};
+  const lines = block.lines || [];
+  if (!lines.length && !Number(block.items)) {
+    host.innerHTML = `<p class="hint">No item was sold beyond the stock on hand this month.</p>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="report-grid growth-mini-grid">
+      <div class="report-card is-alert"><span>Items</span><strong>${block.items || 0}</strong></div>
+      <div class="report-card is-alert"><span>Oversold qty</span><strong>${block.qty || 0}</strong></div>
+      <div class="report-card is-alert"><span>Oversold sales</span><strong>${money(block.amount)}</strong></div>
+      <div class="report-card"><span>Bills</span><strong>${block.bills || 0}</strong></div>
+      <div class="report-card"><span>Still below zero</span><strong>${block.negative || 0}</strong></div>
+    </div>
+    ${productTable(lines, [
+      ["Product", (r) => escapeHtml(r.name)],
+      ["Customer", (r) => escapeHtml(r.customer || "")],
+      ["Invoice", (r) => escapeHtml(r.invoice || "")],
+      ["Sold", (r) => r.sold || 0],
+      ["Before", (r) => r.before || 0],
+      ["Oversold", (r) => r.oversold || 0],
+      ["Sales", (r) => money(r.amount)],
+      ["Date", (r) => escapeHtml(r.date || "")],
+    ])}`;
 }
 
 function renderGrowthScore(data) {
@@ -188,9 +241,11 @@ function renderGrowthActions(data) {
             (a) => `<article class="growth-action">
               <div><strong>${escapeHtml(a.title)}</strong><p>${escapeHtml(a.detail || "")}</p></div>
               <button class="btn primary" type="button" ${
-                a.kind === "combo" || a.jump === "combo" || a.jump === "offers" || a.kind === "clearance"
-                  ? `data-growth-combo="1"`
-                  : `data-growth-jump="${escapeHtml(a.jump || "reports")}"`
+                a.report
+                  ? `data-growth-report="${escapeHtml(a.report)}"`
+                  : a.kind === "combo" || a.jump === "combo" || a.jump === "offers" || a.kind === "clearance"
+                    ? `data-growth-combo="1"`
+                    : `data-growth-jump="${escapeHtml(a.jump || "reports")}"`
               }>${escapeHtml(a.action || "Open")}</button>
             </article>`,
           )
@@ -352,8 +407,10 @@ function renderGrowthAll(data) {
   $("growth-alerts").innerHTML = (data.alerts || [])
     .map((t) => `<p class="growth-alert">⚠ ${escapeHtml(t)}</p>`)
     .join("");
+  renderGrowthStory(data);
   renderGrowthKpis(data);
   renderGrowthScore(data);
+  renderGrowthOversell(data);
   renderGrowthActions(data);
   renderGrowthCharts(data);
   renderGrowthProducts(data);
@@ -373,6 +430,11 @@ function bindGrowthUi() {
   root?.addEventListener("click", (e) => {
     if (e.target.closest("[data-growth-combo]")) {
       openComboDraft();
+      return;
+    }
+    const report = e.target.closest("[data-growth-report]");
+    if (report) {
+      void openGrowthReport(report.dataset.growthReport || "Item-Wise Overselling");
       return;
     }
     const jump = e.target.closest("[data-growth-jump]");
@@ -558,6 +620,16 @@ async function askGrowthQuestion(question) {
     $("growth-hint").textContent = err.message;
     $("growth-hint").className = "hint error";
   }
+}
+
+async function openGrowthReport(sheet) {
+  if (typeof state !== "undefined") state.reportTab = "sales";
+  showView("reports");
+  if (!document.getElementById("item-oversell-report") && typeof loadReports === "function") {
+    await loadReports();
+  }
+  if (typeof applyReportsFilter === "function") applyReportsFilter();
+  document.querySelector(`#reports .report-block[data-report-sheet="${sheet}"]`)?.scrollIntoView({ block: "start" });
 }
 
 async function loadGrowthDashboard() {
