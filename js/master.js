@@ -2623,7 +2623,7 @@ async function render() {
       body.innerHTML = masterDesk(
         "Businesses",
         "Live business admin map",
-        data?.note || "Business admins on a live world map. Locations are approximate.",
+        "Green is online, orange was active in the last 30 minutes, and grey is offline.",
         [],
         map ? map.render(data) : `<p class="hint">The map could not be drawn.</p>`,
       );

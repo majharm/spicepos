@@ -264,16 +264,21 @@
 
   function popupHtml(row) {
     const place = [row.city, row.region, row.country].filter(Boolean).join(", ") || (row.local ? "Private network" : "Location unavailable");
-    return `<strong>${esc(row.businessName)}</strong><br>
-      Business ID ${esc(row.businessId)}<br>
-      Owner ${esc(row.ownerName)}<br>
-      IP ${esc(row.ip || "—")}<br>
-      ${esc(place)}<br>
-      Category ${esc(row.category || "—")}<br>
-      Login ${esc(whenText(row.loginAt))}<br>
-      Last active ${esc(whenText(row.lastActive))}<br>
-      Status ${esc(statusLabel(row.status))}<br>
-      <span>${row.placeSource === "shop" ? "Plotted from the shop city. The admin IP did not resolve." : "Approximate IP location, not an exact address."}</span>`;
+    const source = row.placeSource === "shop"
+      ? "Plotted from the shop city. The admin IP did not resolve."
+      : "Approximate IP location, not an exact address.";
+    return `<div class="biz-pop">
+      <strong>${esc(row.businessName)}</strong>
+      <span class="biz-pop-status is-${esc(row.status)}">${esc(statusLabel(row.status))}</span>
+      <span>Business ID ${esc(row.businessId)}</span>
+      <span>Owner ${esc(row.ownerName)}</span>
+      <span>IP ${esc(row.ip || "—")}</span>
+      <span>${esc(place)}</span>
+      <span>Category ${esc(row.category || "—")}</span>
+      <span>Login ${esc(whenText(row.loginAt))}</span>
+      <span>Last active ${esc(whenText(row.lastActive))}</span>
+      <small>${source}</small>
+    </div>`;
   }
 
   function optionList(values, current, allLabel) {
@@ -295,9 +300,9 @@
         <div class="ip-dash-stat"><label>Active today</label><strong id="biz-today">${esc(summary.activeToday || 0)}</strong><small>Heartbeat today</small></div>
       </div>
       <div class="ip-dash-layout">
-        <section class="ip-dash-panel">
+        <section class="ip-dash-panel biz-map-card">
           <div class="ip-dash-head">
-            <h2>Business admin traffic</h2>
+            <h2>Business admins</h2>
             <div class="ip-dash-legend">
               <span><i class="is-online"></i>Online</span>
               <span><i class="is-recent"></i>Recent</span>
@@ -392,9 +397,15 @@
         map = new maps.Map(mapEl, {
           center: { lat: 22.6, lng: 79 },
           zoom: 5,
-          mapTypeControl: false,
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            style: maps.MapTypeControlStyle.HORIZONTAL_BAR,
+            position: maps.ControlPosition.TOP_RIGHT,
+          },
           streetViewControl: false,
           fullscreenControl: true,
+          zoomControl: true,
+          clickableIcons: false,
         });
         info = new maps.InfoWindow();
         activeMap = { remove: tearDown };
@@ -439,7 +450,7 @@
       const body = board.querySelector("#biz-rows");
       if (body) {
         const slice = shown.slice(0, 100);
-        body.innerHTML = slice.map((row) => `<tr data-biz-id="${esc(row.businessId)}">
+        body.innerHTML = slice.map((row) => `<tr data-biz-id="${esc(row.businessId)}" class="${row.businessId === openId ? "is-on" : ""}">
           <td><strong>${esc(row.businessName)}</strong><small>${esc(row.category)}</small></td>
           <td>${esc(row.city || row.region || row.country || (row.local ? "Private network" : "—"))}</td>
           <td><span class="biz-status is-${esc(row.status)}">${esc(statusLabel(row.status))}</span></td>
@@ -474,6 +485,7 @@
           openId = row.businessId;
           info.setContent(popupHtml(row));
           info.open({ map, anchor: marker });
+          markRow(row.businessId);
         });
         markers.set(row.businessId, { marker, row });
         bounds.extend(position);
@@ -498,6 +510,14 @@
       }
     }
 
+    function markRow(id) {
+      board.querySelectorAll("#biz-rows tr[data-biz-id]").forEach((tr) => {
+        tr.classList.toggle("is-on", tr.dataset.bizId === id);
+      });
+      const selected = id ? board.querySelector(`#biz-rows tr[data-biz-id="${CSS.escape(id)}"]`) : null;
+      selected?.scrollIntoView({ block: "nearest" });
+    }
+
     paintFilters();
     paint();
     ["biz-country", "biz-region", "biz-city", "biz-category", "biz-status"].forEach((id) => {
@@ -513,6 +533,7 @@
       const item = markers.get(rowEl?.dataset?.bizId || "");
       if (!item || !map || !info) return;
       openId = rowEl.dataset.bizId;
+      markRow(openId);
       map.panTo(item.marker.getPosition());
       if ((map.getZoom() || 0) < 6) map.setZoom(6);
       info.setContent(popupHtml(item.row));

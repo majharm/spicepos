@@ -1056,6 +1056,81 @@ body.master-dark #master-app {
 #master-app .ip-dash .leaflet-popup-tip { background: #142238; color: #edf4ff; }
 #master-app .ip-dash .leaflet-popup-content { font-size: 12px; }
 #master-app .ip-dash .leaflet-container a { color: #6bc4ff; }
+
+#master-app .biz-dash { color: var(--ma-text); }
+#master-app .biz-dash .ip-dash-stat,
+#master-app .biz-dash .ip-dash-panel {
+  background: var(--ma-card);
+  color: var(--ma-text);
+  border: 1px solid var(--ma-line);
+  box-shadow: var(--ma-shadow);
+}
+#master-app .biz-dash .ip-dash-panel { overflow: visible; }
+#master-app .biz-dash .ip-dash-stat label,
+#master-app .biz-dash .ip-dash-status,
+#master-app .biz-dash .ip-dash-foot,
+#master-app .biz-dash .ip-dash-legend,
+#master-app .biz-dash .ip-dash-records th,
+#master-app .biz-dash .ip-dash-records small { color: var(--ma-muted); }
+#master-app .biz-dash .ip-dash-stat strong,
+#master-app .biz-dash .ip-dash-head h2,
+#master-app .biz-dash .ip-dash-section h2 { color: var(--ma-text); }
+#master-app .biz-dash .ip-dash-stat small { color: var(--ma-blue); }
+#master-app .biz-dash .ip-dash-head,
+#master-app .biz-dash .ip-dash-records td,
+#master-app .biz-dash .ip-dash-records th { border-color: var(--ma-line); }
+#master-app .biz-dash .ip-dash-records td { color: var(--ma-text); }
+#master-app .biz-dash .ip-dash-records tr:hover,
+#master-app .biz-dash .ip-dash-records tr.is-on { background: var(--ma-blue-bg); }
+#master-app .biz-dash .ip-dash-filters { grid-template-columns: 1fr 1fr; }
+#master-app .biz-dash .ip-dash-filters label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ma-muted);
+}
+#master-app .biz-dash .ip-dash-filters select {
+  background-color: var(--ma-bg);
+  color: var(--ma-text);
+  border-color: var(--ma-line);
+  min-height: 40px;
+}
+#master-app .biz-dash .ip-dash-table { max-height: min(52vh, 460px); }
+#master-app .biz-dash .biz-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+#master-app .biz-dash .biz-status.is-online { background: var(--ma-ok-bg); color: var(--ma-ok); }
+#master-app .biz-dash .biz-status.is-recent { background: var(--ma-warn-bg); color: var(--ma-warn); }
+#master-app .biz-dash .biz-status.is-offline { background: var(--ma-row); color: var(--ma-muted); }
+#master-app #biz-leaflet { height: min(68vh, 640px); border-radius: 0 0 14px 14px; overflow: hidden; }
+#master-app #biz-leaflet .gm-style,
+#master-app #biz-leaflet .gm-style button,
+#master-app #biz-leaflet .gm-style input,
+#master-app #biz-leaflet .gm-style label { color: #202124; font-family: Roboto, Arial, sans-serif; }
+#master-app #biz-leaflet .gm-style button { min-height: 0; padding: 0; background-color: #fff; border: 0; box-shadow: none; }
+#master-app .biz-pop { min-width: 210px; color: #0f2744; font: 13px/1.45 system-ui, sans-serif; }
+#master-app .biz-pop strong { display: block; margin-bottom: 2px; font-size: 15px; }
+#master-app .biz-pop span,
+#master-app .biz-pop small { display: block; color: #64748b; }
+#master-app .biz-pop .biz-pop-status {
+  display: inline-flex;
+  margin: 2px 0 6px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+#master-app .biz-pop .biz-pop-status.is-online { background: #ecfdf5; color: #047857; }
+#master-app .biz-pop .biz-pop-status.is-recent { background: #fffbeb; color: #b45309; }
+#master-app .biz-pop .biz-pop-status.is-offline { background: #f1f5f9; color: #475569; }
+#master-app .biz-pop small { margin-top: 6px; }
 @media (max-width: 1000px) {
   #master-app .ip-dash-layout { grid-template-columns: 1fr; }
   #master-app #ip-leaflet,

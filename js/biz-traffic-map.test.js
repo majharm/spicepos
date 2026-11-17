@@ -141,9 +141,9 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   const auth = read("server/auth.js");
   const php = read("pos-php-core.php");
   assert.match(html, /data-tab="bizmap"/);
-  assert.match(html, /biz-traffic-map\.js\?v=20261117gmap1/);
+  assert.match(html, /biz-traffic-map\.js\?v=20261117gmap2/);
   assert.match(html, /vendor\/leaflet\/leaflet\.js\?v=20261117map1/);
-  assert.match(html, /master\.js\?v=20261117map1/);
+  assert.match(html, /master\.js\?v=20261117gmap2/);
   assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261117bizmap1/);
   assert.match(read("js/admin-heartbeat.js"), /\/api\/session\/heartbeat/);
   assert.match(read("js/admin-heartbeat.js"), /visibilityState === "hidden"/);
