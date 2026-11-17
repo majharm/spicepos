@@ -132,52 +132,114 @@
     });
   }
 
+  let dbPromise = null;
+  let memorySnapshot = null;
+  let memoryRows = null;
+  let shopId = "";
+
   function openDb() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB, 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("snapshot")) db.createObjectStore("snapshot");
-        if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath: "idempotencyKey" });
-        if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+    if (!dbPromise) {
+      dbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("snapshot")) db.createObjectStore("snapshot");
+          if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath: "idempotencyKey" });
+          if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
+        };
+        req.onsuccess = () => {
+          req.result.onclose = () => { dbPromise = null; };
+          resolve(req.result);
+        };
+        req.onerror = () => {
+          dbPromise = null;
+          reject(req.error);
+        };
+      });
+    }
+    return dbPromise;
+  }
+
+  function rememberShop(data) {
+    if (!data || typeof data !== "object") return;
+    memorySnapshot = data;
+    if (data.business?.id) shopId = String(data.business.id);
   }
 
   async function readSnapshot() {
+    if (memorySnapshot) return memorySnapshot;
     const db = await openDb();
-    return new Promise((resolve, reject) => {
+    const data = await new Promise((resolve, reject) => {
       const tx = db.transaction("snapshot", "readonly");
       const req = tx.objectStore("snapshot").get("shop");
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => reject(req.error);
     });
+    if (data) rememberShop(data);
+    return data;
   }
 
-  async function writeSnapshot(data) {
-    const db = await openDb();
-    const tx = db.transaction("snapshot", "readwrite");
-    tx.objectStore("snapshot").put(data, "shop");
-    await txDone(tx);
+  function writeSnapshot(data) {
+    rememberShop(data);
+    openDb().then((db) => {
+      const tx = db.transaction("snapshot", "readwrite");
+      tx.objectStore("snapshot").put(data, "shop");
+    }).catch(() => {});
   }
 
   async function readOutbox() {
+    if (memoryRows) return memoryRows;
     const db = await openDb();
-    return new Promise((resolve, reject) => {
+    memoryRows = await new Promise((resolve, reject) => {
       const tx = db.transaction("outbox", "readonly");
       const req = tx.objectStore("outbox").getAll();
       req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => reject(req.error);
     });
+    return memoryRows;
+  }
+
+  async function getOutbox(key) {
+    if (memoryRows) return memoryRows.find((row) => row.idempotencyKey === key) || null;
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("outbox", "readonly");
+      const req = tx.objectStore("outbox").get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function rememberRow(row) {
+    if (!memoryRows) memoryRows = [];
+    const index = memoryRows.findIndex((entry) => entry.idempotencyKey === row.idempotencyKey);
+    if (index >= 0) memoryRows[index] = row;
+    else memoryRows.push(row);
   }
 
   async function putOutbox(row) {
+    rememberRow(row);
     const db = await openDb();
     const tx = db.transaction("outbox", "readwrite");
     tx.objectStore("outbox").put(row);
     await txDone(tx);
+  }
+
+  async function dropOutbox(keys) {
+    if (!keys.length) return;
+    const gone = new Set(keys);
+    if (memoryRows) memoryRows = memoryRows.filter((row) => !gone.has(row.idempotencyKey));
+    const db = await openDb();
+    const tx = db.transaction("outbox", "readwrite");
+    const store = tx.objectStore("outbox");
+    for (const key of keys) store.delete(key);
+    await txDone(tx);
+  }
+
+  function staleSynced(row) {
+    if (!row || row.status !== "synced") return false;
+    const age = Date.now() - Date.parse(row.syncedAt || "");
+    return age > (row.held ? 20000 : 60000);
   }
 
   async function nextOfflineNumber() {
@@ -199,7 +261,8 @@
     if (!data || typeof data !== "object") return data;
     const rows = await readOutbox().catch(() => []);
     const businessId = String(data.business?.id || "");
-    const mine = rows.filter((row) => !businessId || row.businessId === businessId);
+    const mine = rows.filter((row) => row.status !== "synced" && row.status !== "conflict" && (!businessId || !row.businessId || row.businessId === businessId));
+    if (!mine.length) return data;
     return { ...data, items: applyPendingStock(data.items, mine) };
   }
 
@@ -255,9 +318,9 @@
 
   async function ensureRow(kind, path, payload) {
     const key = String(payload.idempotencyKey || "");
-    const existing = (await readOutbox()).find((row) => row.idempotencyKey === key);
+    const existing = await getOutbox(key);
     if (existing) return existing;
-    const snapshot = await readSnapshot();
+    const snapshot = memorySnapshot;
     const offlineNumber = await nextOfflineNumber();
     const row = {
       idempotencyKey: key,
@@ -266,7 +329,7 @@
       payload,
       deltas: stockDeltas(kind, payload, snapshot),
       offlineNumber: kind === "purchase" ? `PO-${offlineNumber}` : offlineNumber,
-      businessId: String(snapshot?.business?.id || ""),
+      businessId: shopId || String(snapshot?.business?.id || ""),
       deviceId: globalThis.POSDevice?.id?.() || "",
       deviceLabel: globalThis.POSDevice?.label?.() || "",
       status: "pending",
@@ -285,6 +348,9 @@
     const gen = ++paintGen;
     readOutbox().then((rows) => {
       if (gen !== paintGen) return;
+      const stale = rows.filter(staleSynced);
+      if (stale.length) dropOutbox(stale.map((row) => row.idempotencyKey)).catch(() => {});
+      rows = rows.filter((row) => !staleSynced(row));
       const waiting = rows.filter((row) => row.status !== "synced");
       const recent = rows.filter((row) => row.held && row.status === "synced" && Date.now() - Date.parse(row.syncedAt || "") < 20000 && row.serverNumber);
       let bar = document.getElementById("pos-sync-note");
@@ -331,8 +397,7 @@
     if (inflight.has(row.idempotencyKey)) return { waiting: true };
     inflight.add(row.idempotencyKey);
     try {
-      const snapshot = await readSnapshot();
-      const currentBusiness = String(snapshot?.business?.id || "");
+      const currentBusiness = shopId || String(memorySnapshot?.business?.id || "");
       if (currentBusiness && row.businessId && row.businessId !== currentBusiness) {
         row.status = "conflict";
         row.error = "This bill belongs to another shop on this device.";
@@ -393,7 +458,7 @@
   }
 
   async function hold(row) {
-    const stored = (await readOutbox()).find((entry) => entry.idempotencyKey === row.idempotencyKey) || row;
+    const stored = (await getOutbox(row.idempotencyKey)) || row;
     if (stored.status !== "synced") {
       stored.held = true;
       await putOutbox(stored);
@@ -407,7 +472,7 @@
     while (inflight.has(row.idempotencyKey) && Date.now() - start < 25000) {
       await new Promise((resolve) => setTimeout(resolve, 40));
     }
-    const fresh = (await readOutbox()).find((entry) => entry.idempotencyKey === row.idempotencyKey) || row;
+    const fresh = (await getOutbox(row.idempotencyKey)) || row;
     if (fresh.status === "synced") return reply(serverReply(fresh, await localResult(fresh)));
     const sent = await sendOne(fresh);
     if (sent?.ok) return sent.reply;
@@ -444,16 +509,19 @@
   }
 
   let lastReport = 0;
+  let lastSignature = "";
   async function reportStatus() {
     const orig = api._send;
     if (typeof orig !== "function" || navigator.onLine === false) return;
-    if (Date.now() - lastReport < 20000) return;
     const deviceId = globalThis.POSDevice?.id?.() || "";
     if (!deviceId) return;
-    lastReport = Date.now();
-    const rows = await readOutbox().catch(() => []);
+    const rows = memoryRows || await readOutbox().catch(() => []);
     const pending = rows.filter((row) => row.status !== "synced" && row.status !== "conflict").length;
     const conflicts = rows.filter((row) => row.status === "conflict").length;
+    const signature = `${pending}:${conflicts}`;
+    if (signature === lastSignature && (signature === "0:0" || Date.now() - lastReport < 180000)) return;
+    lastReport = Date.now();
+    lastSignature = signature;
     const last = rows.filter((row) => row.syncedAt).sort((a, b) => String(a.syncedAt).localeCompare(String(b.syncedAt))).pop();
     try {
       await orig("/api/sync/status", {
@@ -469,6 +537,7 @@
       });
     } catch {
       lastReport = 0;
+      lastSignature = "";
     }
   }
 

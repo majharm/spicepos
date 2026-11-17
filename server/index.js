@@ -345,6 +345,14 @@ app.post("/api/notifications/ack", requireStaff, async (req, res) => {
   }
 });
 
+const shopAlertAfter = new Map();
+function scheduleShopAlerts(businessId) {
+  const now = Date.now();
+  if (now < (shopAlertAfter.get(businessId) || 0)) return;
+  shopAlertAfter.set(businessId, now + 10 * 60 * 1000);
+  void tickShopAlerts(businessId).catch((err) => console.error("shop alert tick failed:", err.message));
+}
+
 app.get("/api/bootstrap", requireStaff, async (_req, res) => {
   try {
     const businessId = bid();
@@ -429,7 +437,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       offers,
       offerSettings,
     });
-    void tickShopAlerts(businessId).catch((err) => console.error("shop alert tick failed:", err.message));
+    scheduleShopAlerts(businessId);
   } catch (err) {
     res.status(500).json({ error: String(err.message) });
   }
@@ -1384,7 +1392,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
     }, req);
     const soldIds = (result.lines || []).map((line) => line.item_id).filter(Boolean);
     void sendLowStockAlerts(businessId, soldIds).catch((err) => console.error("low stock alert failed:", err.message));
-    void tickShopAlerts(businessId).catch((err) => console.error("closing alert failed:", err.message));
+    scheduleShopAlerts(businessId);
     void deliverInvoiceCopy({ businessId, order: result, source: "auto" }).catch((err) =>
       console.error("invoice email failed:", String(err?.message || err).slice(0, 180)),
     );
@@ -1421,6 +1429,11 @@ app.use((req, res, next) => {
 app.get("/manifest.webmanifest", (req, res) => {
   res.type("application/manifest+json");
   res.sendFile(path.join(publicDir, "manifest.webmanifest"));
+});
+app.get("/sw.js", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.type("application/javascript");
+  res.sendFile(path.join(publicDir, "sw.js"));
 });
 
 app.use(express.static(publicDir));

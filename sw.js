@@ -1,5 +1,5 @@
 /* The installed app opens from cache when the network drops. API calls stay on the network. */
-const SHELL = "pos-pwa-2";
+const SHELL = "pos-pwa-3";
 const OFFLINE = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -23,6 +23,22 @@ function cacheable(url, req) {
   return true;
 }
 
+function isAsset(url) {
+  return /\.(?:js|css|png|jpe?g|webp|gif|svg|ico|woff2?|webmanifest)$/i.test(url.pathname);
+}
+
+function store(cache, req, res) {
+  if (!res || !res.ok) return;
+  const copy = res.clone();
+  cache.put(req, copy).catch(() => {});
+}
+
+async function fromNetwork(cache, req) {
+  const res = await fetch(req);
+  store(cache, req, res);
+  return res;
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -30,15 +46,15 @@ self.addEventListener("fetch", (event) => {
   if (!cacheable(url, req)) return;
   event.respondWith((async () => {
     const cache = await caches.open(SHELL);
+    const cached = await cache.match(req);
+    if (cached && isAsset(url)) {
+      fromNetwork(cache, req).catch(() => {});
+      return cached;
+    }
     try {
-      const res = await fetch(req);
-      if (res && res.ok) {
-        try { await cache.put(req, res.clone()); } catch { /* some responses cannot be stored */ }
-      }
-      return res;
+      return await fromNetwork(cache, req);
     } catch {
-      const hit = await cache.match(req);
-      if (hit) return hit;
+      if (cached) return cached;
       if (req.mode === "navigate") {
         const home = await cache.match("/index.html");
         if (home) return home;
