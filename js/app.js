@@ -10265,12 +10265,16 @@ async function loadReports() {
   try {
     const offerQuery = offerProfitQuery();
     const pir = globalThis.POSPurchaseItemReport;
+    const sir = globalThis.POSSalesItemReport;
     pir?.captureFilters?.();
+    sir?.captureFilters?.();
     const itemQuery = pir?.queryString?.() || `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-    const [data, offerProfit, itemPurchase] = await Promise.all([
+    const salesQuery = sir?.queryString?.() || `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    const [data, offerProfit, itemPurchase, itemSales] = await Promise.all([
       api(`/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
       api(`/api/reports/offer-profit?${offerQuery}`, { timeoutMs: 25000 }).catch((err) => ({ error: err?.message || "Profit report did not load" })),
       api(`/api/reports/item-purchases?${itemQuery}`, { timeoutMs: 25000 }).catch((err) => ({ error: err?.message || "Item-wise purchase report did not load" })),
+      api(`/api/reports/item-sales?${salesQuery}`, { timeoutMs: 25000 }).catch((err) => ({ error: err?.message || "Item-wise sales report did not load" })),
     ]);
     const s = data.summary || {};
     const gs = s.gstSummary || {};
@@ -10314,6 +10318,7 @@ async function loadReports() {
       dailySalesBlock(data),
       reportBlock("GST summary (India)", "GST summary", ["Type", "CGST", "SGST", "IGST", "Total GST"], gstSummaryRows(s), "gst"),
       reportBlock("Sales bills", "Sales bills", ["Order", "Customer", "Type", "Pack", "Pack count", "Status", "Qty g", "Taxable", "GST", "Total", "Pay", "Pay status", "Date"], (data.sales || []).map((o) => [o.order_number, o.customer_name, o.customer_type, o.pack_name || "Loose items", Number(o.pack_count) || 0, orderStatusLabel(o.status), Number(o.total_quantity_gm) || 0, Number(o.subtotal) || 0, Number(o.gst) || 0, Number(o.total) || 0, o.payment_method, o.payment_status, formatShopDateTime(o.created_at)]), "sales"),
+      globalThis.POSSalesItemReport?.sectionHtml?.(itemSales) || "",
       reportBlock("Item sales", "Item sales", isApparelShop() ? ["Item", "Colour", "Size", "Qty g", "Amount", "GST"] : ["Item", "Qty g", "Amount", "GST"], (data.byItem || []).map((r) => (
         isApparelShop()
           ? [r.item_name, r.color || "—", r.size || "—", Number(r.quantity_gm) || 0, Number(r.amount) || 0, Number(r.gst) || 0]

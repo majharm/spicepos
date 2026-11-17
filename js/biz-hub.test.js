@@ -84,7 +84,7 @@ test("POS shell wires Reports Center, payments, audit, and hub scripts", () => {
   assert.match(index, /id="view-hub-sales"/);
   assert.match(index, /id="dash-kpis"/);
   assert.match(ui, /id="dash-sales-graph"/);
-  assert.match(index, /biz-hub\.js\?v=20261116pir1/);
+  assert.match(index, /biz-hub\.js\?v=20261117sir1/);
   assert.match(index, /id="rep-pdf"/);
   assert.match(index, /id="rep-pay-mode"/);
   assert.match(app, /POSBizHubUi\?\.paintDashboard/);

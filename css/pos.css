@@ -8706,14 +8706,17 @@ html[dir="rtl"] select {
   gap: 10px 14px;
   margin-top: 10px;
 }
-#item-purchase-report .reports-more-grid {
+#item-purchase-report .reports-more-grid,
+#item-sales-report .reports-more-grid {
   align-items: end;
   margin: 8px 0 12px;
 }
-#item-purchase-report .pir-span {
+#item-purchase-report .pir-span,
+#item-sales-report .sir-span {
   grid-column: span 2;
 }
-#item-purchase-report th button {
+#item-purchase-report th button,
+#item-sales-report th button {
   background: transparent;
   border: 0;
   color: inherit;
@@ -8723,7 +8726,8 @@ html[dir="rtl"] select {
   padding: 0;
   text-align: left;
 }
-#item-purchase-report th button:hover {
+#item-purchase-report th button:hover,
+#item-sales-report th button:hover {
   text-decoration: underline;
 }
 .reports-center-bar {

@@ -190,6 +190,7 @@
     { id: "yearly-sales", center: "sales", title: "Yearly Sales", tab: "sales", sheet: "Sales bills" },
     { id: "sales-by-customer", center: "sales", title: "Sales by Customer", tab: "sales", sheet: "Customer sales" },
     { id: "sales-by-product", center: "sales", title: "Sales by Product", tab: "sales", sheet: "Item sales" },
+    { id: "item-wise-sales", center: "sales", title: "Item-Wise Sales Report", tab: "sales", sheet: "Item-Wise Sales" },
     { id: "sales-by-category", center: "sales", title: "Sales by Category", tab: "sales", sheet: "Item sales" },
     { id: "sales-by-brand", center: "sales", title: "Sales by Brand", tab: "sales", sheet: "Item sales", kinds: ["apparel", "footwear", "electronics", "pharmacy"] },
     { id: "sales-by-user", center: "sales", title: "Sales by User", tab: "sales", sheet: "Sales bills" },
