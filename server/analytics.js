@@ -100,9 +100,15 @@ export async function ensureAnalyticsSchema() {
     device VARCHAR(32) NULL,
     referrer VARCHAR(255) NULL,
     session_id VARCHAR(64) NULL,
+    ip VARCHAR(64) NULL,
     INDEX (occurred_at),
     INDEX (event_name)
   )`);
+  try {
+    await query("ALTER TABLE website_analytics_events ADD COLUMN ip VARCHAR(64) NULL");
+  } catch {
+    /* column already present */
+  }
   await query(`CREATE TABLE IF NOT EXISTS website_analytics_alerts (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(128) NOT NULL,
@@ -177,6 +183,12 @@ async function saveSettings(body) {
   return getSettings();
 }
 
+export function requestIp(req) {
+  const forwarded = String(req?.headers?.["x-forwarded-for"] || "").split(",")[0].trim();
+  const remote = String(req?.socket?.remoteAddress || "").trim();
+  return (forwarded || remote).replace(/^\[|\]$/g, "").slice(0, 64);
+}
+
 export async function recordWebsiteEvent(body, req) {
   const name = String(body?.event_name || "").trim();
   if (!GA4_EVENTS.includes(name)) throw new Error("Unknown analytics event");
@@ -189,8 +201,8 @@ export async function recordWebsiteEvent(body, req) {
   await query(
     `INSERT INTO website_analytics_events (
        id, occurred_at, event_name, page_path, page_title, business_category, page_type, cta_type,
-       utm_source, utm_medium, utm_campaign, utm_term, utm_content, device, referrer, session_id
-     ) VALUES (?, CURRENT_TIMESTAMP(3), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       utm_source, utm_medium, utm_campaign, utm_term, utm_content, device, referrer, session_id, ip
+     ) VALUES (?, CURRENT_TIMESTAMP(3), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       crypto.randomUUID(),
       name,
@@ -207,6 +219,7 @@ export async function recordWebsiteEvent(body, req) {
       device,
       String(body?.referrer || "").slice(0, 255),
       String(body?.session_id || "").slice(0, 64),
+      requestIp(req),
     ],
   );
   return { ok: true };

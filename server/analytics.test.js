@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { GA4_EVENTS, DEFAULT_CONVERSIONS, isMeasurementId, sanitizeEventParams, rangeToSince } from "./analytics.js";
+import { GA4_EVENTS, DEFAULT_CONVERSIONS, isMeasurementId, sanitizeEventParams, rangeToSince, requestIp } from "./analytics.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
@@ -43,5 +43,11 @@ test("analytics APIs are registered without OAuth tokens in the browser", () => 
   assert.doesNotMatch(masterUi, /client_secret/);
   assert.doesNotMatch(ga, /access_token/);
   assert.match(js, /source: "website_events"/);
+  assert.match(js, /requestIp\(req\)/);
+  assert.doesNotMatch(js, /body\?\.ip|body\.ip|\$body\["ip"\]/);
+  assert.match(read("pos-analytics.php"), /substr\(pos_ip\(\), 0, 64\)/);
+  assert.doesNotMatch(read("pos-analytics.php"), /\$body\["ip"\]/);
+  assert.equal(requestIp({ headers: { "x-forwarded-for": "203.0.113.8, 10.0.0.1" }, socket: { remoteAddress: "10.0.0.1" } }), "203.0.113.8");
+  assert.equal(requestIp({ headers: {}, socket: { remoteAddress: "198.51.100.4" } }), "198.51.100.4");
   assert.match(js, /Search Console rankings are not included/);
 });

@@ -210,7 +210,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "live", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
+  main: ["dash", "live", "ipmap", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support"],
   advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
@@ -224,6 +224,7 @@ const PAGE_HINTS = {
   fees: "Yearly plan fees stored on each shop",
   health: "Database and process status from this server",
   live: "Online only after a real click or keypress",
+  ipmap: "Website visitors plotted by address",
   profile: "Your name, address, password, and preferences",
   biz: "Shops, plans, and module permissions",
   users: "Passwords and locked accounts",
@@ -295,6 +296,7 @@ const MASTER_PAGES = [
   { tab: "fees", title: "Payments", keywords: "fees yearly plan billing" },
   { tab: "health", title: "System monitoring", keywords: "health database status" },
   { tab: "live", title: "Live active users", keywords: "online offline session heartbeat" },
+  { tab: "ipmap", title: "Website traffic map", keywords: "ip geolocation map website traffic visitors country city globe" },
   { tab: "profile", title: "My profile", keywords: "password name email address timezone language" },
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
   { tab: "users", title: "Users", keywords: "password unlock login" },
@@ -2233,6 +2235,7 @@ async function render() {
   const titles = {
     dash: "Overview",
     live: "Live active users",
+    ipmap: "Website traffic map",
     profile: "My profile",
     biz: "Business management",
     fees: "Plan fees",
@@ -2347,6 +2350,7 @@ async function render() {
           ${kpiButton("This month", money(k.monthSales?.value ?? 0), k.monthSales, "dsa-sales", { icon: "sales" })}
           ${kpiButton("Invoices", k.invoices?.value ?? t.transactions, k.invoices, "dsa-sales", { icon: "bill", series: insight?.series, key: "bills" })}
           ${kpiButton("Application load", applicationLoadText(health), null, "health", { icon: "pulse" })}
+          ${kpiButton("Website traffic", "Map", null, "ipmap", { icon: "pulse" })}
         </div>
         <div class="master-insight-grid">
           <section class="master-panel ma-span-2">
@@ -2620,6 +2624,23 @@ async function render() {
       );
       paintFees("");
       $("fees-q")?.addEventListener("input", () => paintFees($("fees-q").value));
+    } else if (tab === "ipmap") {
+      const data = await api("/api/master/ip-map");
+      const geo = globalThis.POSIpMap;
+      const totals = data?.totals || {};
+      body.innerHTML = masterDesk(
+        "Website",
+        "Website traffic map",
+        data?.note || "Website page views from the last 14 days.",
+        [
+          { label: "Visitors", value: totals.ips ?? 0 },
+          { label: "Page views", value: totals.views ?? 0 },
+          { label: "Sessions", value: totals.sessions ?? 0 },
+          { label: "Countries", value: totals.countries ?? 0 },
+        ],
+        geo ? geo.render(data) : `<p class="hint">The map could not be drawn.</p>`,
+      );
+      geo?.bind(body, data, () => render());
     } else if (tab === "health") {
       const [health, auditRows] = await Promise.all([
         api("/api/master/health"),
@@ -3972,6 +3993,12 @@ async function render() {
       } else {
         await window.POSMasterAnalytics.render(body, analyticsPane, api, {
           setPane: (p) => setMasterTab("analytics", p),
+        });
+        body.querySelectorAll("[data-open-tab]").forEach((btn) => {
+          btn.onclick = () => {
+            const next = btn.dataset.openTab;
+            if (next) setMasterTab(next);
+          };
         });
       }
     } else if (tab === "seo") {

@@ -42,7 +42,7 @@ test("live monitoring is wired without marking a quiet tab online", () => {
   assert.doesNotMatch(pulse, /setInterval/);
   assert.match(read("index.html"), /session-pulse\.js\?v=20261030live1/);
   assert.match(read("master.html"), /data-tab="live"/);
-  assert.match(read("master.html"), /master\.js\?v=20261117load1/);
+  assert.match(read("master.html"), /master\.js\?v=20261117ipmap1/);
   assert.match(read("pos-php-core.php"), /session\/pulse/);
   assert.match(read("pos-php-core.php"), /last_seen_at/);
   assert.match(read("pos-master-live.php"), /function pos_master_live_dispatch/);
@@ -53,5 +53,19 @@ test("live monitoring is wired without marking a quiet tab online", () => {
   assert.match(read("pos-master-live.php"), /\/proc\/loadavg/);
   assert.match(read("js/master.js"), /Application load/);
   assert.match(read("js/master.js"), /function applicationLoadText/);
+  assert.match(read("js/master.js"), /tab === "ipmap"/);
+  assert.match(read("server/master-live.js"), /\/api\/master\/ip-map/);
+  assert.match(read("server/ip-geo.js"), /website_analytics_events/);
+  assert.match(read("server/ip-geo.js"), /page_view/);
+  assert.match(read("server/ip-geo.js"), /ipwho\.is/);
+  assert.match(read("server/ip-geo.js"), /LOOKUP_CAP = 12/);
+  assert.match(read("pos-master-live.php"), /function pos_master_ip_map/);
+  assert.match(read("pos-master-live.php"), /function pos_ip_is_private/);
+  assert.match(read("pos-master-live.php"), /ipwho\.is/);
+  assert.match(read("pos-master-live.php"), /master\/ip-map/);
+  assert.match(read("js/ip-geo-map.js"), /Private networks stay off the map/);
+  assert.match(read("js/ip-geo-map.js"), /function groupWebsiteTraffic/);
+  assert.match(read("js/master-analytics.js"), /Open traffic map/);
+  assert.match(read("js/master.js"), /Website traffic map/);
   assert.match(read("server/master.js"), /registerMasterLive/);
 });

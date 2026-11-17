@@ -37,9 +37,14 @@ function pos_ensure_analytics_schema() {
     device VARCHAR(32) NULL,
     referrer VARCHAR(255) NULL,
     session_id VARCHAR(64) NULL,
+    ip VARCHAR(64) NULL,
     INDEX (occurred_at),
     INDEX (event_name)
   )");
+  try {
+    pos_q("ALTER TABLE website_analytics_events ADD COLUMN ip VARCHAR(64) NULL");
+  } catch (Exception $e) {
+  }
   pos_q("CREATE TABLE IF NOT EXISTS website_analytics_alerts (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(128) NOT NULL,
@@ -228,9 +233,9 @@ function pos_analytics_public_dispatch($path, $method, $body) {
     pos_q(
       "INSERT INTO website_analytics_events (
          id, occurred_at, event_name, page_path, page_title, business_category, page_type, cta_type,
-         utm_source, utm_medium, utm_campaign, utm_term, utm_content, device, referrer, session_id
-       ) VALUES (?, CURRENT_TIMESTAMP(3), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      "sssssssssssssss",
+         utm_source, utm_medium, utm_campaign, utm_term, utm_content, device, referrer, session_id, ip
+       ) VALUES (?, CURRENT_TIMESTAMP(3), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "ssssssssssssssss",
       [
         pos_uuid(),
         $name,
@@ -247,6 +252,7 @@ function pos_analytics_public_dispatch($path, $method, $body) {
         $device,
         substr((string) ($body["referrer"] ?? ""), 0, 255),
         substr((string) ($body["session_id"] ?? ""), 0, 64),
+        substr(pos_ip(), 0, 64),
       ]
     );
     pos_send(200, ["ok" => true, "php" => true]);

@@ -447,7 +447,273 @@ function pos_businesses_csv($rows) {
   return $csv;
 }
 
+function pos_ip_is_private($ip) {
+  $ip = strtolower(trim((string) $ip));
+  if ($ip === "" || $ip === "localhost" || $ip === "0.0.0.0" || $ip === "::1" || $ip === "::") return true;
+  if (str_starts_with($ip, "::ffff:")) $ip = substr($ip, 7);
+  $zone = strpos($ip, "%");
+  if ($zone !== false) $ip = substr($ip, 0, $zone);
+  if (str_contains($ip, ":") && !str_contains($ip, ".")) {
+    return str_starts_with($ip, "fe80") || str_starts_with($ip, "fc") || str_starts_with($ip, "fd");
+  }
+  if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) return true;
+  if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) return true;
+  $parts = array_map("intval", explode(".", $ip));
+  if ($parts[0] === 100 && $parts[1] >= 64 && $parts[1] <= 127) return true;
+  return false;
+}
+
+function pos_ip_map_empty() {
+  return [
+    "places" => [],
+    "countries" => [],
+    "totals" => ["ips" => 0, "views" => 0, "sessions" => 0, "online" => 0, "countries" => 0, "mapped" => 0],
+    "windowDays" => 14,
+    "traffic" => "website",
+    "note" => "Website page views from the last 14 days. Locations are estimated from the visitor IP. Private networks stay off the map.",
+  ];
+}
+
+function pos_ip_geo_http($ip) {
+  $url = "https://ipwho.is/" . rawurlencode($ip);
+  if (function_exists("curl_init")) {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_TIMEOUT => 3,
+      CURLOPT_CONNECTTIMEOUT => 2,
+      CURLOPT_FOLLOWLOCATION => false,
+      CURLOPT_HTTPHEADER => ["Accept: application/json"],
+    ]);
+    $raw = curl_exec($ch);
+    curl_close($ch);
+    return is_string($raw) ? $raw : "";
+  }
+  $ctx = stream_context_create(["http" => ["timeout" => 3, "header" => "Accept: application/json\r\n"], "https" => ["timeout" => 3]]);
+  $raw = @file_get_contents($url, false, $ctx);
+  return is_string($raw) ? $raw : "";
+}
+
+function pos_ip_geo_lookup($ip) {
+  $data = json_decode(pos_ip_geo_http($ip), true);
+  if (!is_array($data) || (isset($data["success"]) && $data["success"] === false)) return null;
+  $lat = isset($data["latitude"]) ? (float) $data["latitude"] : null;
+  $lon = isset($data["longitude"]) ? (float) $data["longitude"] : null;
+  if ($lat === null || $lon === null || $lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) return null;
+  return [
+    "lat" => round($lat, 5),
+    "lon" => round($lon, 5),
+    "country" => substr((string) ($data["country"] ?? ""), 0, 80),
+    "countryCode" => substr((string) ($data["country_code"] ?? ""), 0, 8),
+    "region" => substr((string) ($data["region"] ?? ""), 0, 80),
+    "city" => substr((string) ($data["city"] ?? ""), 0, 80),
+  ];
+}
+
+function pos_ip_geo_save($ip, $hit) {
+  $hit = is_array($hit) ? $hit : [];
+  pos_q(
+    "INSERT INTO ip_geo_cache (ip, country, country_code, region, city, lat, lon, ok, looked_up_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+     ON DUPLICATE KEY UPDATE country=VALUES(country), country_code=VALUES(country_code), region=VALUES(region), city=VALUES(city), lat=VALUES(lat), lon=VALUES(lon), ok=VALUES(ok), looked_up_at=NOW()",
+    "sssssddi",
+    [
+      $ip,
+      $hit["country"] ?? "",
+      $hit["countryCode"] ?? "",
+      $hit["region"] ?? "",
+      $hit["city"] ?? "",
+      isset($hit["lat"]) ? (float) $hit["lat"] : 0,
+      isset($hit["lon"]) ? (float) $hit["lon"] : 0,
+      isset($hit["lat"]) ? 1 : 0,
+    ]
+  );
+}
+
+function pos_master_ip_map() {
+  try {
+    if (!function_exists("pos_ensure_analytics_schema")) {
+      require_once __DIR__ . "/pos-analytics.php";
+    }
+    pos_ensure_analytics_schema();
+    pos_q(
+      "CREATE TABLE IF NOT EXISTS ip_geo_cache (
+        ip VARCHAR(64) NOT NULL PRIMARY KEY,
+        country VARCHAR(80) NULL,
+        country_code VARCHAR(8) NULL,
+        region VARCHAR(80) NULL,
+        city VARCHAR(80) NULL,
+        lat DECIMAL(9,5) NULL,
+        lon DECIMAL(9,5) NULL,
+        ok TINYINT NOT NULL DEFAULT 0,
+        looked_up_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_ip_geo_lookup (looked_up_at)
+      )"
+    );
+    $rows = pos_q(
+      "SELECT ip, session_id, page_path, occurred_at
+       FROM website_analytics_events
+       WHERE event_name = 'page_view'
+         AND ip IS NOT NULL AND ip <> ''
+         AND occurred_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+       ORDER BY occurred_at DESC
+       LIMIT 800"
+    );
+  } catch (Exception $e) {
+    return pos_ip_map_empty();
+  }
+  $grouped = [];
+  $now = time();
+  foreach ($rows as $row) {
+    $ip = substr(trim((string) ($row["ip"] ?? "")), 0, 64);
+    if ($ip === "") continue;
+    if (!isset($grouped[$ip])) {
+      $grouped[$ip] = [
+        "ip" => $ip,
+        "views" => 0,
+        "sessions" => 0,
+        "online" => 0,
+        "businesses" => [],
+        "sessionIds" => [],
+        "lastSeen" => null,
+        "lastMs" => 0,
+        "local" => pos_ip_is_private($ip),
+      ];
+    }
+    $place = &$grouped[$ip];
+    $place["views"] += 1;
+    $session = trim((string) ($row["session_id"] ?? ""));
+    if ($session !== "" && !in_array($session, $place["sessionIds"], true)) $place["sessionIds"][] = $session;
+    $seen = (string) ($row["occurred_at"] ?? "");
+    $seenMs = $seen !== "" ? strtotime($seen) : 0;
+    if ($seenMs && $seenMs >= $place["lastMs"]) {
+      $place["lastMs"] = $seenMs;
+      $place["lastSeen"] = $seen;
+    }
+    if ($seenMs && ($now - $seenMs) <= 300 && ($now - $seenMs) >= 0) $place["online"] = 1;
+    $page = trim((string) ($row["page_path"] ?? ""));
+    if ($page !== "" && !in_array($page, $place["businesses"], true) && count($place["businesses"]) < 4) {
+      $place["businesses"][] = $page;
+    }
+    unset($place);
+  }
+  $places = array_values($grouped);
+  foreach ($places as &$place) {
+    $place["sessions"] = count($place["sessionIds"]) ?: (int) $place["views"];
+    unset($place["sessionIds"]);
+  }
+  unset($place);
+  usort($places, function ($a, $b) {
+    if ($a["views"] !== $b["views"]) return $b["views"] <=> $a["views"];
+    if ($a["online"] !== $b["online"]) return $b["online"] <=> $a["online"];
+    return strcmp((string) $b["lastSeen"], (string) $a["lastSeen"]);
+  });
+  $public = [];
+  foreach ($places as $place) {
+    if (!$place["local"]) $public[] = $place["ip"];
+  }
+  $fresh = [];
+  if ($public) {
+    $marks = implode(",", array_fill(0, count($public), "?"));
+    try {
+      $cached = pos_q(
+        "SELECT ip, country, country_code, region, city, lat, lon, ok, looked_up_at FROM ip_geo_cache WHERE ip IN ($marks)",
+        str_repeat("s", count($public)),
+        $public
+      );
+    } catch (Exception $e) {
+      $cached = [];
+    }
+    foreach ($cached as $row) {
+      $age = $now - (strtotime((string) ($row["looked_up_at"] ?? "")) ?: 0);
+      $keep = ((int) $row["ok"] === 1 && $age < 30 * 86400) || ((int) $row["ok"] !== 1 && $age < 86400);
+      if ($keep) $fresh[(string) $row["ip"]] = $row;
+    }
+  }
+  $lookups = 0;
+  foreach ($places as &$place) {
+    unset($place["lastMs"]);
+    if ($place["local"]) continue;
+    $row = $fresh[$place["ip"]] ?? null;
+    if ($row) {
+      if ((int) $row["ok"] === 1) {
+        $place["lat"] = (float) $row["lat"];
+        $place["lon"] = (float) $row["lon"];
+        $place["country"] = (string) ($row["country"] ?? "");
+        $place["countryCode"] = (string) ($row["country_code"] ?? "");
+        $place["region"] = (string) ($row["region"] ?? "");
+        $place["city"] = (string) ($row["city"] ?? "");
+      }
+      continue;
+    }
+    if ($lookups >= 12) continue;
+    $lookups += 1;
+    $hit = pos_ip_geo_lookup($place["ip"]);
+    try {
+      pos_ip_geo_save($place["ip"], $hit);
+    } catch (Exception $e) {
+    }
+    if ($hit) {
+      $place["lat"] = $hit["lat"];
+      $place["lon"] = $hit["lon"];
+      $place["country"] = $hit["country"];
+      $place["countryCode"] = $hit["countryCode"];
+      $place["region"] = $hit["region"];
+      $place["city"] = $hit["city"];
+    }
+  }
+  unset($place);
+  $countries = [];
+  foreach ($places as $place) {
+    $name = !empty($place["local"]) ? "Private network" : (trim((string) ($place["country"] ?? "")) ?: "Unmapped");
+    if (!isset($countries[$name])) $countries[$name] = ["country" => $name, "sessions" => 0, "views" => 0, "ips" => 0, "online" => 0];
+    $countries[$name]["sessions"] += (int) $place["sessions"];
+    $countries[$name]["views"] += (int) ($place["views"] ?? 0);
+    $countries[$name]["ips"] += 1;
+    $countries[$name]["online"] += (int) $place["online"];
+  }
+  $countryRows = array_values($countries);
+  usort($countryRows, function ($a, $b) {
+    $av = (int) ($a["views"] ?? 0) ?: (int) $a["sessions"];
+    $bv = (int) ($b["views"] ?? 0) ?: (int) $b["sessions"];
+    if ($av !== $bv) return $bv <=> $av;
+    return strcmp($a["country"], $b["country"]);
+  });
+  $mapped = 0;
+  $sessions = 0;
+  $views = 0;
+  $online = 0;
+  $named = [];
+  foreach ($places as $place) {
+    $sessions += (int) $place["sessions"];
+    $views += (int) ($place["views"] ?? 0);
+    $online += (int) $place["online"];
+    if (empty($place["local"]) && isset($place["lat"]) && isset($place["lon"])) {
+      $mapped += 1;
+      if (!empty($place["country"])) $named[$place["country"]] = true;
+    }
+  }
+  return [
+    "places" => $places,
+    "countries" => $countryRows,
+    "totals" => [
+      "ips" => count($places),
+      "views" => $views,
+      "sessions" => $sessions,
+      "online" => $online,
+      "countries" => count($named),
+      "mapped" => $mapped,
+    ],
+    "windowDays" => 14,
+    "traffic" => "website",
+    "note" => "Website page views from the last 14 days. Locations are estimated from the visitor IP. Private networks stay off the map.",
+  ];
+}
+
 function pos_master_live_dispatch($path, $method, $auth) {
+  if ($path === "master/ip-map" && $method === "GET") {
+    pos_send(200, pos_master_ip_map());
+  }
   if ($path === "master/insights" && $method === "GET") {
     pos_send(200, pos_master_insights($_GET["range"] ?? "30"));
   }

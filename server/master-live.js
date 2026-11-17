@@ -2,6 +2,7 @@ import os from "node:os";
 import { query } from "./db.js";
 import { publicStatus } from "./subscription.js";
 import { platformAudit } from "./audit.js";
+import { masterIpMap } from "./ip-geo.js";
 
 export const ONLINE_WINDOW_MINUTES = 5;
 
@@ -459,6 +460,9 @@ export function registerMasterLive(app) {
   });
   app.get("/api/master/health", (_req, res) => {
     masterHealth().then((data) => res.json(data)).catch((err) => res.status(500).json({ error: String(err.message) }));
+  });
+  app.get("/api/master/ip-map", (_req, res) => {
+    masterIpMap().then((data) => res.json(data)).catch((err) => res.status(500).json({ error: String(err.message) }));
   });
   app.get("/api/master/live-users", (req, res) => {
     listLiveUsers(req.query || {}).then((data) => res.json(data)).catch((err) => res.status(500).json({ error: String(err.message) }));

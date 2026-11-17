@@ -986,6 +986,44 @@ body.master-dark #master-app {
   list-style: none;
 }
 #master-app .biz-more summary::-webkit-details-marker { display: none; }
+#master-app .ip-map-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+#master-app .ip-map-filters button,
+#master-app .ip-map-side button {
+  border: 1px solid var(--ma-line);
+  background: var(--ma-card);
+  color: var(--ma-text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+#master-app .ip-map-filters button.is-on,
+#master-app .ip-map-side button.is-on { background: var(--ma-blue); color: #fff; border-color: var(--ma-blue); }
+#master-app .ip-map-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, 0.7fr); gap: 14px; }
+#master-app .ip-map-stage { background: #071426; border-radius: 16px; overflow: hidden; }
+#master-app .ip-map-stage svg { width: 100%; height: auto; display: block; }
+#master-app .ip-ocean { fill: #071426; }
+#master-app .ip-land { fill: #163a5f; stroke: #3d7eb8; stroke-width: 0.8; }
+#master-app .ip-graticule { stroke: rgba(255, 255, 255, 0.08); stroke-width: 0.6; }
+#master-app .ip-equator { stroke: rgba(255, 255, 255, 0.18); }
+#master-app .ip-pin.is-on { fill: #22d3ee; }
+#master-app .ip-pin.is-off { fill: #93c5fd; }
+#master-app .ip-pin-halo { fill: rgba(34, 211, 238, 0.28); }
+#master-app .ip-map-legend { display: flex; gap: 14px; color: #cbd5e1; font-size: 12px; padding: 10px 12px 0; }
+#master-app .ip-map-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+#master-app .ip-map-legend i.is-on { background: #22d3ee; }
+#master-app .ip-map-legend i.is-off { background: #93c5fd; }
+#master-app .ip-map-side,
+#master-app .ip-map-table { margin-top: 14px; }
+#master-app .ip-map-side { background: var(--ma-card); border: 1px solid var(--ma-line); border-radius: 16px; padding: 12px; margin-top: 0; }
+#master-app .ip-map-side h3 { margin: 0 0 8px; }
+#master-app .ip-map-side ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 440px; overflow: auto; }
+#master-app .ip-map-side button { width: 100%; text-align: left; border-radius: 10px; display: grid; gap: 2px; }
+#master-app .ip-map-side button span { font-weight: 500; color: var(--ma-muted); font-size: 12px; }
+#master-app .ip-map-side button.is-on span { color: rgba(255, 255, 255, 0.82); }
+@media (max-width: 900px) {
+  #master-app .ip-map-layout { grid-template-columns: 1fr; }
+}
 @media (max-width: 800px) {
   #master-app .biz-perm-row { grid-template-columns: 1fr 1fr; }
   #master-app .biz-perm-who { grid-column: 1 / -1; }

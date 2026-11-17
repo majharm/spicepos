@@ -273,7 +273,8 @@
         ${table(["Source", "Events"], (d.acquisition || []).map((r) => [r.source, r.n]))}
         ${table(["Business category", "Visitors", "Get Started", "Demo", "Leads"], (d.categories || []).map((r) => [r.category, r.visitors, r.get_started, r.demo_requests, r.leads]))}`;
     } else if (pane === "geo") {
-      extra = `<p class="hint">This platform does not store visitor city or GPS. Aggregated country / region / city reports belong in the GA4 UI or Data API. Individual location is not collected.</p>`;
+      extra = `<p class="hint">Website page views are plotted on the traffic map from the visitor address this server sees. Private networks stay off the map. The city is estimated from that address, not from GPS.</p>
+        <p><button class="btn" type="button" data-open-tab="ipmap">Open traffic map</button></p>`;
     } else if (pane === "journey") {
       extra = `<ol class="ga-flow"><li>Campaign / Google / Direct</li><li>Landing page</li><li>Features or business type</li><li>Get Started / Demo / Contact</li></ol>
         ${table(["Event", "Count"], (d.events_by_name || []).map((r) => [r.event_name, r.n]))}
