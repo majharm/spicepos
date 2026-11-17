@@ -186,6 +186,11 @@ test("stock API attaches on-hand batches for this business and does not insert s
   assert.match(html, /Refresh stock/);
   assert.match(css, /stock-desk: on-hand \+ adjustments/);
   assert.match(css, /\.stock-card\[hidden\]/);
+  assert.match(css, /\.stock-desk button\.items-stat/);
+  assert.match(css, /\.stock-desk \.items-library \{ order: -1; \}/);
+  const gridCard = app.slice(app.indexOf("function stockGridCard"), app.indexOf("function stockListRow"));
+  assert.match(gridCard, /class="item-card stock-card/);
+  assert.doesNotMatch(gridCard, /report-card/);
   assert.match(css, /\.stock-exp\.is-expired/);
   assert.match(css, /\.stock-exp\.is-soon/);
   assert.match(css, /\.stock-exp\.is-watch/);

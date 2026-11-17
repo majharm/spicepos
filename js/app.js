@@ -9914,7 +9914,7 @@ function stockGridCard(line, selected, colSet) {
   if (colSet.has("value")) chips.push(`<span class="item-chip">${money(line.stockValue)}</span>`);
   const expiry = colSet.has("expiry") ? `<div class="stock-exp-cell">${paintStockExpiryCell(line.expiryYmd)}</div>` : "";
   const status = colSet.has("status") ? garmentStockPill(line.status) : "";
-  return `<article class="report-card item-card stock-card${editing}${level}${tone}" data-stock-item="${escapeHtml(line.itemId)}" data-stock-batch="${escapeHtml(line.batchId)}" data-stock-barcode="${escapeHtml(line.barcode || "")}" data-stock-search="${escapeHtml(line.search)}" data-stock-status="${escapeHtml(line.status)}" data-stock-low="${line.status === "ok" ? "0" : "1"}" data-stock-expiry="${escapeHtml(line.expiryBucket)}">
+  return `<article class="item-card stock-card${editing}${level}${tone}" data-stock-item="${escapeHtml(line.itemId)}" data-stock-batch="${escapeHtml(line.batchId)}" data-stock-barcode="${escapeHtml(line.barcode || "")}" data-stock-search="${escapeHtml(line.search)}" data-stock-status="${escapeHtml(line.status)}" data-stock-low="${line.status === "ok" ? "0" : "1"}" data-stock-expiry="${escapeHtml(line.expiryBucket)}">
     <div class="item-card-head">
       <div class="item-card-copy">
         <strong>${escapeHtml(line.name)}</strong>
