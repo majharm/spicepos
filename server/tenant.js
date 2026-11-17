@@ -15,6 +15,7 @@ import { attachQrKitchenTicket, ensureKitchenTicketTable, nextKotNumber, syncQrF
 import { createdToday, saleNotVoidSql } from "./sql-time.js";
 import { buildHubDashboard } from "./hub.js";
 import { buildOfferProfitReport, POSOfferProfit } from "./offer-profit.js";
+import "../js/stock-desk.js";
 
 function send(res, fn) {
   return Promise.resolve()
@@ -739,42 +740,79 @@ export function registerTenant(app) {
 
   app.post("/api/stock/adjust", requireStaff, requirePerm("stock"), (req, res) =>
     send(res, async () => {
-      const { item_id, quantity_gm, kind, note, reason, barcode } = req.body || {};
-      let qty = Number(quantity_gm);
-      const k = String(kind || "adjustment");
-      if (["damaged", "expired", "returned"].includes(k) && qty > 0) qty = -qty;
-      if (!item_id || !Number.isFinite(qty) || !qty) throw new Error("Item and quantity required");
+      const { item_id, quantity_gm, kind, note, reason, barcode, set_on_hand, batch_id } = req.body || {};
+      if (!item_id) throw new Error("Item and quantity required");
       const [item] = await query("SELECT * FROM items WHERE id=? AND business_id=?", [item_id, bid()]);
       if (!item) throw new Error("Item not found");
-      if (Number(item.stock_gm) + qty < -0.0001) throw new Error("Not enough stock for this adjustment");
-      await query("UPDATE items SET stock_gm = stock_gm + ? WHERE id=? AND business_id=?", [qty, item_id, bid()]);
+      const plan = globalThis.POSStockDesk.adjustStockQty({
+        kind,
+        quantity: quantity_gm,
+        onHand: item.stock_gm,
+        setOnHand: set_on_hand,
+      });
+      if (plan.error) throw new Error(plan.error);
+      const qty = plan.qty;
+      const k = String(kind || "adjustment");
       const br = branchId();
-      if (br) {
-        await query(
-          `INSERT INTO branch_stocks (id, business_id, branch_id, item_id, stock_gm)
-           VALUES (?,?,?,?,?)
-           ON DUPLICATE KEY UPDATE stock_gm = stock_gm + VALUES(stock_gm)`,
-          [crypto.randomUUID(), bid(), br, item_id, qty],
-        );
+      if (plan.zero) {
+        await query("UPDATE items SET stock_gm = 0 WHERE id=? AND business_id=?", [item_id, bid()]);
+        if (br) {
+          await query(
+            `INSERT INTO branch_stocks (id, business_id, branch_id, item_id, stock_gm)
+             VALUES (?,?,?,?,0)
+             ON DUPLICATE KEY UPDATE stock_gm = 0`,
+            [crypto.randomUUID(), bid(), br, item_id],
+          );
+        }
+        try {
+          await query("UPDATE stock_batches SET remaining_gm = 0 WHERE business_id=? AND item_id=?", [bid(), item_id]);
+        } catch {
+          /* batch table is optional until pharmacy stock is enabled */
+        }
+      } else {
+        await query("UPDATE items SET stock_gm = COALESCE(stock_gm, 0) + ? WHERE id=? AND business_id=?", [qty, item_id, bid()]);
+        if (br) {
+          await query(
+            `INSERT INTO branch_stocks (id, business_id, branch_id, item_id, stock_gm)
+             VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE stock_gm = COALESCE(stock_gm, 0) + ?`,
+            [crypto.randomUUID(), bid(), br, item_id, qty, qty],
+          );
+        }
+        const batchId = String(batch_id || "").trim();
+        if (batchId) {
+          try {
+            await query(
+              `UPDATE stock_batches
+               SET remaining_gm = GREATEST(0, COALESCE(remaining_gm, 0) + ?)
+               WHERE id=? AND business_id=? AND item_id=?`,
+              [qty, batchId, bid(), item_id],
+            );
+          } catch {
+            /* batch table is optional until pharmacy stock is enabled */
+          }
+        }
       }
       const actor = authUser()?.id || null;
       const why = String(reason || "").trim().slice(0, 64);
       const code = String(barcode || "").trim().slice(0, 64);
-      try {
-        await query(
-          `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by, barcode, reason)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
-          [crypto.randomUUID(), bid(), br, item_id, k, qty, note || null, actor, code || null, why || null],
-        );
-      } catch {
-        await query(
-          `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by)
-           VALUES (?,?,?,?,?,?,?,?)`,
-          [crypto.randomUUID(), bid(), br, item_id, k, qty, note || null, actor],
-        );
+      if (qty) {
+        try {
+          await query(
+            `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by, barcode, reason)
+             VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            [crypto.randomUUID(), bid(), br, item_id, k, qty, note || null, actor, code || null, why || null],
+          );
+        } catch {
+          await query(
+            `INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            [crypto.randomUUID(), bid(), br, item_id, k, qty, note || null, actor],
+          );
+        }
       }
       await audit("Stock Adjusted", { module: "stock", target_id: item_id, kind: k, qty, reason: why, barcode: code }, req);
-      return { ok: true };
+      return { ok: true, stock_gm: plan.stock, applied: qty };
     }),
   );
 

@@ -161,6 +161,38 @@ test("filters, sort, columns and pagination stay on the prepared lines", () => {
   assert.equal(page.to, 60);
 });
 
+test("a zero quantity sets stock to 0, and a zero balance can still be adjusted", () => {
+  assert.deepEqual(S.adjustStockQty({ kind: "adjustment", quantity: 0, onHand: 8 }), { qty: -8, stock: 0, zero: true });
+  assert.deepEqual(S.adjustStockQty({ kind: "opening", quantity: 0, onHand: 0, setOnHand: 0 }), { qty: 0, stock: 0, zero: true });
+  assert.deepEqual(S.adjustStockQty({ kind: "adjustment", quantity: 5, onHand: 0 }), { qty: 5, stock: 5, zero: false });
+  assert.deepEqual(S.adjustStockQty({ kind: "adjustment", quantity: -3, onHand: 0 }), { qty: 0, stock: 0, zero: true });
+  assert.deepEqual(S.adjustStockQty({ kind: "adjustment", quantity: -4, onHand: 4 }), { qty: -4, stock: 0, zero: false });
+  assert.equal(S.adjustStockQty({ kind: "adjustment", quantity: -9, onHand: 4 }).error, "Not enough stock for this adjustment");
+  assert.equal(S.adjustStockQty({ kind: "damaged", quantity: 0, onHand: 0 }).error, "Item and quantity required");
+  assert.deepEqual(S.adjustStockQty({ kind: "damaged", quantity: 2, onHand: 0 }), { qty: 0, stock: 0, zero: true });
+  assert.deepEqual(S.adjustStockQty({ kind: "returned", quantity: 2, onHand: 6 }), { qty: -2, stock: 4, zero: false });
+  assert.equal(S.adjustStockQty({ kind: "adjustment", quantity: "", onHand: 1 }).error, "Item and quantity required");
+  assert.equal(S.adjustStockQty({ kind: "adjustment", quantity: null, onHand: 1 }).error, "Item and quantity required");
+
+  const app = read("js/app.js");
+  const tenant = read("server/tenant.js");
+  const php = read("pos-crud.php");
+  const form = app.slice(app.indexOf("$(\"stock-form\")"), app.indexOf("$(\"stock-clear\")"));
+  assert.match(form, /set_on_hand: typedZero \? 0 : undefined/);
+  assert.match(form, /Set \$\{picked\.name\} stock to 0/);
+  assert.match(form, /adjustStockQty/);
+  assert.match(tenant, /adjustStockQty/);
+  assert.match(tenant, /UPDATE items SET stock_gm = 0/);
+  assert.match(tenant, /COALESCE\(stock_gm, 0\) \+ \?/);
+  assert.match(tenant, /UPDATE stock_batches SET remaining_gm = 0/);
+  assert.match(php, /function pos_stock_adjust_qty/);
+  assert.match(php, /set_on_hand/);
+  assert.match(php, /UPDATE items SET stock_gm = 0/);
+  assert.match(php, /COALESCE\(stock_gm, 0\) \+ \?/);
+  assert.match(php, /UPDATE stock_batches SET remaining_gm = 0/);
+  assert.doesNotMatch(tenant.slice(tenant.indexOf('app.post("/api/stock/adjust"'), tenant.indexOf('app.post("/api/stock/reorder"')), /VALUES\(stock_gm\)/);
+});
+
 test("stock API attaches on-hand batches for this business and does not insert stock", () => {
   const tenant = read("server/tenant.js");
   const handler = tenant.slice(tenant.indexOf('app.get("/api/stock"'), tenant.indexOf('app.get("/api/stock/excel"'));

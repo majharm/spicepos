@@ -9317,11 +9317,12 @@ function paintStockSelected(item) {
     ${pill}`;
 }
 
-function selectStockItem(id, barcode) {
+function selectStockItem(id, barcode, batchId) {
   const rows = state.stockRows || [];
   const item = rows.find((r) => r.id === id) || state.items.find((i) => i.id === id);
   if (!item) return;
   state.stockBarcode = barcode || "";
+  state.stockBatchId = batchId || "";
   if ($("stk-item")) $("stk-item").value = item.id;
   if ($("stk-item-search")) $("stk-item-search").value = item.name;
   paintStockSelected(item);
@@ -9382,6 +9383,8 @@ function clearStockForm() {
   if ($("stk-qty")) $("stk-qty").value = "";
   if ($("stk-note")) $("stk-note").value = "";
   if ($("stk-kind")) $("stk-kind").value = "adjustment";
+  state.stockBarcode = "";
+  state.stockBatchId = "";
   paintStockSelected(null);
   document.querySelectorAll("#stock-table [data-stock-item].is-editing").forEach((el) => el.classList.remove("is-editing"));
   if ($("stock-hint")) {
@@ -17310,14 +17313,28 @@ $("stock-form")?.addEventListener("submit", async (e) => {
   if ($("stk-item")) $("stk-item").value = picked.id;
   if ($("stk-item-search")) $("stk-item-search").value = picked.name;
   paintStockSelected(picked);
-  let qty = qtyToBaseFromInput(picked, $("stk-qty")?.value);
-  const kind = String($("stk-kind")?.value || "adjustment");
-  if (["damaged", "expired", "returned"].includes(kind)) qty = Math.abs(qty);
-  if (!qty) {
+  const rawQty = String($("stk-qty")?.value ?? "").trim();
+  if (rawQty === "" || !Number.isFinite(Number(rawQty))) {
     setStockHint("Enter a quantity.", "error");
     $("stk-qty")?.focus();
     return;
   }
+  const kind = String($("stk-kind")?.value || "adjustment");
+  const stockRow = (state.stockRows || []).find((row) => row.id === picked.id);
+  const onHand = Number((stockRow || picked).stock_gm) || 0;
+  const typedZero = Number(rawQty) === 0 && (kind === "adjustment" || kind === "opening");
+  const plan = stockDeskApi()?.adjustStockQty?.({
+    kind,
+    quantity: qtyToBaseFromInput(picked, rawQty),
+    onHand,
+    setOnHand: typedZero ? 0 : undefined,
+  });
+  if (!plan || plan.error) {
+    setStockHint(plan?.error === "Item and quantity required" || !plan ? "Enter a quantity." : plan.error, "error");
+    $("stk-qty")?.focus();
+    return;
+  }
+  const qty = plan.qty;
   const reason = String($("stk-reason")?.value || "").trim();
   const noteRaw = String($("stk-note")?.value || "").trim();
   const note = state.stockMode === "advanced" && reason
@@ -17326,24 +17343,31 @@ $("stock-form")?.addEventListener("submit", async (e) => {
   const postBtn = $("stock-post");
   if (postBtn) postBtn.disabled = true;
   try {
-    await api("/api/stock/adjust", {
+    const posted = await api("/api/stock/adjust", {
       method: "POST",
       body: JSON.stringify({
         item_id: picked.id,
-        quantity_gm: qty,
+        quantity_gm: qtyToBaseFromInput(picked, rawQty),
+        set_on_hand: typedZero ? 0 : undefined,
         kind,
         reason,
         note,
         barcode: state.stockBarcode || "",
+        batch_id: state.stockBatchId || "",
       }),
     });
     const taken = ["damaged", "expired", "returned"].includes(kind);
-    setStockHint(
-      taken
-        ? `Took ${fmtQty(Math.abs(qty), picked)} off ${picked.name}`
-        : `Posted ${qty > 0 ? "+" : ""}${fmtQty(qty, picked)} on ${picked.name}`,
-      "ok",
-    );
+    const stockNow = Number(posted?.stock_gm);
+    if (typedZero || (plan.zero && stockNow === 0)) {
+      setStockHint(typedZero ? `Set ${picked.name} stock to 0` : `${picked.name} stock is 0`, "ok");
+    } else {
+      setStockHint(
+        taken
+          ? `Took ${fmtQty(Math.abs(qty), picked)} off ${picked.name}`
+          : `Posted ${qty > 0 ? "+" : ""}${fmtQty(qty, picked)} on ${picked.name}`,
+        "ok",
+      );
+    }
     if ($("stk-qty")) $("stk-qty").value = "";
     if ($("stk-note")) $("stk-note").value = "";
     await loadStock();
@@ -17482,7 +17506,7 @@ $("stock-table")?.addEventListener("click", (e) => {
   if (e.target.closest("input, select, textarea")) return;
   const card = e.target.closest("[data-stock-item]");
   if (!card || !card.dataset.stockItem) return;
-  selectStockItem(card.dataset.stockItem, card.dataset.stockBarcode || "");
+  selectStockItem(card.dataset.stockItem, card.dataset.stockBarcode || "", card.dataset.stockBatch || "");
 });
 $("stock-table")?.addEventListener("change", async (e) => {
   if (e.target?.id === "stock-page-size") {

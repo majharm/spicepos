@@ -342,6 +342,24 @@
     return STOCK_COLUMNS.filter((col) => set.has(col.id)).map((col) => col.id);
   }
 
+  function adjustStockQty({ kind = "adjustment", quantity = 0, onHand = 0, setOnHand } = {}) {
+    const k = String(kind || "adjustment").trim().toLowerCase() || "adjustment";
+    const current = Number(onHand);
+    const have = Number.isFinite(current) ? current : 0;
+    const missing = quantity === null || quantity === undefined || quantity === "";
+    const qtyRaw = missing ? NaN : Number(quantity);
+    if (!Number.isFinite(qtyRaw)) return { error: "Item and quantity required" };
+    const removal = ["damaged", "expired", "returned"].includes(k);
+    const qty = removal && qtyRaw > 0 ? -qtyRaw : qtyRaw;
+    const setFlag = setOnHand !== undefined && setOnHand !== null && setOnHand !== "" && Number(setOnHand) === 0;
+    const setZero = !removal && (k === "adjustment" || k === "opening") && (setFlag || qty === 0);
+    if (setZero) return { qty: have ? -have : 0, stock: 0, zero: true };
+    if (qty === 0) return { error: "Item and quantity required" };
+    if (have <= 0 && qty < 0) return { qty: 0, stock: 0, zero: true };
+    if (have + qty < -0.0001) return { error: "Not enough stock for this adjustment" };
+    return { qty, stock: have + qty, zero: false };
+  }
+
   function prepareStockView(items, options = {}) {
     const lines = buildStockLines(items, options);
     const filtered = filterStockLines(lines, options.filters || {});
@@ -370,5 +388,6 @@
     pageList,
     visibleColumnIds,
     prepareStockView,
+    adjustStockQty,
   };
 });

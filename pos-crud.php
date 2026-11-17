@@ -37,6 +37,25 @@ function pos_garment_variant_matrix($body) {
   return $out;
 }
 
+function pos_stock_adjust_qty($kind, $quantity, $onHand, $setOnHand) {
+  $k = strtolower(trim((string) ($kind ?? "adjustment")));
+  if ($k === "") $k = "adjustment";
+  $current = is_numeric($onHand) ? (float) $onHand : 0.0;
+  if ($quantity === null || $quantity === "" || !is_numeric($quantity)) {
+    return ["error" => "Item and quantity required"];
+  }
+  $qty = (float) $quantity;
+  $removal = in_array($k, ["damaged", "expired", "returned"], true);
+  if ($removal && $qty > 0) $qty = -$qty;
+  $setFlag = $setOnHand !== null && $setOnHand !== "" && is_numeric($setOnHand) && (float) $setOnHand === 0.0;
+  $setZero = !$removal && ($k === "adjustment" || $k === "opening") && ($setFlag || $qty === 0.0);
+  if ($setZero) return ["qty" => $current == 0.0 ? 0.0 : -$current, "stock" => 0, "zero" => true];
+  if ($qty == 0.0) return ["error" => "Item and quantity required"];
+  if ($current <= 0 && $qty < 0) return ["qty" => 0, "stock" => 0, "zero" => true];
+  if ($current + $qty < -0.0001) return ["error" => "Not enough stock for this adjustment"];
+  return ["qty" => $qty, "stock" => $current + $qty, "zero" => false];
+}
+
 function pos_insert_apparel_variant($bid, $biz, $body, $variant, $image) {
   $id = pos_uuid();
   $n = pos_next_seq("item", $bid, 7);
@@ -1158,43 +1177,73 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
   }
 
   if ($path === "stock/adjust" && $method === "POST") {
-    $itemId = $body["item_id"] ?? "";
-    $qty = (float) ($body["quantity_gm"] ?? 0);
+    $itemId = trim((string) ($body["item_id"] ?? ""));
     $kind = strtolower((string) ($body["kind"] ?? "adjustment"));
-    if (in_array($kind, ["damaged", "expired", "returned"], true) && $qty > 0) $qty = -$qty;
-    if (!$itemId || !$qty) pos_send(400, ["error" => "Item and quantity required"]);
+    if ($itemId === "") pos_send(400, ["error" => "Item and quantity required"]);
     $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$itemId, $bid]);
     if (!$it) pos_send(400, ["error" => "Item not found"]);
-    if ((float) ($it[0]["stock_gm"] ?? 0) + $qty < -0.0001) pos_send(400, ["error" => "Not enough stock for this adjustment"]);
-    pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$qty, $itemId, $bid]);
-    if ($branchId) {
+    $setOnHand = array_key_exists("set_on_hand", $body) ? $body["set_on_hand"] : null;
+    $plan = pos_stock_adjust_qty($kind, $body["quantity_gm"] ?? null, $it[0]["stock_gm"] ?? 0, $setOnHand);
+    if (!empty($plan["error"])) pos_send(400, ["error" => $plan["error"]]);
+    $qty = (float) $plan["qty"];
+    if (!empty($plan["zero"])) {
+      pos_q("UPDATE items SET stock_gm = 0 WHERE id = ? AND business_id = ?", "ss", [$itemId, $bid]);
+      if ($branchId) {
+        try {
+          pos_q(
+            "INSERT INTO branch_stocks (id, business_id, branch_id, item_id, stock_gm) VALUES (?,?,?,?,0)
+             ON DUPLICATE KEY UPDATE stock_gm = 0",
+            "ssss",
+            [pos_uuid(), $bid, $branchId, $itemId]
+          );
+        } catch (Exception $e) { /* optional */ }
+      }
       try {
-        pos_q(
-          "INSERT INTO branch_stocks (id, business_id, branch_id, item_id, stock_gm) VALUES (?,?,?,?,?)
-           ON DUPLICATE KEY UPDATE stock_gm = stock_gm + VALUES(stock_gm)",
-          "ssssd",
-          [pos_uuid(), $bid, $branchId, $itemId, $qty]
-        );
+        pos_q("UPDATE stock_batches SET remaining_gm = 0 WHERE business_id = ? AND item_id = ?", "ss", [$bid, $itemId]);
       } catch (Exception $e) { /* optional */ }
+    } else {
+      pos_q("UPDATE items SET stock_gm = COALESCE(stock_gm, 0) + ? WHERE id = ? AND business_id = ?", "dss", [$qty, $itemId, $bid]);
+      if ($branchId) {
+        try {
+          pos_q(
+            "INSERT INTO branch_stocks (id, business_id, branch_id, item_id, stock_gm) VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE stock_gm = COALESCE(stock_gm, 0) + ?",
+            "ssssdd",
+            [pos_uuid(), $bid, $branchId, $itemId, $qty, $qty]
+          );
+        } catch (Exception $e) { /* optional */ }
+      }
+      $batchId = trim((string) ($body["batch_id"] ?? ""));
+      if ($batchId !== "") {
+        try {
+          pos_q(
+            "UPDATE stock_batches SET remaining_gm = GREATEST(0, COALESCE(remaining_gm, 0) + ?) WHERE id = ? AND business_id = ? AND item_id = ?",
+            "dsss",
+            [$qty, $batchId, $bid, $itemId]
+          );
+        } catch (Exception $e) { /* optional */ }
+      }
     }
     $why = substr(trim((string) ($body["reason"] ?? "")), 0, 64);
     $code = substr(trim((string) ($body["barcode"] ?? "")), 0, 64);
-    try {
-      pos_q(
-        "INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by, barcode, reason) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        "sssssdssss",
-        [pos_uuid(), $bid, (string) $branchId, $itemId, (string) ($body["kind"] ?? "adjustment"), $qty, $body["note"] ?? null, $uid, $code !== "" ? $code : null, $why !== "" ? $why : null]
-      );
-    } catch (Exception $e) {
+    if ($qty) {
       try {
         pos_q(
-          "INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by) VALUES (?,?,?,?,?,?,?,?)",
-          "sssssdss",
-          [pos_uuid(), $bid, (string) $branchId, $itemId, (string) ($body["kind"] ?? "adjustment"), $qty, $body["note"] ?? null, $uid]
+          "INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by, barcode, reason) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          "sssssdssss",
+          [pos_uuid(), $bid, (string) $branchId, $itemId, (string) ($body["kind"] ?? "adjustment"), $qty, $body["note"] ?? null, $uid, $code !== "" ? $code : null, $why !== "" ? $why : null]
         );
-      } catch (Exception $e2) { /* optional */ }
+      } catch (Exception $e) {
+        try {
+          pos_q(
+            "INSERT INTO stock_movements (id, business_id, branch_id, item_id, kind, quantity_gm, note, created_by) VALUES (?,?,?,?,?,?,?,?)",
+            "sssssdss",
+            [pos_uuid(), $bid, (string) $branchId, $itemId, (string) ($body["kind"] ?? "adjustment"), $qty, $body["note"] ?? null, $uid]
+          );
+        } catch (Exception $e2) { /* optional */ }
+      }
     }
-    pos_send(200, ["ok" => true]);
+    pos_send(200, ["ok" => true, "stock_gm" => (float) $plan["stock"], "applied" => $qty]);
   }
 
   if ($path === "stock/reorder" && $method === "POST") {
