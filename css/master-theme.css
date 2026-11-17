@@ -1008,7 +1008,8 @@ body.master-dark #master-app {
 #master-app .ip-dash-legend i { width: 8px; height: 8px; display: inline-block; border-radius: 50%; background: #35d39a; margin-right: 5px; }
 #master-app #ip-leaflet,
 #master-app #biz-leaflet { height: 590px; width: 100%; background: #101c2c; }
-#master-app #biz-leaflet.leaflet-container { min-height: 420px; z-index: 0; }
+#master-app #biz-leaflet { position: relative; min-height: 420px; z-index: 0; }
+#master-app #biz-leaflet img { max-width: none !important; }
 #master-app .leaflet-container img.leaflet-tile {
   max-width: none !important;
   max-height: none !important;

@@ -141,7 +141,7 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   const auth = read("server/auth.js");
   const php = read("pos-php-core.php");
   assert.match(html, /data-tab="bizmap"/);
-  assert.match(html, /biz-traffic-map\.js\?v=20261117map1/);
+  assert.match(html, /biz-traffic-map\.js\?v=20261117gmap1/);
   assert.match(html, /vendor\/leaflet\/leaflet\.js\?v=20261117map1/);
   assert.match(html, /master\.js\?v=20261117map1/);
   assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261117bizmap1/);
@@ -163,7 +163,8 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   assert.match(php, /function pos_record_admin_login/);
   assert.match(php, /heartbeat_at = NULL/);
   assert.match(read("js/biz-traffic-map.js"), /not an exact address/);
-  assert.match(read("js/biz-traffic-map.js"), /basemaps\.cartocdn\.com\/dark_all/);
+  assert.match(read("js/biz-traffic-map.js"), /maps\.googleapis\.com\/maps\/api\/js/);
+  assert.match(read("js/biz-traffic-map.js"), /AIzaSyAG8q32DcFtFKmgK3V20L4K_FsN4lI3jB4/);
   assert.match(read("server/biz-traffic.js"), /shop_city/);
   assert.match(read("pos-master-live.php"), /shopCity/);
   const board = M.render({ businesses: [], summary: { total: 0, online: 0, offline: 0, activeToday: 0 } });

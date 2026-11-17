@@ -4,6 +4,7 @@
   const RECENT_MS = 30 * 60 * 1000;
   const STATUS_RANK = { online: 3, recent: 2, offline: 1 };
   const COLORS = { online: "#22c55e", recent: "#f59e0b", offline: "#94a3b8" };
+  const GOOGLE_MAP_KEY = "AIzaSyAG8q32DcFtFKmgK3V20L4K_FsN4lI3jB4";
   const NOTE = "Locations are approximate, estimated from the business admin IP address. They are not an exact street address. A login by itself does not mark a business online.";
   let activeMap = null;
 
@@ -303,7 +304,7 @@
               <span><i class="is-offline"></i>Offline</span>
             </div>
           </div>
-          <div id="biz-leaflet" role="img" aria-label="World map of business admins"></div>
+          <div id="biz-leaflet" role="region" aria-label="Google map of business admins"></div>
         </section>
         <aside class="ip-dash-side">
           <section class="ip-dash-panel ip-dash-section">
@@ -332,6 +333,29 @@
     </div>`;
   }
 
+  function loadGoogleMaps() {
+    if (root.google?.maps?.Map) return Promise.resolve(root.google.maps);
+    if (root.__posGoogleMapsLoad) return root.__posGoogleMapsLoad;
+    root.__posGoogleMapsLoad = new Promise((resolve, reject) => {
+      const callback = "posGoogleMapsReady";
+      const timer = setTimeout(() => reject(new Error("Google Maps did not load")), 15000);
+      root[callback] = () => {
+        clearTimeout(timer);
+        if (root.google?.maps?.Map) resolve(root.google.maps);
+        else reject(new Error("Google Maps did not load"));
+      };
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAP_KEY)}&callback=${callback}&v=weekly`;
+      script.async = true;
+      script.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error("Google Maps did not load"));
+      };
+      document.head.appendChild(script);
+    });
+    return root.__posGoogleMapsLoad;
+  }
+
   function bind(rootEl, data) {
     const board = rootEl?.querySelector?.("#biz-map-board") || rootEl;
     if (!board) return null;
@@ -346,35 +370,41 @@
     let fitted = false;
     let viewed = false;
     let openId = "";
-    const Leaflet = root.L || globalThis.L;
+    let alive = true;
+    let map = null;
+    let mapsApi = null;
+    let info = null;
     const mapEl = board.querySelector("#biz-leaflet");
-    const map = Leaflet && mapEl ? Leaflet.map(mapEl, { worldCopyJump: true }) : null;
-    const resize = () => map?.invalidateSize();
-    if (map) {
-      activeMap = map;
-      let replaced = false;
-      const base = Leaflet.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap &copy; CARTO",
-        subdomains: "abcd",
-        maxZoom: 19,
-      }).addTo(map);
-      base.on("tileerror", () => {
-        if (replaced) return;
-        replaced = true;
-        map.removeLayer(base);
-        Leaflet.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
-          attribution: "Tiles &copy; Esri",
-          maxZoom: 18,
-        }).addTo(map);
-      });
-      map.setView([22.6, 79], 5);
-      requestAnimationFrame(resize);
-      setTimeout(resize, 250);
-      window.addEventListener("resize", resize);
-    } else if (mapEl) {
-      mapEl.textContent = "The world map did not load.";
+    const resize = () => {
+      if (map && mapsApi?.event) mapsApi.event.trigger(map, "resize");
+    };
+    function tearDown() {
+      window.removeEventListener("resize", resize);
+      markers.forEach((item) => item.marker.setMap(null));
+      markers.clear();
+      try { info?.close(); } catch { /* popup may already be closed */ }
+      map = null;
     }
-    const layer = map ? Leaflet.layerGroup().addTo(map) : null;
+    if (mapEl) {
+      loadGoogleMaps().then((maps) => {
+        if (!alive || !mapEl.isConnected) return;
+        mapsApi = maps;
+        map = new maps.Map(mapEl, {
+          center: { lat: 22.6, lng: 79 },
+          zoom: 5,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+        });
+        info = new maps.InfoWindow();
+        activeMap = { remove: tearDown };
+        window.addEventListener("resize", resize);
+        setTimeout(resize, 250);
+        paint();
+      }).catch(() => {
+        if (alive && mapEl) mapEl.textContent = "The Google map did not load.";
+      });
+    }
 
     function paintFilters() {
       const pick = choices(rows);
@@ -418,33 +448,54 @@
           body.insertAdjacentHTML("beforeend", `<tr><td colspan="3">${shown.length - slice.length} more match. Narrow the filters to see them.</td></tr>`);
         }
       }
-      if (!map || !layer) return;
-      layer.clearLayers();
+      if (!map || !mapsApi) return;
+      markers.forEach((item) => item.marker.setMap(null));
       markers.clear();
-      const bounds = [];
+      const bounds = new mapsApi.LatLngBounds();
+      let plotted = 0;
       for (const row of shown) {
         if (!row.plotted) continue;
-        const marker = Leaflet.circleMarker([Number(row.lat), Number(row.lon)], {
-          radius: row.status === "online" ? 8 : 6,
-          color: COLORS[row.status] || COLORS.offline,
-          fillColor: COLORS[row.status] || COLORS.offline,
-          fillOpacity: 0.9,
-          weight: 1,
+        const position = { lat: Number(row.lat), lng: Number(row.lon) };
+        if (!Number.isFinite(position.lat) || !Number.isFinite(position.lng)) continue;
+        const marker = new mapsApi.Marker({
+          position,
+          map,
+          title: row.businessName,
+          icon: {
+            path: mapsApi.SymbolPath.CIRCLE,
+            scale: row.status === "online" ? 9 : 7,
+            fillColor: COLORS[row.status] || COLORS.offline,
+            fillOpacity: 1,
+            strokeColor: "#0f172a",
+            strokeWeight: 1,
+          },
         });
-        marker.bindPopup(popupHtml(row));
-        marker.on("click", () => { openId = row.businessId; });
-        marker.addTo(layer);
-        markers.set(row.businessId, marker);
-        bounds.push([Number(row.lat), Number(row.lon)]);
+        marker.addListener("click", () => {
+          openId = row.businessId;
+          info.setContent(popupHtml(row));
+          info.open({ map, anchor: marker });
+        });
+        markers.set(row.businessId, { marker, row });
+        bounds.extend(position);
+        plotted += 1;
       }
-      if (!fitted && bounds.length) {
-        map.fitBounds(bounds, { padding: [28, 28], maxZoom: 6 });
+      if (!fitted && plotted) {
+        map.fitBounds(bounds, 48);
+        mapsApi.event.addListenerOnce(map, "idle", () => {
+          if ((map.getZoom() || 0) > 6) map.setZoom(6);
+        });
         fitted = true;
+        viewed = true;
       } else if (!viewed) {
-        map.setView([22.6, 79], 5);
+        map.setCenter({ lat: 22.6, lng: 79 });
+        map.setZoom(5);
         viewed = true;
       }
-      if (openId && markers.get(openId)) markers.get(openId).openPopup();
+      const open = markers.get(openId);
+      if (open) {
+        info.setContent(popupHtml(open.row));
+        info.open({ map, anchor: open.marker });
+      }
     }
 
     paintFilters();
@@ -459,11 +510,13 @@
     });
     board.querySelector("#biz-rows")?.addEventListener("click", (event) => {
       const rowEl = event.target.closest?.("[data-biz-id]");
-      const marker = markers.get(rowEl?.dataset?.bizId || "");
-      if (!marker || !map) return;
+      const item = markers.get(rowEl?.dataset?.bizId || "");
+      if (!item || !map || !info) return;
       openId = rowEl.dataset.bizId;
-      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 4), { duration: 0.6 });
-      marker.openPopup();
+      map.panTo(item.marker.getPosition());
+      if ((map.getZoom() || 0) < 6) map.setZoom(6);
+      info.setContent(popupHtml(item.row));
+      info.open({ map, anchor: item.marker });
     });
 
     return {
@@ -474,11 +527,9 @@
         paint();
       },
       destroy() {
-        window.removeEventListener("resize", resize);
-        if (activeMap === map && map) {
-          try { map.remove(); } catch { /* the container may already be gone */ }
-          activeMap = null;
-        }
+        alive = false;
+        tearDown();
+        if (activeMap) activeMap = null;
       },
     };
   }
