@@ -206,6 +206,35 @@ function pos_crm_automation_tick() {
   return ["shops" => count($shops), "sent" => $sent];
 }
 
+function pos_crm_kpis($bid) {
+  $today = (new DateTime("now", new DateTimeZone("Asia/Kolkata")))->format("Y-m-d");
+  $customers = (int) (pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ?" . pos_crm_active_customer_sql(), "s", [$bid])[0]["n"] ?? 0);
+  $open = (int) (pos_q("SELECT COUNT(*) AS n FROM crm_leads WHERE business_id = ? AND stage NOT IN ('converted','lost')", "s", [$bid])[0]["n"] ?? 0);
+  $follow = pos_q(
+    "SELECT
+       SUM(status = 'pending' AND (due_on IS NULL OR due_on >= ?)) AS pending,
+       SUM(status = 'pending' AND due_on IS NOT NULL AND due_on < ?) AS missed
+     FROM crm_followups WHERE business_id = ?",
+    "sss",
+    [$today, $today, $bid]
+  );
+  $tasks = (int) (pos_q("SELECT COUNT(*) AS n FROM crm_tasks WHERE business_id = ? AND status NOT IN ('done','cancelled')", "s", [$bid])[0]["n"] ?? 0);
+  $closed = pos_q("SELECT SUM(stage = 'converted') AS won, SUM(stage IN ('converted','lost')) AS closed FROM crm_leads WHERE business_id = ?", "s", [$bid]);
+  $won = (int) ($closed[0]["won"] ?? 0);
+  $done = (int) ($closed[0]["closed"] ?? 0);
+  $outstanding = (float) (pos_q("SELECT COALESCE(SUM(outstanding),0) AS n FROM customers WHERE business_id = ?", "s", [$bid])[0]["n"] ?? 0);
+  return [
+    "customers" => $customers,
+    "leads" => $open,
+    "followups" => (int) ($follow[0]["pending"] ?? 0),
+    "missed" => (int) ($follow[0]["missed"] ?? 0),
+    "tasks" => $tasks,
+    "outstanding" => $outstanding,
+    "converted" => $won,
+    "conversion" => $done ? round(($won / $done) * 1000) / 10 : 0,
+  ];
+}
+
 function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
   if (strpos($path, "crm") !== 0) return false;
   $uid = $auth["user"]["id"] ?? "";
@@ -223,12 +252,7 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
         "segments" => pos_q("SELECT id, name FROM crm_customer_segments WHERE business_id = ? ORDER BY name", "s", [$bid]),
         "automations" => pos_q("SELECT auto_key AS `key`, enabled, channel, template, wait_days FROM crm_automations WHERE business_id = ?", "s", [$bid]),
         "staff" => pos_q("SELECT id, role, COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), NULLIF(email, ''), username) AS name FROM staff_users WHERE business_id = ? ORDER BY first_name, last_name LIMIT 200", "s", [$bid]),
-        "kpis" => [
-          "customers" => (int) (pos_q("SELECT COUNT(*) AS n FROM customers WHERE business_id = ?" . pos_crm_active_customer_sql(), "s", [$bid])[0]["n"] ?? 0),
-          "leads" => (int) (pos_q("SELECT COUNT(*) AS n FROM crm_leads WHERE business_id = ? AND stage NOT IN ('converted','lost')", "s", [$bid])[0]["n"] ?? 0),
-          "followups" => (int) (pos_q("SELECT COUNT(*) AS n FROM crm_followups WHERE business_id = ? AND status = 'pending'", "s", [$bid])[0]["n"] ?? 0),
-          "outstanding" => (float) (pos_q("SELECT COALESCE(SUM(outstanding),0) AS n FROM customers WHERE business_id = ?", "s", [$bid])[0]["n"] ?? 0),
-        ],
+        "kpis" => pos_crm_kpis($bid),
         "php" => true,
       ]);
     }

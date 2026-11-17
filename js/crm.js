@@ -184,6 +184,47 @@
     };
   }
 
+  function crmBrief(kpis = {}) {
+    const count = (value) => Math.max(0, Math.round(num(value)));
+    const customers = count(kpis.customers);
+    const leads = count(kpis.leads);
+    const followups = count(kpis.followups);
+    const missed = count(kpis.missed);
+    const tasks = count(kpis.tasks);
+    const converted = count(kpis.converted);
+    const outstanding = Math.max(0, num(kpis.outstanding));
+    const conversion = num(kpis.conversion);
+    const money = `₹${inr(outstanding)}`;
+    const happened = customers || leads
+      ? `${customers} customer${customers === 1 ? "" : "s"} on file, ${leads} open lead${leads === 1 ? "" : "s"}, and ${followups} follow-up${followups === 1 ? "" : "s"} still due.`
+      : "No customers or open leads yet. Add a lead to start the pipeline.";
+    const why = [];
+    if (missed) why.push(`${missed} follow-up${missed === 1 ? " is" : "s are"} past the due date.`);
+    if (tasks) why.push(`${tasks} task${tasks === 1 ? " is" : "s are"} still open.`);
+    if (outstanding > 0.5) why.push(`${money} is still outstanding.`);
+    if (converted) why.push(`Closed leads convert at ${conversion}%.`);
+    else if (leads) why.push("No lead has been marked converted or lost yet, so the conversion rate is still open.");
+    const next = missed
+      ? "Missed follow-ups stay on the dashboard until someone marks them done or moves the lead."
+      : leads
+        ? "Open leads stay in the pipeline until they are contacted, converted, or marked lost."
+        : "The next lead you save will show up in the pipeline and in this briefing.";
+    const action = missed
+      ? "Clear the missed follow-ups first, then convert any lead whose mobile already matches a customer."
+      : outstanding > 0.5
+        ? "Collect the outstanding, then move the open leads that are closest to a quotation."
+        : leads
+          ? "Move each open lead one stage forward, or convert it when the mobile already matches a customer."
+          : "Save the first lead with a mobile number so it can link to a customer later.";
+    return {
+      engine: "advanced",
+      happened,
+      why: why.join(" ") || "The pipeline does not show a single blockage yet.",
+      next,
+      action,
+    };
+  }
+
   function pipelineColumns(leads) {
     const rows = Array.isArray(leads) ? leads : [];
     return STAGES.filter((stage) => !stage.lost).map((stage) => ({
@@ -236,6 +277,7 @@
     openLead,
     followupState,
     summarize,
+    crmBrief,
     pipelineColumns,
     sameCustomer,
     customValues,

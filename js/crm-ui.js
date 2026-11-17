@@ -70,8 +70,20 @@
     return `<div class="crm-kpis">${rows.map(([label, value]) => `<article class="crm-kpi"><span>${esc(label)}</span><strong>${esc(value)}</strong></article>`).join("")}</div>`;
   }
 
+  function paintBrief(data) {
+    const brief = CRM().crmBrief(data || {});
+    const cards = [
+      ["01", "What happened", brief.happened],
+      ["02", "Why it happened", brief.why],
+      ["03", "What may happen next", brief.next],
+      ["04", "What you should do", brief.action],
+    ];
+    return `<section class="crm-ai"><p class="crm-ai-kicker">Advanced AI</p><div class="crm-story">${cards.map(([step, title, text]) => `<article class="crm-story-card"><span>${step}</span><h3>${esc(title)}</h3><p>${esc(text)}</p></article>`).join("")}</div></section>`;
+  }
+
   async function paintDashboard() {
-    $("crm-body").innerHTML = `${kpis(boot.kpis || {})}<div class="crm-timeline"><article><strong>How this desk works</strong><p class="crm-meta">Leads move from New Lead to Converted. Converting a lead links an existing customer when the mobile, email, or GSTIN already exists. WhatsApp, SMS, and email automations stay off until you enable a template and the customer has consented.</p></article></div>`;
+    const data = boot.kpis || {};
+    $("crm-body").innerHTML = `${kpis(data)}${paintBrief(data)}<div class="crm-timeline"><article><strong>How this desk works</strong><p class="crm-meta">Leads move from New Lead to Converted. Converting a lead links an existing customer when the mobile, email, or GSTIN already exists. WhatsApp, SMS, and email automations stay off until you enable a template and the customer has consented.</p></article></div>`;
   }
 
   async function paintPipeline() {
