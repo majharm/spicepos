@@ -106,6 +106,16 @@ test("shop clean keeps login and settings tables", () => {
   assert.match(masterJs, /data-clean-biz/);
   assert.match(masterJs, /\/api\/master\/businesses\/\$\{businessId\}\/clean/);
   assert.match(masterJs, /id="biz-clean-form"/);
+  assert.match(backupJs, /export async function deleteBusinessAccount/);
+  assert.match(backupJs, /UPDATE staff_users SET status = 'inactive'/);
+  assert.match(backupPhp, /function pos_delete_business_account/);
+  assert.match(masterApi, /\/api\/master\/businesses\/:id\/delete/);
+  assert.match(masterApi, /\/api\/master\/users\/:id\/status/);
+  assert.match(core, /businesses\/\(\[\^\/\]\+\)\/delete/);
+  assert.match(core, /master\/users\/\(\[\^\/\]\+\)\/status/);
+  assert.match(masterJs, /data-delete-biz/);
+  assert.match(masterJs, /data-staff-status/);
+  assert.match(masterJs, /data-user-status/);
 });
 
 test("ISO timestamps are stored as MySQL datetimes", () => {

@@ -20,7 +20,7 @@ import { registerMasterOfferProfit } from "./offer-profit.js";
 import { workbookXml } from "./excel.js";
 import { getPlatformSettings, setPlatformSetting } from "./settings.js";
 import { normalizeLocale } from "./i18n.js";
-import { cleanShopData, registerMasterBackup, tickBackupEmail } from "./backup.js";
+import { cleanShopData, deleteBusinessAccount, registerMasterBackup, tickBackupEmail } from "./backup.js";
 import { sendWelcomeSignup, sendWelcomeStaff, publicLoginUrl } from "./mail.js";
 import { registerNotifyCampaigns } from "./notify-routes.js";
 import {
@@ -713,6 +713,42 @@ export function registerMaster(app) {
     }
   });
 
+  app.post("/api/master/businesses/:id/delete", async (req, res) => {
+    try {
+      const password = String(req.body?.password || "");
+      if (!password) {
+        res.status(400).json({ error: "Master Admin password is required" });
+        return;
+      }
+      const [admin] = await query("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", [req.auth.admin.id]);
+      if (!admin || admin.status !== "active" || !(await verifyPassword(password, admin.password_hash))) {
+        res.status(401).json({ error: "Master Admin password is incorrect" });
+        return;
+      }
+      const [biz] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!biz) {
+        res.status(404).json({ error: "Business not found" });
+        return;
+      }
+      const result = await deleteBusinessAccount(biz.id);
+      await platformAudit(
+        req.auth.admin,
+        "Business deleted",
+        { module: "businesses", target_id: biz.id, target_name: biz.name, tables: result.tables, users: result.users },
+        req,
+      );
+      res.json({
+        ok: true,
+        business: biz.name,
+        tables: result.tables,
+        users: result.users,
+        note: "The shop and all of its data were deleted. Its users were inactivated and signed out.",
+      });
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
   app.delete("/api/master/businesses/:id", (req, res) =>
     send(res, async () => {
       const id = req.params.id;
@@ -881,6 +917,29 @@ export function registerMaster(app) {
       const user = await unlockStaffUser(req.params.id);
       await platformAudit(req.auth.admin, "Account Unlocked", { module: "users", target_id: user.id, target_name: user.email }, req);
       return { ok: true, email: user.email };
+    }),
+  );
+
+  app.post("/api/master/users/:id/status", (req, res) =>
+    send(res, async () => {
+      const status = String(req.body?.status || "").toLowerCase() === "inactive" ? "inactive" : "active";
+      const [user] = await query("SELECT id, email, business_id FROM staff_users WHERE id = ? LIMIT 1", [req.params.id]);
+      if (!user) throw new Error("User not found");
+      await query("UPDATE staff_users SET status = ? WHERE id = ?", [status, user.id]);
+      if (status === "inactive") {
+        try {
+          await query("DELETE FROM staff_sessions WHERE staff_user_id = ?", [user.id]);
+        } catch {
+          /* optional table */
+        }
+      }
+      await platformAudit(
+        req.auth.admin,
+        status === "inactive" ? "User inactivated" : "User activated",
+        { module: "users", target_id: user.id, target_name: user.email, business_id: user.business_id },
+        req,
+      );
+      return { ok: true, email: user.email, status };
     }),
   );
 

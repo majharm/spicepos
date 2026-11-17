@@ -202,6 +202,42 @@ export async function cleanShopData(businessId) {
   return { ok: true, tables: names.length, kept: [...SHOP_CLEAN_KEEP_TABLES].sort() };
 }
 
+export async function deleteBusinessAccount(businessId) {
+  const id = String(businessId || "").trim();
+  if (!id) throw new Error("Select a shop");
+  const known = await listBizTables();
+  const names = known.filter((t) => t !== "staff_users" && t !== "businesses");
+  const deleteOrder = sortBackupTables(names, false);
+  let users = 0;
+  await withTransaction(async (conn) => {
+    await withFkOff(conn, async () => {
+      try {
+        await conn.query("DELETE FROM staff_sessions WHERE business_id = ?", [id]);
+      } catch {
+        /* optional table */
+      }
+      try {
+        await conn.query(
+          `DELETE s FROM staff_sessions s
+           INNER JOIN staff_users u ON u.id = s.staff_user_id
+           WHERE u.business_id = ?`,
+          [id],
+        );
+      } catch {
+        /* optional table */
+      }
+      for (const t of deleteOrder) {
+        await conn.query(`DELETE FROM \`${t}\` WHERE business_id = ?`, [id]);
+      }
+      const [counted] = await conn.query("SELECT COUNT(*) AS n FROM staff_users WHERE business_id = ?", [id]);
+      users = Number(counted[0]?.n) || 0;
+      await conn.query("UPDATE staff_users SET status = 'inactive' WHERE business_id = ?", [id]);
+      await conn.query("DELETE FROM businesses WHERE id = ?", [id]);
+    });
+  });
+  return { ok: true, tables: names.length + 1, users };
+}
+
 async function requireShop(businessId) {
   const id = String(businessId || "").trim();
   if (!id) throw new Error("Select a shop");

@@ -4754,6 +4754,39 @@ function pos_php_dispatch($path, $method, $rawBody) {
       ]);
     }
 
+    if (preg_match("#^master/businesses/([^/]+)/delete$#", $path, $m) && $method === "POST") {
+      $password = (string) ($body["password"] ?? "");
+      if ($password === "") pos_send(400, ["error" => "Master Admin password is required", "php" => true]);
+      $admins = pos_q("SELECT * FROM platform_admins WHERE id = ? LIMIT 1", "s", [$auth["admin"]["id"]]);
+      $adminRow = $admins[0] ?? null;
+      $envPass = pos_env("MASTER_ADMIN_PASSWORD");
+      $ok = false;
+      if ($adminRow && ($adminRow["status"] ?? "") === "active") {
+        if ($envPass !== "" && hash_equals($envPass, $password)) $ok = true;
+        else $ok = pos_verify_password($password, $adminRow["password_hash"] ?? "");
+      }
+      if (!$ok) pos_send(401, ["error" => "Master Admin password is incorrect", "php" => true]);
+      $biz = pos_q("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$biz) throw new Exception("Business not found");
+      pos_require_backup();
+      $out = pos_delete_business_account($m[1]);
+      pos_audit($auth["admin"], "Business deleted", [
+        "module" => "businesses",
+        "target_id" => $m[1],
+        "target_name" => $biz[0]["name"] ?? "",
+        "tables" => $out["tables"] ?? 0,
+        "users" => $out["users"] ?? 0,
+      ]);
+      pos_send(200, [
+        "ok" => true,
+        "business" => $biz[0]["name"] ?? "",
+        "tables" => $out["tables"] ?? 0,
+        "users" => $out["users"] ?? 0,
+        "note" => "The shop and all of its data were deleted. Its users were inactivated and signed out.",
+        "php" => true,
+      ]);
+    }
+
     if (preg_match("#^master/businesses/([^/]+)$#", $path, $m) && $method === "DELETE") {
       $id = $m[1];
       $swami = pos_env("BUSINESS_ID", "00000000-0000-4000-8000-000000000001");
@@ -4889,6 +4922,27 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $user = pos_unlock_staff_user($m[1]);
       pos_audit($auth["admin"], "Account Unlocked", ["module" => "users", "target_id" => $m[1], "target_name" => $user["email"] ?? ""]);
       pos_send(200, ["ok" => true, "email" => $user["email"] ?? ""]);
+    }
+
+    if (preg_match("#^master/users/([^/]+)/status$#", $path, $m) && $method === "POST") {
+      $status = strtolower((string) ($body["status"] ?? "")) === "inactive" ? "inactive" : "active";
+      $rows = pos_q("SELECT id, email, business_id FROM staff_users WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      if (!$rows) throw new Exception("User not found");
+      pos_q("UPDATE staff_users SET status = ? WHERE id = ?", "ss", [$status, $m[1]]);
+      if ($status === "inactive") {
+        try {
+          pos_q("DELETE FROM staff_sessions WHERE staff_user_id = ?", "s", [$m[1]]);
+        } catch (Exception $e) {
+          /* optional */
+        }
+      }
+      pos_audit($auth["admin"], $status === "inactive" ? "User inactivated" : "User activated", [
+        "module" => "users",
+        "target_id" => $m[1],
+        "target_name" => $rows[0]["email"] ?? "",
+        "business_id" => $rows[0]["business_id"] ?? "",
+      ]);
+      pos_send(200, ["ok" => true, "email" => $rows[0]["email"] ?? "", "status" => $status]);
     }
 
     if ($path === "master/staff" && $method === "POST") {

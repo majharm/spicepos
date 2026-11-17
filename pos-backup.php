@@ -248,6 +248,46 @@ function pos_clean_shop_data($bid) {
   return ["ok" => true, "tables" => count($names)];
 }
 
+function pos_delete_business_account($bid) {
+  pos_backup_prepare();
+  $names = [];
+  foreach (pos_backup_biz_tables() as $t) {
+    if ($t === "staff_users" || $t === "businesses") continue;
+    $names[] = $t;
+  }
+  $deleteOrder = pos_backup_sort_tables($names, false);
+  $users = 0;
+  pos_with_transaction(function () use ($bid, $deleteOrder, &$users) {
+    pos_q("SET FOREIGN_KEY_CHECKS=0");
+    try {
+      try {
+        pos_q("DELETE FROM staff_sessions WHERE business_id = ?", "s", [$bid]);
+      } catch (Exception $e) {
+        /* optional */
+      }
+      try {
+        pos_q(
+          "DELETE s FROM staff_sessions s INNER JOIN staff_users u ON u.id = s.staff_user_id WHERE u.business_id = ?",
+          "s",
+          [$bid]
+        );
+      } catch (Exception $e) {
+        /* optional */
+      }
+      foreach ($deleteOrder as $t) {
+        pos_q("DELETE FROM `{$t}` WHERE business_id = ?", "s", [$bid]);
+      }
+      $counted = pos_q("SELECT COUNT(*) AS n FROM staff_users WHERE business_id = ?", "s", [$bid]);
+      $users = (int) ($counted[0]["n"] ?? 0);
+      pos_q("UPDATE staff_users SET status = 'inactive' WHERE business_id = ?", "s", [$bid]);
+      pos_q("DELETE FROM businesses WHERE id = ?", "s", [$bid]);
+    } finally {
+      pos_q("SET FOREIGN_KEY_CHECKS=1");
+    }
+  });
+  return ["ok" => true, "tables" => count($names) + 1, "users" => $users];
+}
+
 function pos_backup_restore($bid, $payload, $auth, $masterAdmin = null) {
   pos_backup_prepare();
   if (!is_array($payload) || ($payload["kind"] ?? "") !== "spicepos-shop-backup") {

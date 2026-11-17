@@ -865,6 +865,7 @@ body.master-dark #master-app {
 }
 #master-app #biz-pw-form[hidden],
 #master-app #biz-clean-form[hidden],
+#master-app #biz-delete-form[hidden],
 #master-app #biz-sub-history[hidden],
 #master-app #biz-cancel[hidden] { display: none !important; }
 #master-app .biz-shops { display: grid; gap: 16px; }

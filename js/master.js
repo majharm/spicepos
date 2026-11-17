@@ -2802,6 +2802,7 @@ async function render() {
                           ? `<button class="btn" type="button" data-act="activate" data-id="${attr(b.id)}">Activate</button>`
                           : `<button class="btn" type="button" data-act="suspend" data-id="${attr(b.id)}">Suspend</button>`}
                         <button class="btn danger" type="button" data-clean-biz="${attr(b.id)}">Clean data</button>
+                        <button class="btn danger" type="button" data-delete-biz="${attr(b.id)}">Delete account</button>
                       </div>
                     </details>
                   </div>
@@ -2844,6 +2845,24 @@ async function render() {
                 <button class="btn danger" type="submit">Clean all data</button>
                 <button class="btn" type="button" id="biz-clean-cancel">Cancel</button>
                 <p class="hint" id="biz-clean-hint"></p>
+              </div>
+            </form>
+            <form class="settings item-composer" id="biz-delete-form" hidden>
+              <div class="item-composer-top">
+                <p class="item-mode">Delete business and all data</p>
+                <p class="item-composer-note" id="biz-delete-who"></p>
+              </div>
+              <input type="hidden" name="business_id" />
+              <fieldset class="item-block">
+                <legend>Master Admin password</legend>
+                <p class="item-composer-note">Any shop can be removed at any time. Bills, items, customers, stock, branches, devices, and settings are deleted. Every user on this shop is inactivated and signed out. This cannot be undone.</p>
+                <label>Password <input name="password" type="password" required autocomplete="current-password" /></label>
+                <label>Confirm password <input name="confirm" type="password" required autocomplete="current-password" /></label>
+              </fieldset>
+              <div class="item-composer-actions">
+                <button class="btn danger" type="submit">Delete account and data</button>
+                <button class="btn" type="button" id="biz-delete-cancel">Cancel</button>
+                <p class="hint" id="biz-delete-hint"></p>
               </div>
             </form>
             <form class="settings item-composer biz-create" id="biz-form">
@@ -3458,11 +3477,20 @@ async function render() {
       const bizCleanForm = $("biz-clean-form");
       const bizCleanHint = $("biz-clean-hint");
       const bizCleanWho = $("biz-clean-who");
+      const bizDeleteForm = $("biz-delete-form");
+      const bizDeleteHint = $("biz-delete-hint");
+      const bizDeleteWho = $("biz-delete-who");
       $("biz-clean-cancel").onclick = () => {
         bizCleanForm.hidden = true;
         bizCleanForm.reset();
         bizCleanHint.textContent = "";
         bizCleanHint.className = "hint";
+      };
+      $("biz-delete-cancel").onclick = () => {
+        bizDeleteForm.hidden = true;
+        bizDeleteForm.reset();
+        bizDeleteHint.textContent = "";
+        bizDeleteHint.className = "hint";
       };
       bizCleanForm.onsubmit = async (e) => {
         e.preventDefault();
@@ -3490,9 +3518,36 @@ async function render() {
           bizCleanHint.className = "hint error";
         }
       };
+      bizDeleteForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(bizDeleteForm);
+        const password = String(fd.get("password") || "");
+        const confirm = String(fd.get("confirm") || "");
+        if (password !== confirm) {
+          bizDeleteHint.textContent = "Password and confirm password do not match";
+          bizDeleteHint.className = "hint error";
+          return;
+        }
+        const businessId = fd.get("business_id");
+        const shop = rows.find((r) => r.id === businessId);
+        try {
+          bizDeleteHint.className = "hint";
+          bizDeleteHint.textContent = "Checking password and deleting the shop…";
+          const out = await api(`/api/master/businesses/${businessId}/delete`, {
+            method: "POST",
+            body: JSON.stringify({ password }),
+          });
+          panelFlash = out.note || `${shop?.name || "This shop"} was deleted. Its users are inactive.`;
+          render();
+        } catch (err) {
+          bizDeleteHint.textContent = err.message;
+          bizDeleteHint.className = "hint error";
+        }
+      };
       body.querySelectorAll("[data-reset-biz]").forEach((btn) => {
         btn.onclick = () => {
           bizCleanForm.hidden = true;
+          bizDeleteForm.hidden = true;
           const b = rows.find((r) => r.id === btn.dataset.resetBiz);
           bizPw.open(btn.dataset.resetBiz, `New login password for ${b?.name || "this shop"} (${b?.admin_username || b?.email || "business admin"}).`);
         };
@@ -3500,6 +3555,7 @@ async function render() {
       body.querySelectorAll("[data-clean-biz]").forEach((btn) => {
         btn.onclick = () => {
           $("biz-pw-form").hidden = true;
+          bizDeleteForm.hidden = true;
           const b = rows.find((r) => r.id === btn.dataset.cleanBiz);
           bizCleanForm.hidden = false;
           bizCleanForm.business_id.value = btn.dataset.cleanBiz;
@@ -3510,6 +3566,22 @@ async function render() {
           bizCleanHint.className = "hint";
           bizCleanForm.scrollIntoView({ block: "start" });
           bizCleanForm.password.focus();
+        };
+      });
+      body.querySelectorAll("[data-delete-biz]").forEach((btn) => {
+        btn.onclick = () => {
+          $("biz-pw-form").hidden = true;
+          bizCleanForm.hidden = true;
+          const b = rows.find((r) => r.id === btn.dataset.deleteBiz);
+          bizDeleteForm.hidden = false;
+          bizDeleteForm.business_id.value = btn.dataset.deleteBiz;
+          bizDeleteWho.textContent = `Delete ${b?.name || "this shop"} and every bill, item, customer, branch, and device. Its users will be inactivated.`;
+          bizDeleteForm.password.value = "";
+          bizDeleteForm.confirm.value = "";
+          bizDeleteHint.textContent = "";
+          bizDeleteHint.className = "hint";
+          bizDeleteForm.scrollIntoView({ block: "start" });
+          bizDeleteForm.password.focus();
         };
       });
       if (panelFlash) {
@@ -3626,6 +3698,7 @@ async function render() {
                   </div>
                   <div class="master-staff-actions">
                     <button class="btn" type="button" data-edit-staff="${attr(u.id)}">Edit</button>
+                    <button class="btn" type="button" data-staff-status="${off ? "active" : "inactive"}" data-staff-id="${attr(u.id)}">${off ? "Activate" : "Inactivate"}</button>
                     <button class="btn" type="button" data-unlock="${attr(u.id)}">Unlock</button>
                     ${u.status === "active" ? `<button class="btn primary" type="button" data-enter-user="${attr(u.id)}">Open POS</button>` : ""}
                   </div>
@@ -3680,6 +3753,27 @@ async function render() {
       $("staff-list").addEventListener("click", async (e) => {
         const edit = e.target.closest("[data-edit-staff]");
         const unlock = e.target.closest("[data-unlock]");
+        const statusBtn = e.target.closest("[data-staff-status]");
+        if (statusBtn) {
+          const staff = rows.find((u) => u.id === statusBtn.dataset.staffId);
+          const next = statusBtn.dataset.staffStatus === "inactive" ? "inactive" : "active";
+          const name = `${staff?.first_name || ""} ${staff?.last_name || ""}`.trim() || staff?.email || "this user";
+          if (next === "inactive" && !confirm(`Inactivate ${name}? They are signed out and cannot sign in until you activate them.`)) return;
+          statusBtn.disabled = true;
+          try {
+            await api(`/api/master/users/${statusBtn.dataset.staffId}/status`, {
+              method: "POST",
+              body: JSON.stringify({ status: next }),
+            });
+            panelFlash = next === "inactive" ? `${name} is inactive and signed out.` : `${name} is active again.`;
+            render();
+          } catch (err) {
+            hint.textContent = err.message;
+            hint.className = "hint error";
+            statusBtn.disabled = false;
+          }
+          return;
+        }
         if (edit) {
           const staff = rows.find((u) => u.id === edit.dataset.editStaff);
           if (staff) fillStaff(staff);
@@ -3735,6 +3829,7 @@ async function render() {
           u.business_name || "—",
           accountStatusLabel(u),
           `${u.status === "active" ? `<button class="btn primary" type="button" data-enter-user="${u.id}">Open POS</button>` : ""}
+           <button class="btn" type="button" data-user-status="${u.status === "inactive" ? "active" : "inactive"}" data-user-id="${u.id}">${u.status === "inactive" ? "Activate" : "Inactivate"}</button>
            <button class="btn" type="button" data-reset-user="${u.id}">Set password</button>
            <button class="btn" type="button" data-unlock="${u.id}">Unlock</button>`,
         ]),
@@ -3762,6 +3857,27 @@ async function render() {
           try {
             await api(`/api/master/users/${btn.dataset.unlock}/unlock`, { method: "POST" });
             panelFlash = "Account unlocked. The user can sign in again.";
+            render();
+          } catch (err) {
+            usersHint.textContent = err.message;
+            usersHint.className = "hint error";
+            btn.disabled = false;
+          }
+        };
+      });
+      body.querySelectorAll("[data-user-status]").forEach((btn) => {
+        btn.onclick = async () => {
+          const u = rows.find((r) => r.id === btn.dataset.userId);
+          const next = btn.dataset.userStatus === "inactive" ? "inactive" : "active";
+          const name = `${u?.first_name || ""} ${u?.last_name || ""}`.trim() || u?.email || "this user";
+          if (next === "inactive" && !confirm(`Inactivate ${name}? They are signed out and cannot sign in until you activate them.`)) return;
+          btn.disabled = true;
+          try {
+            await api(`/api/master/users/${btn.dataset.userId}/status`, {
+              method: "POST",
+              body: JSON.stringify({ status: next }),
+            });
+            panelFlash = next === "inactive" ? `${name} is inactive and signed out.` : `${name} is active again.`;
             render();
           } catch (err) {
             usersHint.textContent = err.message;
