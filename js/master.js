@@ -2398,12 +2398,6 @@ async function render() {
           </div>
           ${livePreviewTable(live)}
         </section>
-        <div class="master-shop-toolbar">
-        <label class="master-shop-search">Search shops
-          <input id="master-shop-q" type="search" placeholder="Name, DSA, plan, or status" autocomplete="off" />
-        </label>
-        <p class="hint">${t.branches || 0} branches · ${t.devices || 0} POS devices · ${t.transactions || 0} bills today</p>
-      </div>
       <div class="master-shop-board">${
         (d.businesses || []).length
           ? d.businesses
@@ -2426,12 +2420,6 @@ async function render() {
       }</div>`,
       );
       bindEnterPosButtons(body);
-      $("master-shop-q")?.addEventListener("input", () => {
-        const q = String($("master-shop-q").value || "").trim().toLowerCase();
-        body.querySelectorAll("[data-shop-card]").forEach((el) => {
-          el.hidden = Boolean(q) && !String(el.dataset.shopSearch || "").includes(q);
-        });
-      });
       body.querySelectorAll("[data-dash-range]").forEach((btn) => {
         btn.onclick = () => {
           dashRange = btn.dataset.dashRange || "30";
