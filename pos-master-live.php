@@ -710,9 +710,162 @@ function pos_master_ip_map() {
   ];
 }
 
+function pos_master_biz_traffic() {
+  $empty = [
+    "businesses" => [],
+    "summary" => ["total" => 0, "online" => 0, "recent" => 0, "offline" => 0, "activeToday" => 0, "plotted" => 0],
+    "pollSeconds" => 30,
+    "note" => "Locations are approximate, estimated from the business admin IP address. They are not an exact street address. A login by itself does not mark a business online.",
+  ];
+  try {
+    pos_ensure_business_presence();
+    pos_q(
+      "CREATE TABLE IF NOT EXISTS ip_geo_cache (
+        ip VARCHAR(64) NOT NULL PRIMARY KEY,
+        country VARCHAR(80) NULL,
+        country_code VARCHAR(8) NULL,
+        region VARCHAR(80) NULL,
+        city VARCHAR(80) NULL,
+        lat DECIMAL(9,5) NULL,
+        lon DECIMAL(9,5) NULL,
+        ok TINYINT NOT NULL DEFAULT 0,
+        looked_up_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_ip_geo_lookup (looked_up_at)
+      )"
+    );
+    $rows = pos_q(
+      "SELECT u.id AS admin_id, b.id AS business_id, b.name AS business_name, b.owner_name,
+              COALESCE(NULLIF(TRIM(b.business_type), ''), NULLIF(TRIM(b.category), ''), 'Other') AS category,
+              COALESCE(NULLIF(p.ip, ''), s.ip, '') AS ip,
+              COALESCE(p.login_at, s.created_at) AS login_at,
+              p.heartbeat_at, p.logout_at,
+              p.country, p.region, p.city, p.lat, p.lon,
+              CASE
+                WHEN p.heartbeat_at IS NOT NULL
+                  AND p.heartbeat_at >= DATE_SUB(NOW(), INTERVAL 90 SECOND)
+                  AND (p.logout_at IS NULL OR p.logout_at < p.heartbeat_at)
+                THEN 'online'
+                WHEN (p.heartbeat_at IS NOT NULL AND p.heartbeat_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE))
+                  OR (p.logout_at IS NOT NULL AND p.logout_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE))
+                THEN 'recent'
+                ELSE 'offline'
+              END AS status,
+              CASE
+                WHEN p.heartbeat_at >= CURDATE() AND p.heartbeat_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY) THEN 1
+                ELSE 0
+              END AS active_today
+       FROM staff_users u
+       JOIN businesses b ON b.id = u.business_id
+       LEFT JOIN business_admin_presence p ON p.staff_user_id = u.id
+       LEFT JOIN staff_sessions s ON s.staff_user_id = u.id AND s.created_at = (
+         SELECT MAX(s2.created_at) FROM staff_sessions s2 WHERE s2.staff_user_id = u.id
+       )
+       WHERE u.role IN ('business_admin', 'resort_owner') AND u.status = 'active'"
+    );
+    $best = [];
+    $rank = ["offline" => 1, "recent" => 2, "online" => 3];
+    foreach ($rows as $row) {
+      $id = (string) $row["business_id"];
+      $status = (string) ($row["status"] ?? "offline");
+      $lat = isset($row["lat"]) ? (float) $row["lat"] : 0;
+      $lon = isset($row["lon"]) ? (float) $row["lon"] : 0;
+      $ip = (string) ($row["ip"] ?? "");
+      $local = pos_ip_is_private($ip);
+      $plotted = !$local && $lat !== 0.0 && $lon !== 0.0;
+      $item = [
+        "businessId" => $id,
+        "businessName" => $row["business_name"] ?: "Business",
+        "ownerName" => $row["owner_name"] ?: "—",
+        "category" => $row["category"] ?: "Other",
+        "ip" => $ip,
+        "loginAt" => $row["login_at"] ?? null,
+        "lastActive" => $row["heartbeat_at"] ?? null,
+        "logoutAt" => $row["logout_at"] ?? null,
+        "country" => $row["country"] ?? "",
+        "region" => $row["region"] ?? "",
+        "city" => $row["city"] ?? "",
+        "lat" => $plotted ? $lat : null,
+        "lon" => $plotted ? $lon : null,
+        "status" => $status,
+        "activeToday" => (int) ($row["active_today"] ?? 0) === 1,
+        "local" => $local,
+        "plotted" => $plotted,
+      ];
+      if (!isset($best[$id]) || ($rank[$status] ?? 0) > ($rank[$best[$id]["status"]] ?? 0)) {
+        if (isset($best[$id]) && !empty($best[$id]["activeToday"])) $item["activeToday"] = true;
+        $best[$id] = $item;
+      } elseif (!empty($item["activeToday"])) {
+        $best[$id]["activeToday"] = true;
+      }
+    }
+    $lookups = 0;
+    foreach ($best as $id => $item) {
+      if ($item["plotted"] || $item["local"] || $item["ip"] === "" || $lookups >= 12) continue;
+      $cached = pos_q(
+        "SELECT country, region, city, lat, lon, ok, looked_up_at FROM ip_geo_cache WHERE ip = ? LIMIT 1",
+        "s",
+        [$item["ip"]]
+      );
+      $hit = null;
+      $row = $cached[0] ?? null;
+      $fresh = false;
+      if ($row) {
+        $age = time() - (strtotime((string) ($row["looked_up_at"] ?? "")) ?: 0);
+        $fresh = ((int) $row["ok"] === 1 && $age < 30 * 86400) || ((int) $row["ok"] !== 1 && $age < 86400);
+        if ($fresh && (int) $row["ok"] === 1) {
+          $hit = ["country" => $row["country"], "region" => $row["region"], "city" => $row["city"], "lat" => (float) $row["lat"], "lon" => (float) $row["lon"]];
+        }
+      }
+      if (!$fresh) {
+        $lookups += 1;
+        $found = pos_ip_geo_lookup($item["ip"]);
+        pos_ip_geo_save($item["ip"], $found);
+        if ($found) $hit = $found;
+      }
+      if (!$hit) continue;
+      $best[$id]["country"] = $hit["country"] ?? "";
+      $best[$id]["region"] = $hit["region"] ?? "";
+      $best[$id]["city"] = $hit["city"] ?? "";
+      $best[$id]["lat"] = $hit["lat"];
+      $best[$id]["lon"] = $hit["lon"];
+      $best[$id]["plotted"] = true;
+      try {
+        pos_q(
+          "UPDATE business_admin_presence SET country = ?, region = ?, city = ?, lat = ?, lon = ? WHERE ip = ? AND (lat IS NULL OR lat = 0)",
+          "sssdds",
+          [$hit["country"] ?? "", $hit["region"] ?? "", $hit["city"] ?? "", (float) $hit["lat"], (float) $hit["lon"], $item["ip"]]
+        );
+      } catch (Exception $e) { /* cache still serves the next poll */ }
+    }
+    $businesses = array_values($best);
+    usort($businesses, function ($a, $b) use ($rank) {
+      $diff = ($rank[$b["status"]] ?? 0) - ($rank[$a["status"]] ?? 0);
+      if ($diff !== 0) return $diff;
+      return strcmp($a["businessName"], $b["businessName"]);
+    });
+    $summary = ["total" => count($businesses), "online" => 0, "recent" => 0, "offline" => 0, "activeToday" => 0, "plotted" => 0];
+    foreach ($businesses as $item) {
+      $summary[$item["status"]] = ($summary[$item["status"]] ?? 0) + 1;
+      if (!empty($item["activeToday"])) $summary["activeToday"] += 1;
+      if (!empty($item["plotted"])) $summary["plotted"] += 1;
+    }
+    return [
+      "businesses" => $businesses,
+      "summary" => $summary,
+      "pollSeconds" => 30,
+      "note" => $empty["note"],
+    ];
+  } catch (Exception $e) {
+    return $empty;
+  }
+}
+
 function pos_master_live_dispatch($path, $method, $auth) {
   if ($path === "master/ip-map" && $method === "GET") {
     pos_send(200, pos_master_ip_map());
+  }
+  if ($path === "master/biz-traffic" && $method === "GET") {
+    pos_send(200, pos_master_biz_traffic());
   }
   if ($path === "master/insights" && $method === "GET") {
     pos_send(200, pos_master_insights($_GET["range"] ?? "30"));

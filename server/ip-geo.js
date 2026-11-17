@@ -81,6 +81,49 @@ async function saveGeo(ip, hit) {
   );
 }
 
+export async function locateIps(ips) {
+  await ensureIpGeoCache();
+  const unique = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(ips) ? ips : []) {
+    const ip = String(raw || "").trim().slice(0, 64);
+    if (!ip || seen.has(ip) || mapApi().isPrivateIp(ip)) continue;
+    seen.add(ip);
+    unique.push(ip);
+  }
+  const found = new Map();
+  let lookups = 0;
+  for (let offset = 0; offset < unique.length; offset += 400) {
+    const chunk = unique.slice(offset, offset + 400);
+    const marks = chunk.map(() => "?").join(",");
+    const cached = await query(
+      `SELECT ip, country, country_code, region, city, lat, lon, ok, looked_up_at
+       FROM ip_geo_cache WHERE ip IN (${marks})`,
+      chunk,
+    );
+    const fresh = new Map();
+    const now = Date.now();
+    for (const row of cached) {
+      const age = now - new Date(row.looked_up_at).getTime();
+      const keep = Number(row.ok) === 1 ? age < 30 * 86400000 : age < 86400000;
+      if (keep) fresh.set(String(row.ip), row);
+    }
+    for (const ip of chunk) {
+      const row = fresh.get(ip);
+      if (row) {
+        if (Number(row.ok) === 1) found.set(ip, geoFromRow(row));
+        continue;
+      }
+      if (lookups >= LOOKUP_CAP) continue;
+      lookups += 1;
+      const hit = await lookupIp(ip);
+      await saveGeo(ip, hit);
+      if (hit) found.set(ip, hit);
+    }
+  }
+  return found;
+}
+
 async function attachGeo(ips) {
   const found = new Map();
   if (!ips.length) return found;

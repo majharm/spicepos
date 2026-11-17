@@ -16,6 +16,7 @@ import {
   SUBSCRIPTION_EXPIRED_TITLE,
   SUBSCRIPTION_EXPIRED_MESSAGE,
 } from "./subscription.js";
+import { recordAdminHeartbeat, recordAdminLogin, recordAdminLogout } from "./biz-traffic.js";
 
 export { publicStatus };
 
@@ -348,6 +349,24 @@ export function registerAuth(app) {
     res.json({ ok: true, onlineWindowSeconds: 300 });
   });
 
+  app.post("/api/session/heartbeat", async (req, res) => {
+    const token = cookies(req).pos_sid;
+    if (!token) {
+      res.status(401).json({ error: "Sign in required" });
+      return;
+    }
+    const staff = await loadStaffSession(token);
+    if (!staff || staff.impersonatorAdminId) {
+      res.status(staff ? 200 : 401).json(staff ? { ok: true, tracked: false } : { error: "Sign in required" });
+      return;
+    }
+    try {
+      res.json(await recordAdminHeartbeat(staff.user, clientIp(req)));
+    } catch (err) {
+      res.status(500).json({ error: String(err.message) });
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     const { identifier, password, branchId } = req.body || {};
     try {
@@ -407,6 +426,7 @@ export function registerAuth(app) {
         ],
       );
       await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE id = ?", [sid]);
+      await recordAdminLogin(user, clientIp(req));
       setCookie(res, "pos_sid", token, ttl, req);
       runTenant({ businessId: user.business_id, branchId: user.branch_id, user }, async () => {
         await audit("User Login", { module: "auth" }, req);
@@ -580,6 +600,7 @@ export function registerAuth(app) {
         ],
       );
       await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", [sha256(token)]);
+      await recordAdminLogin(user, clientIp(req));
       setCookie(res, "pos_sid", token, ttl, req);
       res.json({
         ok: true,
@@ -648,7 +669,9 @@ export function registerAuth(app) {
     const token = cookies(req).pos_sid;
     const master = cookies(req).pos_master;
     if (token) {
+      const staff = await loadStaffSession(token);
       await query("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", [sha256(token)]);
+      if (staff?.user && !staff.impersonatorAdminId) await recordAdminLogout(staff.user);
     }
     if (master) {
       await query("UPDATE platform_sessions SET revoked_at = NOW() WHERE token_hash = ?", [

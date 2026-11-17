@@ -7,6 +7,8 @@ let websitePane = "images";
 let panelFlash = "";
 let dashRange = "30";
 let liveTimer = 0;
+let bizTimer = 0;
+let bizMapView = null;
 let liveState = { q: "", presence: "all", category: "", plan: "", sort: "activity", page: 1 };
 let masterNotices = [];
 let alertLogFocus = "";
@@ -210,7 +212,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "live", "ipmap", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
+  main: ["dash", "live", "ipmap", "bizmap", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support"],
   advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
@@ -225,6 +227,7 @@ const PAGE_HINTS = {
   health: "Database and process status from this server",
   live: "Online only after a real click or keypress",
   ipmap: "Website visitors plotted by address",
+  bizmap: "Business admins plotted by approximate IP location",
   profile: "Your name, address, password, and preferences",
   biz: "Shops, plans, and module permissions",
   users: "Passwords and locked accounts",
@@ -297,6 +300,7 @@ const MASTER_PAGES = [
   { tab: "health", title: "System monitoring", keywords: "health database status" },
   { tab: "live", title: "Live active users", keywords: "online offline session heartbeat" },
   { tab: "ipmap", title: "Website traffic map", keywords: "ip geolocation map website traffic visitors country city globe" },
+  { tab: "bizmap", title: "Business admin map", keywords: "business admin online offline heartbeat map country state city" },
   { tab: "profile", title: "My profile", keywords: "password name email address timezone language" },
   { tab: "biz", title: "Businesses", keywords: "shops create open pos" },
   { tab: "users", title: "Users", keywords: "password unlock login" },
@@ -586,6 +590,13 @@ bindMasterJump();
 function stopLivePoll() {
   if (liveTimer) clearInterval(liveTimer);
   liveTimer = 0;
+}
+
+function stopBizPoll() {
+  if (bizTimer) clearInterval(bizTimer);
+  bizTimer = 0;
+  bizMapView?.destroy?.();
+  bizMapView = null;
 }
 
 function growthMarkup(item) {
@@ -2232,10 +2243,12 @@ function bindAlertsForm(alerts) {
 
 async function render() {
   stopLivePoll();
+  stopBizPoll();
   const titles = {
     dash: "Overview",
     live: "Live active users",
     ipmap: "Website traffic map",
+    bizmap: "Business admin map",
     profile: "My profile",
     biz: "Business management",
     fees: "Plan fees",
@@ -2351,6 +2364,7 @@ async function render() {
           ${kpiButton("Invoices", k.invoices?.value ?? t.transactions, k.invoices, "dsa-sales", { icon: "bill", series: insight?.series, key: "bills" })}
           ${kpiButton("Application load", applicationLoadText(health), null, "health", { icon: "pulse" })}
           ${kpiButton("Website traffic", "Map", null, "ipmap", { icon: "pulse" })}
+          ${kpiButton("Business map", "Live", null, "bizmap", { icon: "pulse" })}
         </div>
         <div class="master-insight-grid">
           <section class="master-panel ma-span-2">
@@ -2635,6 +2649,21 @@ async function render() {
         geo ? geo.render(data) : `<p class="hint">The map could not be drawn.</p>`,
       );
       geo?.bind(body, data, () => render());
+    } else if (tab === "bizmap") {
+      const data = await api("/api/master/biz-traffic");
+      const map = globalThis.POSBizTraffic;
+      body.innerHTML = masterDesk(
+        "Businesses",
+        "Live business admin map",
+        data?.note || "Business admins on a live world map. Locations are approximate.",
+        [],
+        map ? map.render(data) : `<p class="hint">The map could not be drawn.</p>`,
+      );
+      bizMapView = map?.bind(body, data) || null;
+      bizTimer = setInterval(() => {
+        if (tab !== "bizmap" || document.hidden) return;
+        api("/api/master/biz-traffic").then((next) => bizMapView?.update(next)).catch(() => {});
+      }, 30000);
     } else if (tab === "health") {
       const [health, auditRows] = await Promise.all([
         api("/api/master/health"),

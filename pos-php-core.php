@@ -223,6 +223,94 @@ function pos_ensure_company_timezone_columns() {
   }
 }
 
+function pos_ensure_business_presence() {
+  static $done = false;
+  if ($done) return;
+  $done = true;
+  $db = pos_db();
+  @$db->query(
+    "CREATE TABLE IF NOT EXISTS business_admin_presence (
+      staff_user_id VARCHAR(255) NOT NULL PRIMARY KEY,
+      business_id VARCHAR(255) NOT NULL,
+      ip VARCHAR(64) NULL,
+      login_at DATETIME NULL,
+      heartbeat_at DATETIME NULL,
+      logout_at DATETIME NULL,
+      country VARCHAR(80) NULL,
+      region VARCHAR(80) NULL,
+      city VARCHAR(80) NULL,
+      lat DECIMAL(9,5) NULL,
+      lon DECIMAL(9,5) NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_bap_business (business_id),
+      KEY idx_bap_heartbeat (heartbeat_at)
+    )"
+  );
+}
+
+function pos_admin_role($role) {
+  return in_array((string) $role, ["business_admin", "resort_owner"], true);
+}
+
+function pos_record_admin_login($user, $ip) {
+  if (!is_array($user) || !pos_admin_role($user["role"] ?? "")) return;
+  $id = (string) ($user["id"] ?? "");
+  $biz = (string) ($user["business_id"] ?? "");
+  if ($id === "" || $biz === "") return;
+  try {
+    pos_ensure_business_presence();
+    pos_q(
+      "INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
+       VALUES (?, ?, ?, NOW(), NULL, NULL)
+       ON DUPLICATE KEY UPDATE
+         business_id = VALUES(business_id),
+         country = IF(ip <=> VALUES(ip), country, NULL),
+         region = IF(ip <=> VALUES(ip), region, NULL),
+         city = IF(ip <=> VALUES(ip), city, NULL),
+         lat = IF(ip <=> VALUES(ip), lat, NULL),
+         lon = IF(ip <=> VALUES(ip), lon, NULL),
+         ip = VALUES(ip),
+         login_at = NOW(),
+         heartbeat_at = NULL,
+         logout_at = NULL,
+         updated_at = NOW()",
+      "sss",
+      [$id, $biz, substr(trim((string) $ip), 0, 64)]
+    );
+  } catch (Exception $e) { /* presence must not block sign-in */ }
+}
+
+function pos_record_admin_heartbeat($user, $ip) {
+  if (!is_array($user) || !pos_admin_role($user["role"] ?? "")) return ["ok" => true, "tracked" => false];
+  pos_ensure_business_presence();
+  pos_q(
+    "INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
+     VALUES (?, ?, ?, NULL, NOW(), NULL)
+     ON DUPLICATE KEY UPDATE
+       business_id = VALUES(business_id),
+       heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
+       logout_at = NULL,
+       country = IF(ip <=> VALUES(ip), country, NULL),
+       region = IF(ip <=> VALUES(ip), region, NULL),
+       city = IF(ip <=> VALUES(ip), city, NULL),
+       lat = IF(ip <=> VALUES(ip), lat, NULL),
+       lon = IF(ip <=> VALUES(ip), lon, NULL),
+       ip = VALUES(ip),
+       updated_at = NOW()",
+    "sss",
+    [(string) $user["id"], (string) $user["business_id"], substr(trim((string) $ip), 0, 64)]
+  );
+  return ["ok" => true, "tracked" => true, "onlineWindowSeconds" => 90];
+}
+
+function pos_record_admin_logout($user) {
+  if (!is_array($user) || !pos_admin_role($user["role"] ?? "")) return;
+  try {
+    pos_ensure_business_presence();
+    pos_q("UPDATE business_admin_presence SET logout_at = NOW(), updated_at = NOW() WHERE staff_user_id = ?", "s", [(string) $user["id"]]);
+  } catch (Exception $e) { /* presence must not block sign-out */ }
+}
+
 function pos_ensure_staff_session_columns() {
   static $done = false;
   if ($done) return;
@@ -3949,6 +4037,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $branchId]
       );
       try { pos_q("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($token)]); } catch (Exception $e) { /* seen-at is optional */ }
+      pos_record_admin_login($user, pos_ip());
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
         "ok" => true,
@@ -4036,6 +4125,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $user["branch_id"]]
       );
       try { pos_q("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($token)]); } catch (Exception $e) { /* seen-at is optional */ }
+      pos_record_admin_login($user, pos_ip());
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
         "ok" => true,
@@ -4048,7 +4138,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if ($path === "auth/logout" && $method === "POST") {
       $sid = pos_cookie("pos_sid");
       $master = pos_cookie("pos_master");
-      if ($sid) pos_q("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($sid)]);
+      if ($sid) {
+        $staff = pos_staff_session();
+        pos_q("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($sid)]);
+        if ($staff && empty($staff["impersonatorAdminId"])) pos_record_admin_logout($staff["user"] ?? null);
+      }
       if ($master) pos_q("UPDATE platform_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($master)]);
       pos_clear_cookie("pos_sid");
       pos_clear_cookie("pos_master");
@@ -4147,6 +4241,13 @@ function pos_php_dispatch($path, $method, $rawBody) {
         [pos_sha256(pos_cookie("pos_sid"))]
       );
       pos_send(200, ["ok" => true, "onlineWindowSeconds" => 300]);
+    }
+
+    if ($path === "session/heartbeat" && $method === "POST") {
+      $staff = pos_staff_session();
+      if (!$staff) pos_send(401, ["error" => "Sign in required"]);
+      if (!empty($staff["impersonatorAdminId"])) pos_send(200, ["ok" => true, "tracked" => false]);
+      pos_send(200, pos_record_admin_heartbeat($staff["user"] ?? null, pos_ip()));
     }
 
     $auth = pos_require_master($path);
