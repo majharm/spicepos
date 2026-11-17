@@ -387,18 +387,35 @@ function pos_master_insights($range) {
   ];
 }
 
+function pos_application_load() {
+  if (function_exists("sys_getloadavg")) {
+    $load = @sys_getloadavg();
+    if (is_array($load) && isset($load[0])) return $load;
+  }
+  $raw = @file_get_contents("/proc/loadavg");
+  if (is_string($raw) && preg_match("/^([0-9.]+)\\s+([0-9.]+)\\s+([0-9.]+)/", $raw, $m)) {
+    return [(float) $m[1], (float) $m[2], (float) $m[3]];
+  }
+  return null;
+}
+
 function pos_master_health() {
   $started = microtime(true);
   pos_q("SELECT 1 AS ok");
+  $load = pos_application_load();
+  $one = is_array($load) ? ($load[0] ?? null) : null;
   return [
     "ok" => true,
     "database" => "connected",
     "dbMs" => (int) round((microtime(true) - $started) * 1000),
     "uptimeSeconds" => null,
     "memoryRss" => memory_get_usage(true),
-    "loadAvg" => null,
+    "loadAvg" => $one,
+    "load1" => $one,
+    "load5" => is_array($load) ? ($load[1] ?? null) : null,
+    "load15" => is_array($load) ? ($load[2] ?? null) : null,
     "php" => true,
-    "note" => "Host CPU and RAM are not exposed. Memory is this PHP request.",
+    "note" => "Application load is the 1, 5, and 15 minute average. Memory is this PHP request.",
   ];
 }
 

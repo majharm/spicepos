@@ -695,16 +695,30 @@ function subscriptionMix(subs) {
     .join("")}</div><ul class="ma-mix-legend">${parts.map(([label, n]) => `<li><span>${attr(label)}</span><strong>${n}</strong></li>`).join("")}</ul>`;
 }
 
+function loadFigure(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : "";
+}
+
+function applicationLoadText(health) {
+  const one = loadFigure(health?.load1 ?? health?.loadAvg);
+  const five = loadFigure(health?.load5);
+  const fifteen = loadFigure(health?.load15);
+  if (!one && !five && !fifteen) return "Unavailable";
+  if (one && !five && !fifteen) return one;
+  return [one || "—", five || "—", fifteen || "—"].join(" / ");
+}
+
 function healthLines(health) {
   if (!health) return `<p class="hint">System status is unavailable.</p>`;
   const rows = [
     ["Database", health.database || "—"],
     ["Query", `${Number(health.dbMs) || 0} ms`],
+    ["Application load", applicationLoadText(health)],
   ];
   if (health.uptimeSeconds) rows.push(["Process uptime", `${Math.round(Number(health.uptimeSeconds) / 60)} min`]);
   if (health.memoryRss) rows.push(["Process memory", `${Math.round(Number(health.memoryRss) / 1048576)} MB`]);
-  if (health.loadAvg != null) rows.push(["Process load", Number(health.loadAvg).toFixed(2)]);
-  return `<ul class="ma-health-list">${rows.map(([label, value]) => `<li><span>${attr(label)}</span><strong>${attr(value)}</strong></li>`).join("")}</ul>${health.note ? `<p class="hint">${attr(health.note)}</p>` : ""}`;
+  return `<ul class="ma-health-list">${rows.map(([label, value]) => `<li><span>${attr(label)}</span><strong>${attr(value)}</strong></li>`).join("")}</ul><p class="hint">Application load is the 1, 5, and 15 minute average.</p>${health.note ? `<p class="hint">${attr(health.note)}</p>` : ""}`;
 }
 
 function livePreviewTable(payload) {
@@ -774,8 +788,10 @@ function paintSystemStatus(health) {
     return;
   }
   const ok = health.database === "connected";
+  const load = applicationLoadText(health);
+  const loadBit = load !== "Unavailable" ? ` · load ${load}` : "";
   el.className = `ma-status${ok ? " is-ok" : " is-bad"}`;
-  el.innerHTML = `<span class="ma-dot" aria-hidden="true"></span>${ok ? "System operational" : "Database unavailable"}`;
+  el.innerHTML = `<span class="ma-dot" aria-hidden="true"></span>${ok ? "System operational" : "Database unavailable"}${attr(loadBit)}`;
   if (health.note) el.title = health.note;
 }
 
@@ -2330,6 +2346,7 @@ async function render() {
           ${kpiButton("Range sales", money(k.rangeSales?.value ?? 0), k.rangeSales, "dsa-sales", { icon: "sales", series: insight?.series, key: "sales" })}
           ${kpiButton("This month", money(k.monthSales?.value ?? 0), k.monthSales, "dsa-sales", { icon: "sales" })}
           ${kpiButton("Invoices", k.invoices?.value ?? t.transactions, k.invoices, "dsa-sales", { icon: "bill", series: insight?.series, key: "bills" })}
+          ${kpiButton("Application load", applicationLoadText(health), null, "health", { icon: "pulse" })}
         </div>
         <div class="master-insight-grid">
           <section class="master-panel ma-span-2">
@@ -2617,6 +2634,7 @@ async function render() {
         [
           { label: "Database", value: health?.database || "—" },
           { label: "Query", value: `${Number(health?.dbMs) || 0} ms` },
+          { label: "Application load", value: applicationLoadText(health) },
         ],
         `<div class="master-insight-grid">
           <section class="master-panel">${healthLines(health)}</section>

@@ -400,18 +400,27 @@ export async function masterInsights(range = "30") {
   };
 }
 
+function applicationLoad() {
+  const loads = typeof os.loadavg === "function" ? os.loadavg() : [];
+  const num = (value) => (Number.isFinite(Number(value)) ? Number(value) : null);
+  return { load1: num(loads[0]), load5: num(loads[1]), load15: num(loads[2]) };
+}
+
 export async function masterHealth() {
   const started = Date.now();
   await query("SELECT 1 AS ok");
-  const load = typeof os.loadavg === "function" ? os.loadavg()[0] : null;
+  const load = applicationLoad();
   return {
     ok: true,
     database: "connected",
     dbMs: Date.now() - started,
     uptimeSeconds: Math.round(process.uptime()),
     memoryRss: process.memoryUsage().rss,
-    loadAvg: load,
-    note: "Memory and load describe this Node process. Host credentials, paths, and environment values are not included.",
+    loadAvg: load.load1,
+    load1: load.load1,
+    load5: load.load5,
+    load15: load.load15,
+    note: "Application load is the 1, 5, and 15 minute average. Memory is this Node process. Host credentials are not included.",
   };
 }
 
