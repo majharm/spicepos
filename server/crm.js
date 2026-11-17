@@ -833,13 +833,12 @@ export function registerCrm(app) {
       }
       await linkProfile(bid(), customer.id);
       const [profile] = await query("SELECT * FROM crm_customers WHERE business_id = ? AND customer_id = ?", [bid(), customer.id]);
-      const [orders, quotes, contacts, notes, followups, tickets, logs, lines] = await Promise.all([
+      const [orders, quotes, contacts, notes, followups, logs, lines] = await Promise.all([
         query("SELECT id, order_number, total, amount_paid, payment_status, created_at FROM sales_orders WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 20", [bid(), customer.id]).catch(() => []),
         query("SELECT id, quotation_number, status, total, valid_until, quotation_date FROM quotations WHERE business_id = ? AND customer_id = ? ORDER BY quotation_date DESC LIMIT 20", [bid(), customer.id]).catch(() => []),
         query("SELECT * FROM crm_contacts WHERE business_id = ? AND customer_id = ? ORDER BY is_primary DESC, name", [bid(), customer.id]),
         query("SELECT * FROM crm_notes WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 30", [bid(), customer.id]),
         query("SELECT * FROM crm_followups WHERE business_id = ? AND customer_id = ? ORDER BY due_on DESC LIMIT 30", [bid(), customer.id]),
-        query("SELECT * FROM crm_support_tickets WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 20", [bid(), customer.id]),
         query("SELECT channel, template_key, status, error, body, created_at FROM crm_communication_logs WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 30", [bid(), customer.id]),
         query("SELECT l.item_name, l.quantity, l.line_total, o.created_at FROM sales_order_lines l JOIN sales_orders o ON o.id = l.order_id WHERE l.business_id = ? AND o.customer_id = ? ORDER BY o.created_at DESC LIMIT 20", [bid(), customer.id]).catch(() => []),
       ]);
@@ -863,7 +862,6 @@ export function registerCrm(app) {
         contacts,
         notes,
         followups,
-        tickets,
         logs,
         loyalty,
       });
@@ -1018,50 +1016,6 @@ export function registerCrm(app) {
         return;
       }
       res.json({ ok: true });
-    } catch (err) {
-      res.status(err.status || 500).json({ error: String(err.message) });
-    }
-  });
-
-  app.get("/api/crm/tickets", requireStaff, requirePerm("customers"), async (_req, res) => {
-    try {
-      await requireOn();
-      res.json({ tickets: await query("SELECT * FROM crm_support_tickets WHERE business_id = ? ORDER BY created_at DESC LIMIT 200", [bid()]) });
-    } catch (err) {
-      res.status(err.status || 500).json({ error: String(err.message) });
-    }
-  });
-
-  app.post("/api/crm/tickets", requireStaff, requirePerm("customers"), async (req, res) => {
-    try {
-      await requireOn();
-      const subject = clip(req.body?.subject, 180);
-      if (!subject) {
-        res.status(400).json({ error: "Enter the complaint or request" });
-        return;
-      }
-      const ticketId = id();
-      await query(
-        "INSERT INTO crm_support_tickets (id, business_id, branch_id, customer_id, subject, body, priority, assigned_to, created_by) VALUES (?,?,?,?,?,?,?,?,?)",
-        [ticketId, bid(), branchId(), clip(req.body?.customer_id, 36) || null, subject, clip(req.body?.body, 2000) || null, CRM.priorityOf(req.body?.priority), clip(req.body?.assigned_to, 36) || null, actorId()],
-      );
-      await activity(bid(), { customerId: req.body?.customer_id, kind: "ticket", summary: subject });
-      res.json({ ok: true, id: ticketId });
-    } catch (err) {
-      res.status(err.status || 500).json({ error: String(err.message) });
-    }
-  });
-
-  app.post("/api/crm/tickets/:id/status", requireStaff, requirePerm("customers"), async (req, res) => {
-    try {
-      await requireOn();
-      const status = ["open", "pending", "resolved"].includes(req.body?.status) ? req.body.status : "open";
-      const result = await query("UPDATE crm_support_tickets SET status = ? WHERE id = ? AND business_id = ?", [status, req.params.id, bid()]);
-      if (!result.affectedRows) {
-        res.status(404).json({ error: "Ticket not found" });
-        return;
-      }
-      res.json({ ok: true, status });
     } catch (err) {
       res.status(err.status || 500).json({ error: String(err.message) });
     }

@@ -36,7 +36,6 @@
       ["customers", "Customers"],
       ["followups", "Follow-ups"],
       ["tasks", "Tasks"],
-      ["tickets", "Tickets"],
       ["messages", "Messages"],
     ];
   }
@@ -249,12 +248,6 @@
     $("crm-body").innerHTML = `<form class="crm-form" id="crm-task-form"><h4 class="crm-panel-title">New task</h4><label>Task<input name="title" required maxlength="180" /></label><label>Due<input name="due_on" type="date" /></label><label>Assign<select name="assigned_to">${staffOptions("")}</select></label><label>Priority<select name="priority"><option>normal</option><option>high</option><option>urgent</option></select></label><div><button class="btn primary" type="submit">Add task</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.title)}</strong><p class="crm-meta">${esc(row.due_on || "No date")}</p></div><div class="crm-row-mid">${pill(row.status, tone(row.status))} ${pill(row.priority || "normal", tone(row.priority))}</div><div class="crm-actions">${row.status === "done" ? "" : `<button class="btn" type="button" data-crm-done="task" data-id="${esc(row.id)}">Done</button>`}</div></article>`).join("") || empty("No tasks.")}</div>`;
   }
 
-  async function paintTickets() {
-    const data = await root.api("/api/crm/tickets");
-    const rows = data.tickets || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-ticket-form"><h4 class="crm-panel-title">New ticket</h4><label>Subject<input name="subject" required maxlength="180" /></label><label>Priority<select name="priority"><option>normal</option><option>high</option><option>urgent</option></select></label><label class="crm-wide">Details<textarea name="body" rows="2"></textarea></label><div><button class="btn primary" type="submit">Open ticket</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.subject)}</strong><p class="crm-meta">${esc(row.body || "")}</p></div><div class="crm-row-mid">${pill(row.status, tone(row.status))} ${pill(row.priority, tone(row.priority))}</div></article>`).join("") || empty("No complaints or service requests.")}</div>`;
-  }
-
   async function paintMessages() {
     const rows = boot?.automations || [];
     $("crm-body").innerHTML = `<form class="crm-autos" id="crm-auto-form"><p class="crm-note">Messages send only when the switch is on and the customer has consented. Opt-out stops WhatsApp. SMS stays logged until an SMS provider is connected. Invoice WhatsApp from billing is unchanged.</p>${rows.map((row) => { const meta = CRM().AUTOMATIONS.find((item) => item.key === row.key); return `<article class="crm-auto"><label class="crm-auto-on"><input type="checkbox" name="enabled" data-key="${esc(row.key)}"${Number(row.enabled) === 1 ? " checked" : ""} /><span><strong>${esc(meta?.label || row.key)}</strong><em>${esc(meta?.trigger || "")}</em></span></label><label>Template<textarea name="template" data-key="${esc(row.key)}" rows="2">${esc(row.template || "")}</textarea></label><label>Wait days<input name="days" data-key="${esc(row.key)}" type="number" min="0" max="365" value="${esc(row.wait_days || 0)}" /></label></article>`; }).join("")}<div class="crm-actions"><button class="btn primary" type="submit">Save templates</button><button class="btn" type="button" id="crm-run">Run due messages</button></div></form>`;
@@ -271,7 +264,6 @@
     if (tab === "customers") return paintCustomers();
     if (tab === "followups") return paintFollowups();
     if (tab === "tasks") return paintTasks();
-    if (tab === "tickets") return paintTickets();
     if (tab === "messages") return paintMessages();
   }
 
@@ -395,10 +387,6 @@
           await root.api("/api/crm/tasks", { method: "POST", body: JSON.stringify({ title: read("title"), due_on: read("due_on"), assigned_to: read("assigned_to"), priority: read("priority") }) });
           hint("Task added", "ok");
           await show("tasks");
-        } else if (form.id === "crm-ticket-form") {
-          await root.api("/api/crm/tickets", { method: "POST", body: JSON.stringify({ subject: read("subject"), body: read("body"), priority: read("priority") }) });
-          hint("Ticket opened", "ok");
-          await show("tickets");
         } else if (form.id === "crm-auto-form") {
           const automations = (boot.automations || []).map((row) => ({
             key: row.key,

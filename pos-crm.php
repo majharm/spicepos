@@ -368,7 +368,6 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
         "contacts" => pos_q("SELECT * FROM crm_contacts WHERE business_id = ? AND customer_id = ?", "ss", [$bid, $customer["id"]]),
         "notes" => pos_q("SELECT * FROM crm_notes WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 30", "ss", [$bid, $customer["id"]]),
         "followups" => pos_q("SELECT * FROM crm_followups WHERE business_id = ? AND customer_id = ? ORDER BY due_on DESC LIMIT 30", "ss", [$bid, $customer["id"]]),
-        "tickets" => pos_q("SELECT * FROM crm_support_tickets WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 20", "ss", [$bid, $customer["id"]]),
         "logs" => pos_q("SELECT channel, template_key, status, error, body, created_at FROM crm_communication_logs WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 30", "ss", [$bid, $customer["id"]]),
         "php" => true,
       ]);
@@ -421,18 +420,6 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
       pos_crm_on($bid);
       pos_q("UPDATE crm_tasks SET status = 'done' WHERE id = ? AND business_id = ?", "ss", [$m[1], $bid]);
       pos_send(200, ["ok" => true, "php" => true]);
-    }
-    if ($path === "crm/tickets" && $method === "GET") {
-      pos_crm_on($bid);
-      pos_send(200, ["tickets" => pos_q("SELECT * FROM crm_support_tickets WHERE business_id = ? ORDER BY created_at DESC LIMIT 200", "s", [$bid]), "php" => true]);
-    }
-    if ($path === "crm/tickets" && $method === "POST") {
-      pos_crm_on($bid);
-      $subject = pos_crm_clip($body["subject"] ?? "", 180);
-      if ($subject === "") throw new Exception("Enter the complaint or request");
-      $id = pos_uuid();
-      pos_q("INSERT INTO crm_support_tickets (id, business_id, customer_id, subject, body, priority, assigned_to, created_by) VALUES (?,?,?,?,?,?,?,?)", "ssssssss", [$id, $bid, pos_crm_clip($body["customer_id"] ?? "", 36), $subject, pos_crm_clip($body["body"] ?? "", 2000), pos_crm_clip($body["priority"] ?? "normal", 16), pos_crm_clip($body["assigned_to"] ?? "", 36), $uid]);
-      pos_send(200, ["ok" => true, "id" => $id, "php" => true]);
     }
     if ($path === "crm/notes" && $method === "POST") {
       pos_crm_on($bid);

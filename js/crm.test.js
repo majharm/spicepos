@@ -77,7 +77,11 @@ test("CRM stays off until enabled and links the customer master", () => {
   assert.doesNotMatch(index, /id="set-crm" checked/);
   assert.match(index, /Enable CRM/);
   assert.match(index, /js\/crm\.js\?v=20261117crm6/);
-  assert.match(index, /js\/crm-ui\.js\?v=20261117crm6/);
+  assert.match(index, /js\/crm-ui\.js\?v=20261117crm7/);
+  assert.doesNotMatch(read("js/crm-ui.js"), /Tickets/);
+  assert.doesNotMatch(read("js/crm-ui.js"), /\/api\/crm\/tickets/);
+  assert.doesNotMatch(node, /app\.get\("\/api\/crm\/tickets"/);
+  assert.doesNotMatch(php, /crm\/tickets/);
   assert.match(index, /css\/crm\.css\?v=20261117crm6/);
   assert.match(read("js/crm-ui.js"), /crmBrief/);
   assert.match(read("js/crm-ui.js"), /Advanced AI/);
