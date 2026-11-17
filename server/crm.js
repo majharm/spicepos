@@ -335,6 +335,16 @@ function leadInput(body, category) {
   };
 }
 
+async function syncLeadFollowup(businessId, leadId) {
+  const idValue = clip(leadId, 36);
+  if (!idValue) return;
+  const [next] = await query(
+    "SELECT MIN(due_on) AS due FROM crm_followups WHERE business_id = ? AND lead_id = ? AND status = 'pending'",
+    [businessId, idValue],
+  );
+  await query("UPDATE crm_leads SET next_followup = ? WHERE id = ? AND business_id = ?", [next?.due || null, idValue, businessId]);
+}
+
 function actorId() {
   return authUser()?.id || null;
 }
@@ -930,11 +940,20 @@ export function registerCrm(app) {
         res.status(400).json({ error: "Choose a follow-up date" });
         return;
       }
+      const leadId = clip(body.lead_id, 36);
+      if (leadId) {
+        const [lead] = await query("SELECT id FROM crm_leads WHERE id = ? AND business_id = ?", [leadId, bid()]);
+        if (!lead) {
+          res.status(400).json({ error: "Choose a lead" });
+          return;
+        }
+      }
       const followId = id();
       await query(
         "INSERT INTO crm_followups (id, business_id, branch_id, customer_id, lead_id, assigned_to, kind, due_on, note, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        [followId, bid(), branchId(), clip(body.customer_id, 36) || null, clip(body.lead_id, 36) || null, clip(body.assigned_to, 36) || actorId(), clip(body.kind, 24) || "call", due, clip(body.note, 500) || null, actorId()],
+        [followId, bid(), branchId(), clip(body.customer_id, 36) || null, leadId || null, clip(body.assigned_to, 36) || actorId(), clip(body.kind, 24) || "call", due, clip(body.note, 500) || null, actorId()],
       );
+      await syncLeadFollowup(bid(), leadId);
       await query(
         "INSERT INTO crm_reminders (id, business_id, customer_id, assigned_to, kind, due_on, note) VALUES (?,?,?,?,?,?,?)",
         [id(), bid(), clip(body.customer_id, 36) || null, clip(body.assigned_to, 36) || actorId(), clip(body.kind, 24) || "call", due, clip(body.note, 500) || null],
@@ -948,11 +967,13 @@ export function registerCrm(app) {
   app.post("/api/crm/followups/:id/done", requireStaff, requirePerm("customers"), async (req, res) => {
     try {
       await requireOn();
+      const [row] = await query("SELECT lead_id FROM crm_followups WHERE id = ? AND business_id = ?", [req.params.id, bid()]);
       const result = await query("UPDATE crm_followups SET status = 'done', completed_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND business_id = ?", [req.params.id, bid()]);
       if (!result.affectedRows) {
         res.status(404).json({ error: "Follow-up not found" });
         return;
       }
+      await syncLeadFollowup(bid(), row?.lead_id || "");
       res.json({ ok: true });
     } catch (err) {
       res.status(err.status || 500).json({ error: String(err.message) });

@@ -320,6 +320,18 @@
   color: #64748b;
 }
 .crm-summary-stats strong { font-size: 16px; color: #0f172a; }
+.crm-follow-board { display: grid; gap: 12px; }
+.crm-follow-group {
+  display: grid;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+}
+.crm-follow-group header h4 { margin: 0; font-size: 15px; color: #0f766e; }
+.crm-follow-group header p { margin: 2px 0 0; color: #64748b; font-size: 13px; }
+.crm-follow-group .crm-row { background: #f8fafc; }
 .crm-timeline { margin: 0; display: grid; gap: 8px; }
 .crm-timeline article {
   border-left: 3px solid #0f766e;

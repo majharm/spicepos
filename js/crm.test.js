@@ -51,6 +51,15 @@ test("CRM pipeline, consent, categories, and customer linking", () => {
   assert.equal(linked.id, "c1");
   assert.equal(CRM.sameCustomer([{ id: "c2", mobile: "9000000000" }], { mobile: "9876543210" }), null);
   assert.equal(CRM.followupState({ status: "pending", due_on: "2026-11-04" }, "2026-11-05"), "missed");
+  const groups = CRM.groupFollowups([
+    { id: "f2", lead_id: "l2", due_on: "2026-11-20", kind: "call" },
+    { id: "f1", lead_id: "l1", due_on: "2026-11-18", kind: "visit" },
+    { id: "f3", lead_id: "l1", due_on: "2026-11-12", kind: "whatsapp" },
+    { id: "f4", lead_id: "", due_on: "2026-11-01", kind: "call" },
+  ], [{ id: "l1", name: "Asha Rao", mobile: "9876543210" }, { id: "l2", name: "Mill House", mobile: "" }]);
+  assert.deepEqual(groups.map((group) => group.name), ["Asha Rao", "Mill House", "No lead"]);
+  assert.deepEqual(groups[0].followups.map((row) => row.id), ["f3", "f1"]);
+  assert.equal(groups[0].mobile, "9876543210");
   assert.deepEqual(CRM.customValues({ shoe_size: "8", secret: "no" }, "footwear"), { shoe_size: "8", brand: "" });
 });
 
@@ -67,9 +76,9 @@ test("CRM stays off until enabled and links the customer master", () => {
   assert.match(index, /id="set-crm"/);
   assert.doesNotMatch(index, /id="set-crm" checked/);
   assert.match(index, /Enable CRM/);
-  assert.match(index, /js\/crm\.js\?v=20261117crm3/);
-  assert.match(index, /js\/crm-ui\.js\?v=20261117crm5/);
-  assert.match(index, /css\/crm\.css\?v=20261117crm5/);
+  assert.match(index, /js\/crm\.js\?v=20261117crm6/);
+  assert.match(index, /js\/crm-ui\.js\?v=20261117crm6/);
+  assert.match(index, /css\/crm\.css\?v=20261117crm6/);
   assert.match(read("js/crm-ui.js"), /crmBrief/);
   assert.match(read("js/crm-ui.js"), /Advanced AI/);
   assert.match(read("js/crm-ui.js"), /crm-pill/);
@@ -80,6 +89,11 @@ test("CRM stays off until enabled and links the customer master", () => {
   assert.match(read("js/crm-ui.js"), /name="gstin"/);
   assert.match(read("js/crm-ui.js"), /name="next_followup"/);
   assert.match(read("js/crm-ui.js"), /data-crm-edit/);
+  assert.match(read("js/crm-ui.js"), /data-crm-follows/);
+  assert.match(read("js/crm-ui.js"), /name="lead_id" required/);
+  assert.match(read("js/crm-ui.js"), /groupFollowups/);
+  assert.match(node, /syncLeadFollowup/);
+  assert.match(php, /function pos_crm_sync_follow/);
   assert.match(node, /CRM Lead Updated/);
   assert.match(node, /function leadInput/);
   assert.match(php, /function pos_crm_lead_input/);

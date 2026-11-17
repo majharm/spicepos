@@ -265,6 +265,13 @@ function pos_crm_lead_input($body) {
   ];
 }
 
+function pos_crm_sync_follow($bid, $leadId) {
+  $leadId = pos_crm_clip($leadId, 36);
+  if ($leadId === "") return;
+  $row = pos_q("SELECT MIN(due_on) AS due FROM crm_followups WHERE business_id = ? AND lead_id = ? AND status = 'pending'", "ss", [$bid, $leadId]);
+  pos_q("UPDATE crm_leads SET next_followup = NULLIF(?, '') WHERE id = ? AND business_id = ?", "sss", [(string) ($row[0]["due"] ?? ""), $leadId, $bid]);
+}
+
 function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
   if (strpos($path, "crm") !== 0) return false;
   $uid = $auth["user"]["id"] ?? "";
@@ -383,14 +390,19 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
       pos_crm_on($bid);
       $due = substr((string) ($body["due_on"] ?? ""), 0, 10);
       if (!preg_match("/^\d{4}-\d{2}-\d{2}$/", $due)) throw new Exception("Choose a follow-up date");
+      $leadId = pos_crm_clip($body["lead_id"] ?? "", 36);
+      if ($leadId !== "" && !pos_q("SELECT id FROM crm_leads WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$leadId, $bid])) throw new Exception("Choose a lead");
       $id = pos_uuid();
-      pos_q("INSERT INTO crm_followups (id, business_id, customer_id, lead_id, assigned_to, kind, due_on, note, created_by) VALUES (?,?,?,?,?,?,?,?,?)", "sssssssss", [$id, $bid, pos_crm_clip($body["customer_id"] ?? "", 36), pos_crm_clip($body["lead_id"] ?? "", 36), pos_crm_clip($body["assigned_to"] ?? $uid, 36), pos_crm_clip($body["kind"] ?? "call", 24), $due, pos_crm_clip($body["note"] ?? "", 500), $uid]);
+      pos_q("INSERT INTO crm_followups (id, business_id, customer_id, lead_id, assigned_to, kind, due_on, note, created_by) VALUES (?,?,NULLIF(?,''),NULLIF(?,''),NULLIF(?,''),?,?,?,?)", "sssssssss", [$id, $bid, pos_crm_clip($body["customer_id"] ?? "", 36), $leadId, pos_crm_clip($body["assigned_to"] ?? $uid, 36), pos_crm_clip($body["kind"] ?? "call", 24), $due, pos_crm_clip($body["note"] ?? "", 500), $uid]);
+      pos_crm_sync_follow($bid, $leadId);
       pos_q("INSERT INTO crm_reminders (id, business_id, customer_id, assigned_to, kind, due_on, note) VALUES (?,?,?,?,?,?,?)", "sssssss", [pos_uuid(), $bid, pos_crm_clip($body["customer_id"] ?? "", 36), pos_crm_clip($body["assigned_to"] ?? $uid, 36), pos_crm_clip($body["kind"] ?? "call", 24), $due, pos_crm_clip($body["note"] ?? "", 500)]);
       pos_send(200, ["ok" => true, "id" => $id, "php" => true]);
     }
     if (preg_match("#^crm/followups/([^/]+)/done$#", $path, $m) && $method === "POST") {
       pos_crm_on($bid);
+      $follow = pos_q("SELECT lead_id FROM crm_followups WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$m[1], $bid])[0] ?? null;
       pos_q("UPDATE crm_followups SET status = 'done' WHERE id = ? AND business_id = ?", "ss", [$m[1], $bid]);
+      pos_crm_sync_follow($bid, $follow["lead_id"] ?? "");
       pos_send(200, ["ok" => true, "php" => true]);
     }
     if ($path === "crm/tasks" && $method === "GET") {

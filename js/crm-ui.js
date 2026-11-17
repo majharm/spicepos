@@ -7,6 +7,7 @@
   let profileId = "";
   let leadRows = [];
   let editingLead = null;
+  let followLeadId = "";
 
   function $(id) {
     return document.getElementById(id);
@@ -134,7 +135,7 @@
     const data = await root.api("/api/crm/leads");
     const columns = CRM().pipelineColumns(data.leads || []);
     leadRows = data.leads || [];
-    $("crm-body").innerHTML = `<div class="crm-board">${columns.map((column) => `<section class="crm-col"><header><h4>${esc(column.label)}</h4><span>${column.leads.length}</span></header>${column.leads.map((lead) => `<article class="crm-card"><strong>${esc(lead.name)}</strong><p>${esc(lead.mobile || lead.company_name || "No mobile")}</p><div class="crm-actions"><button class="btn" type="button" data-crm-edit="${esc(lead.id)}">Edit</button>${(() => { const next = CRM().STAGES.find((stage) => stage.sort === CRM().stageOf(lead.stage).sort + 1 && !stage.lost); return next ? `<button class="btn" type="button" data-crm-stage="${esc(lead.id)}" data-stage="${esc(next.key)}">${esc(next.label)}</button>` : ""; })()}${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : ""}</div></article>`).join("") || `<p class="crm-empty">No leads</p>`}</section>`).join("")}</div>`;
+    $("crm-body").innerHTML = `<div class="crm-board">${columns.map((column) => `<section class="crm-col"><header><h4>${esc(column.label)}</h4><span>${column.leads.length}</span></header>${column.leads.map((lead) => `<article class="crm-card"><strong>${esc(lead.name)}</strong><p>${esc(lead.mobile || lead.company_name || "No mobile")}</p><div class="crm-actions"><button class="btn" type="button" data-crm-edit="${esc(lead.id)}">Edit</button><button class="btn" type="button" data-crm-follows="${esc(lead.id)}">Follow-ups</button>${(() => { const next = CRM().STAGES.find((stage) => stage.sort === CRM().stageOf(lead.stage).sort + 1 && !stage.lost); return next ? `<button class="btn" type="button" data-crm-stage="${esc(lead.id)}" data-stage="${esc(next.key)}">${esc(next.label)}</button>` : ""; })()}${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : ""}</div></article>`).join("") || `<p class="crm-empty">No leads</p>`}</section>`).join("")}</div>`;
   }
 
   function leadForm(lead) {
@@ -173,7 +174,7 @@
     leadRows = data.leads || [];
     const editing = editingLead;
     editingLead = null;
-    $("crm-body").innerHTML = `${leadForm(editing)}<div class="crm-list">${leadRows.map((lead) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(lead.name)}</strong><p class="crm-meta">${esc(leadMeta(lead))}</p></div><div class="crm-row-mid">${pill(CRM().stageOf(lead.stage).label, tone(lead.stage))} ${pill(lead.priority || "normal", tone(lead.priority))}</div><div class="crm-actions"><button class="btn" type="button" data-crm-edit="${esc(lead.id)}">Edit</button>${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : pill("Linked", "ok")}</div></article>`).join("") || empty("No leads yet.")}</div>`;
+    $("crm-body").innerHTML = `${leadForm(editing)}<div class="crm-list">${leadRows.map((lead) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(lead.name)}</strong><p class="crm-meta">${esc(leadMeta(lead))}</p></div><div class="crm-row-mid">${pill(CRM().stageOf(lead.stage).label, tone(lead.stage))} ${pill(lead.priority || "normal", tone(lead.priority))}</div><div class="crm-actions"><button class="btn" type="button" data-crm-follows="${esc(lead.id)}">Follow-ups</button><button class="btn" type="button" data-crm-edit="${esc(lead.id)}">Edit</button>${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : pill("Linked", "ok")}</div></article>`).join("") || empty("No leads yet.")}</div>`;
     if (editing?.id) $("crm-lead-form")?.scrollIntoView({ block: "nearest" });
   }
 
@@ -217,10 +218,29 @@
       <div class="crm-timeline"><h4>Invoices</h4>${orders || empty("No invoices yet.")}<h4>Quotations</h4>${quotes || empty("No quotations yet.")}<h4>Messages</h4>${logs || empty("No messages yet.")}</div>`;
   }
 
+  function leadChoices(selected) {
+    return `<option value="">Choose a lead</option>${leadRows.map((row) => `<option value="${esc(row.id)}"${row.id === selected ? " selected" : ""}>${esc(row.name)}${row.mobile ? ` · ${esc(row.mobile)}` : ""}</option>`).join("")}`;
+  }
+
+  function followRow(row) {
+    const state = row.state || row.status;
+    return `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.kind)} · ${esc(dateValue(row.due_on) || row.due_on || "")}</strong><p class="crm-meta">${esc(row.note || "No note")}</p></div><div class="crm-row-mid">${pill(state, tone(state))}</div><div class="crm-actions">${row.status === "done" ? "" : `<button class="btn" type="button" data-crm-done="follow" data-id="${esc(row.id)}">Done</button>`}</div></article>`;
+  }
+
   async function paintFollowups() {
-    const data = await root.api("/api/crm/followups");
-    const rows = data.followups || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-follow-form"><h4 class="crm-panel-title">New follow-up</h4><label>Date<input name="due_on" type="date" required /></label><label>Kind<select name="kind"><option>call</option><option>meeting</option><option>whatsapp</option><option>visit</option></select></label><label>Assign<select name="assigned_to">${staffOptions("")}</select></label><label class="crm-wide">Note<input name="note" maxlength="500" /></label><div><button class="btn primary" type="submit">Add follow-up</button></div></form><div class="crm-list">${rows.map((row) => { const state = row.state || row.status; return `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.kind)} · ${esc(row.due_on || "")}</strong><p class="crm-meta">${esc(row.note || "")}</p></div><div class="crm-row-mid">${pill(state, tone(state))}</div><div class="crm-actions">${row.status === "done" ? "" : `<button class="btn" type="button" data-crm-done="follow" data-id="${esc(row.id)}">Done</button>`}</div></article>`; }).join("") || empty("No follow-ups.")}</div>`;
+    const [data, leads] = await Promise.all([root.api("/api/crm/followups"), root.api("/api/crm/leads")]);
+    leadRows = leads.leads || [];
+    const rows = (data.followups || []).map((row) => ({ ...row, state: row.state || CRM().followupState(row) }));
+    const selected = followLeadId && leadRows.some((row) => row.id === followLeadId) ? followLeadId : "";
+    followLeadId = selected;
+    const visible = selected ? rows.filter((row) => row.lead_id === selected) : rows;
+    const groups = CRM().groupFollowups(visible, leadRows);
+    const focus = leadRows.find((row) => row.id === selected);
+    const head = selected
+      ? `<div class="crm-form-head"><h4 class="crm-panel-title">Follow-ups for ${esc(focus?.name || "this lead")}</h4><button class="btn" type="button" id="crm-follow-all">All leads</button></div>`
+      : `<h4 class="crm-panel-title">Follow-ups by lead</h4>`;
+    const list = groups.map((group) => `<section class="crm-follow-group"><header><h4>${esc(group.name)}</h4>${group.mobile ? `<p>${esc(group.mobile)}</p>` : ""}</header>${group.followups.map(followRow).join("")}</section>`).join("") || empty(selected ? "No follow-ups for this lead." : "No follow-ups.");
+    $("crm-body").innerHTML = `<form class="crm-form" id="crm-follow-form"><h4 class="crm-panel-title">New follow-up</h4><label>Lead<select name="lead_id" required>${leadChoices(selected)}</select></label><label>Date<input name="due_on" type="date" required /></label><label>Kind<select name="kind"><option>call</option><option>meeting</option><option>whatsapp</option><option>visit</option></select></label><label>Assign<select name="assigned_to">${staffOptions(focus?.assigned_to || "")}</select></label><label class="crm-wide">Note<input name="note" maxlength="500" /></label><div><button class="btn primary" type="submit">Add follow-up</button></div></form><section class="crm-follow-board">${head}${list}</section>`;
   }
 
   async function paintTasks() {
@@ -270,7 +290,20 @@
       const tabBtn = event.target.closest("[data-crm-tab]");
       if (tabBtn && $("crm-desk")?.contains(tabBtn)) {
         hint("");
+        if (tabBtn.dataset.crmTab === "followups") followLeadId = "";
         await show(tabBtn.dataset.crmTab).catch((err) => hint(err.message, "bad"));
+        return;
+      }
+      const followsBtn = event.target.closest("[data-crm-follows]");
+      if (followsBtn && $("crm-desk")?.contains(followsBtn)) {
+        followLeadId = followsBtn.dataset.crmFollows || "";
+        hint("");
+        await show("followups").catch((err) => hint(err.message, "bad"));
+        return;
+      }
+      if (event.target.id === "crm-follow-all") {
+        followLeadId = "";
+        await paintFollowups().catch((err) => hint(err.message, "bad"));
         return;
       }
       const editBtn = event.target.closest("[data-crm-edit]");
@@ -354,7 +387,8 @@
           await root.api("/api/crm/contacts", { method: "POST", body: JSON.stringify({ customer_id: profileId, name: read("name"), role_name: read("role_name"), mobile: read("mobile"), address: read("address") }) });
           hint("Contact added", "ok");
         } else if (form.id === "crm-follow-form") {
-          await root.api("/api/crm/followups", { method: "POST", body: JSON.stringify({ due_on: read("due_on"), kind: read("kind"), assigned_to: read("assigned_to"), note: read("note") }) });
+          followLeadId = read("lead_id") || followLeadId;
+          await root.api("/api/crm/followups", { method: "POST", body: JSON.stringify({ due_on: read("due_on"), kind: read("kind"), assigned_to: read("assigned_to"), note: read("note"), lead_id: read("lead_id") }) });
           hint("Follow-up added", "ok");
           await show("followups");
         } else if (form.id === "crm-task-form") {

@@ -255,6 +255,34 @@
     return out;
   }
 
+  function groupFollowups(followups, leads = []) {
+    const names = new Map((Array.isArray(leads) ? leads : []).map((lead) => [String(lead.id || ""), lead]));
+    const groups = new Map();
+    (Array.isArray(followups) ? followups : []).forEach((row) => {
+      const id = String(row?.lead_id || "");
+      if (!groups.has(id)) {
+        const lead = names.get(id);
+        groups.set(id, {
+          id,
+          name: row?.lead_name || lead?.name || (id ? "Lead" : "No lead"),
+          mobile: row?.lead_mobile || lead?.mobile || "",
+          followups: [],
+        });
+      }
+      groups.get(id).followups.push(row);
+    });
+    const list = [...groups.values()];
+    list.forEach((group) => {
+      group.followups.sort((a, b) => String(a?.due_on || "").localeCompare(String(b?.due_on || "")));
+    });
+    list.sort((a, b) => {
+      if (!a.id) return 1;
+      if (!b.id) return -1;
+      return String(a.followups[0]?.due_on || "").localeCompare(String(b.followups[0]?.due_on || "")) || a.name.localeCompare(b.name);
+    });
+    return list;
+  }
+
   function inr(value) {
     const n = Math.round(num(value) * 100) / 100;
     return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -276,6 +304,7 @@
     renderTemplate,
     openLead,
     followupState,
+    groupFollowups,
     summarize,
     crmBrief,
     pipelineColumns,
