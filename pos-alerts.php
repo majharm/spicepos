@@ -825,12 +825,21 @@ function pos_log_alert_deliveries($meta, $subject, $text, $wa, $mail) {
   }
 }
 
-function pos_list_alert_delivery_logs($limit = 200) {
+function pos_list_alert_delivery_logs($limit = 500) {
   pos_ensure_alert_schema();
   $n = (int) $limit;
-  if ($n < 1) $n = 200;
+  if ($n < 1) $n = 500;
   if ($n > 500) $n = 500;
-  return pos_q("SELECT * FROM alert_delivery_logs ORDER BY created_at DESC LIMIT {$n}");
+  $rows = pos_q("SELECT * FROM alert_delivery_logs ORDER BY created_at DESC LIMIT {$n}");
+  $recipients = [];
+  try {
+    $recipients = pos_q(
+      "SELECT channel, recipient FROM alert_delivery_logs WHERE channel IN ('whatsapp','email') AND recipient <> '' GROUP BY channel, recipient ORDER BY MAX(created_at) DESC"
+    );
+  } catch (Throwable $e) {
+    $recipients = [];
+  }
+  return ["rows" => $rows ?: [], "recipients" => $recipients ?: []];
 }
 
 function pos_alert_dispatch($phones, $emails, $subject, $text, $html = "", $image = "", $meta = []) {

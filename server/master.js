@@ -1025,7 +1025,7 @@ export function registerMaster(app) {
     ),
   );
 
-  app.get("/api/master/alert-log", (_req, res) => send(res, () => listAlertDeliveryLogs({ limit: 200 })));
+  app.get("/api/master/alert-log", (_req, res) => send(res, () => listAlertDeliveryLogs({ limit: 500 })));
 
   app.get("/api/master/settings", (_req, res) =>
     send(res, async () => ({

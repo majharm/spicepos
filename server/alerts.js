@@ -1262,10 +1262,23 @@ export async function logAlertDeliveries(payload) {
   }
 }
 
-export async function listAlertDeliveryLogs({ limit = 200 } = {}) {
+export async function listAlertDeliveryLogs({ limit = 500 } = {}) {
   await ensureAlertSettings();
-  const n = Math.min(500, Math.max(1, Number(limit) || 200));
-  return query(`SELECT * FROM alert_delivery_logs ORDER BY created_at DESC LIMIT ${n}`);
+  const n = Math.min(500, Math.max(1, Number(limit) || 500));
+  const rows = await query(`SELECT * FROM alert_delivery_logs ORDER BY created_at DESC LIMIT ${n}`);
+  let recipients = [];
+  try {
+    recipients = await query(
+      `SELECT channel, recipient
+       FROM alert_delivery_logs
+       WHERE channel IN ('whatsapp','email') AND recipient <> ''
+       GROUP BY channel, recipient
+       ORDER BY MAX(created_at) DESC`,
+    );
+  } catch {
+    recipients = [];
+  }
+  return { rows, recipients };
 }
 
 export async function dispatchAlert({

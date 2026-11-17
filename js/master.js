@@ -991,15 +991,16 @@ function alertLogRowHay(row) {
   return `${row.shop_name || ""} ${row.recipient || ""} ${to} ${digits} ${row.kind || ""} ${row.channel || ""} ${row.subject || ""} ${row.error || ""} ${row.detail || ""}`.toLowerCase();
 }
 
-function alertLogPageHtml(rows) {
+function alertLogPageHtml(rows, recipientRows) {
   const list = rows || [];
+  const recipientSource = Array.isArray(recipientRows) && recipientRows.length ? recipientRows : list;
   const waN = list.filter((r) => r.channel === "whatsapp").length;
   const mailN = list.filter((r) => r.channel === "email").length;
   const failN = list.filter((r) => r.status === "failed").length;
   const skipN = list.filter((r) => r.status === "skipped").length;
-  const recips = uniqueAlertLogRecipients(list);
+  const recips = uniqueAlertLogRecipients(recipientSource);
   const flash = panelFlash
-    ? `<p class="hint ok" id="alert-log-flash">${attr(panelFlash)}</p>`
+    ? `<p class="hint ok" id="alert-log-flash" style="white-space:pre-line">${attr(panelFlash)}</p>`
     : "";
   return `<div class="items-desk master-desk expiry-alerts-desk">
     ${masterHero("Platform", "WA Master & Email log", "Every WhatsApp number and email this platform sent or mailed. Sent + HTTP 200 means WA Master accepted the chat — reconnect that QR if the phone stays empty.", [
@@ -1048,7 +1049,7 @@ function alertLogPageHtml(rows) {
             : `<p class="hint">No WhatsApp or email attempts yet. Send an alert, then refresh this page.</p>`
         }
       </div>
-      <p class="hint">${skipN ? `${skipN} skipped (often SMTP not configured). ` : ""}Latest 200 rows.</p>
+      <p class="hint">${skipN ? `${skipN} skipped (often SMTP not configured). ` : ""}Latest ${list.length} rows. Every number and every email above is the full list, not only these rows.</p>
     </section>
   </div>`;
 }
@@ -4143,8 +4144,10 @@ async function render() {
       );
       bindMasterListFilter(body);
     } else if (tab === "alert-log") {
-      const rows = await api("/api/master/alert-log");
-      body.innerHTML = alertLogPageHtml(rows);
+      const data = await api("/api/master/alert-log");
+      const rows = Array.isArray(data) ? data : data?.rows || [];
+      const recipients = Array.isArray(data?.recipients) && data.recipients.length ? data.recipients : rows;
+      body.innerHTML = alertLogPageHtml(rows, recipients);
       bindAlertLogPage(rows);
     } else if (tab === "customers") {
       const data = await api("/api/master/customer-duplicates");
@@ -5413,104 +5416,23 @@ function summarizeNoticeDelivery(delivery) {
 }
 
 function alertSkipReason(row) {
-  const name = row?.shopName || "This shop";
-  switch (row?.reason) {
-    case "no-number":
-      return `${name}: no mobile or email on file`;
-    case "no-low-stock":
-      return `${name}: no low-stock or out-of-stock items`;
-    case "no-admin-number":
-      return `${name}: business admin has no WhatsApp number or email`;
-    case "no-expiry":
-      return `${name}: no expiry date`;
-    case "not-due-yet":
-      return `${name}: not in the last 7 days${row.days != null ? ` (${row.days} days left)` : ""}`;
-    case "not-expired":
-      return `${name}: not expired yet${row.days != null ? ` (${row.days} days left)` : ""}`;
-    case "already-expired":
-      return `${name}: already expired`;
-    case "already-sent":
-      return `${name}: already sent`;
-    case "alerts-off":
-      return "Renewal and expired alerts are inactive in Settings";
-    default:
-      return row?.reason ? `${name}: ${row.reason}` : name;
-  }
+  return globalThis.POSAlertSummary.alertSkipReason(row);
 }
 
 function formatAlertWaTo(row) {
-  const raw = Array.isArray(row?.wa?.to) ? row.wa.to[0] : row?.wa?.to;
-  const n = String(raw || row?.wa?.number || row?.wa?.results?.[0]?.number || "").replace(/\D/g, "");
-  if (!n) return "";
-  return n.length === 10 ? `+91${n}` : `+${n}`;
+  return globalThis.POSAlertSummary.formatAlertWaTo(row);
 }
 
 function mailFailReason(row) {
-  const mails = row?.mail || [];
-  if (!mails.length) return "";
-  const fail = mails.find((m) => m && !m.ok);
-  if (!fail) return "";
-  if (fail.error) return fail.error;
-  if (fail.skipped) return "SMTP not configured";
-  return "email failed";
+  return globalThis.POSAlertSummary.mailFailReason(row);
 }
 
-function uniqueAlertBits(items, max = 3) {
-  const u = [...new Set((items || []).filter(Boolean))];
-  if (!u.length) return "";
-  const head = u.slice(0, max).join(" · ");
-  return u.length > max ? `${head} · +${u.length - max} more` : head;
+function uniqueAlertBits(items, max, sep) {
+  return globalThis.POSAlertSummary.uniqueAlertBits(items, max, sep);
 }
 
 function summarizeAlertDelivery(out) {
-  if (out?.kind === "test") {
-    const row = Array.isArray(out?.results) ? out.results[0] : null;
-    const to = formatAlertWaTo(row) || "the number";
-    if (row?.wa?.ok) {
-      return `Test WhatsApp accepted for ${to}. Reconnect the WA Master QR if the phone stays empty.`;
-    }
-    const why = row?.wa?.error || row?.wa?.reason || out?.error || "WhatsApp did not accept the test";
-    return `Test WhatsApp failed for ${to}: ${why}`;
-  }
-  if (out?.skipped) {
-    return out.reason === "alerts-off"
-      ? "Renewal and expired alerts are inactive in Settings."
-      : "No expiry alerts were sent.";
-  }
-  const results = Array.isArray(out?.results) ? out.results : [];
-  if (!results.length) {
-    return "No shops with an expiry date matched a renewal or expired alert.";
-  }
-  const s = out?.summary || {};
-  const wa = s.wa ?? results.filter((r) => r.wa?.ok).length;
-  const mail = s.mail ?? results.filter((r) => (r.mail || []).some((m) => m?.ok)).length;
-  const sent = s.sent ?? results.filter((r) => r.wa?.ok || (r.mail || []).some((m) => m?.ok)).length;
-  const skipped = s.skipped ?? results.filter((r) => r.skipped).length;
-  const skipBits = uniqueAlertBits(results.filter((r) => r.skipped).map(alertSkipReason));
-  const failByShop = new Map();
-  for (const r of results.filter((row) => !row.skipped && !(row.wa?.ok || (row.mail || []).some((m) => m?.ok)))) {
-    const waWhy = r.wa?.reason || r.wa?.error || (r.wa?.skipped ? "WhatsApp skipped" : "");
-    const mailWhy = mailFailReason(r);
-    const why = [waWhy, mailWhy].filter(Boolean).join(" · ") || "not delivered";
-    const name = r.shopName || "Shop";
-    const prev = failByShop.get(name) || new Set();
-    prev.add(why);
-    failByShop.set(name, prev);
-  }
-  const failBits = uniqueAlertBits([...failByShop.entries()].map(([name, set]) => `${name}: ${[...set].join(" · ")}`));
-  const tos = [...new Set(results.map(formatAlertWaTo).filter(Boolean))];
-  const mailWhy = [...new Set(results.map(mailFailReason).filter(Boolean))];
-  const rateLimited = results.some((r) => /429|rate limited/i.test(String(r.wa?.error || r.wa?.reason || "")));
-  let msg = `Alerts sent. WhatsApp ${wa}/${results.length}`;
-  if (tos.length) msg += ` sent to ${tos.slice(0, 3).join(", ")}`;
-  msg += ` · Email ${mail}/${results.length}`;
-  if (mail < results.length && mailWhy.length) msg += ` (${mailWhy.slice(0, 2).join("; ")})`;
-  msg += ` · Delivered ${sent}, skipped ${skipped}.`;
-  if (rateLimited) msg += " WA Master hit its per-minute limit. Wait one minute, then send again for the shops that failed.";
-  else if (wa > 0) msg += " WA Master accepted the queue — reconnect the WhatsApp QR if the phone stays empty.";
-  if (skipBits) msg += ` ${skipBits}`;
-  if (failBits) msg += ` ${failBits}`;
-  return msg;
+  return globalThis.POSAlertSummary.summarizeAlertDelivery(out);
 }
 
 function attr(value) {

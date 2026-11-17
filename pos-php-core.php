@@ -5062,7 +5062,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
     }
 
     if ($path === "master/alert-log" && $method === "GET") {
-      pos_send(200, pos_list_alert_delivery_logs(200));
+      pos_send(200, pos_list_alert_delivery_logs(500));
     }
 
     if ($path === "master/settings" && $method === "GET") {

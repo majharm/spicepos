@@ -108,6 +108,7 @@ test("renewal alerts cover the week before expiry and after expiry", () => {
 test("Master Admin Settings lives under Backup with Active/Inactive templates", () => {
   const masterHtml = readFileSync(path.join(root, "master.html"), "utf8");
   const master = readFileSync(path.join(root, "js/master.js"), "utf8");
+  const summary = readFileSync(path.join(root, "js/alert-summary.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-php-core.php"), "utf8");
   const alerts = readFileSync(path.join(root, "pos-alerts.php"), "utf8");
   const nodeAlerts = readFileSync(path.join(root, "server/alerts.js"), "utf8");
@@ -172,7 +173,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(master, /data-send-expiry/);
   assert.match(master, /summarizeAlertDelivery/);
   assert.match(master, /formatAlertWaTo/);
-  assert.match(master, /sent to/);
+  assert.match(summary, /Every email/);
   assert.match(master, /SMTP not configured/);
   assert.match(master, /Outgoing email \(SMTP\)/);
   assert.match(master, /imap\.hostinger\.com/);
@@ -193,7 +194,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.equal(smtp.smtp_host, "smtp.hostinger.com");
   assert.equal(smtp.smtp_user, "pos@atavtelecom.in");
   assert.match(master, /uniqueAlertBits/);
-  assert.match(master, /WA Master hit its per-minute limit/);
+  assert.match(summary, /WA Master hit its per-minute limit/);
   assert.match(master, /function alertLogStatusValue/);
   assert.match(master, /WA Master accepted/);
   assert.match(master, /function openWaEmailLog/);
@@ -227,7 +228,7 @@ test("Master Admin Settings lives under Backup with Active/Inactive templates", 
   assert.match(nodeAlerts, /export function waApiNumber/);
   assert.match(alerts, /"numbers" => \$intl/);
   assert.match(nodeAlerts, /numbers: intl/);
-  assert.match(master, /Test WhatsApp accepted/);
+  assert.match(summary, /Test WhatsApp accepted/);
   assert.match(alerts, /pos_summarize_alert_results/);
   assert.match(alerts, /pos_wa_response_ok/);
   assert.match(alerts, /pos_wa_delivery_state/);
@@ -643,7 +644,7 @@ test("low stock list includes empty shelves and piece-threshold items", () => {
   assert.match(php, /role = 'business_admin'/);
   assert.match(php, /pos_query_low_stock_items\(\$bid, \[\]\)/);
   assert.doesNotMatch(php, /reorder_level_gm > 0 AND stock_gm <= reorder_level_gm/);
-  assert.match(master, /no-admin-number/);
+  assert.match(readFileSync(path.join(root, "js/alert-summary.js"), "utf8"), /no-admin-number/);
   assert.match(master, /full low-stock list on WhatsApp to the business admin/);
   const auto = readFileSync(path.join(root, "pos-automation.php"), "utf8");
   assert.match(auto, /pos_query_low_stock_items/);
