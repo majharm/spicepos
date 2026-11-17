@@ -101,7 +101,7 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
         $built[] = ["item" => $item, "qty" => $qty, "rate" => $rate, "amount" => $amount, "gstRate" => (float) ($item["gst_rate"] ?? 0), "discount" => 0, "gst" => pos_round8(($amount * (float) ($item["gst_rate"] ?? 0)) / 100)];
       }
     }
-    pos_assert_apparel_sale_stock($bid, $built);
+    if (empty($body["offlineSync"])) pos_assert_apparel_sale_stock($bid, $built);
     $billType = $body["discountType"] ?? $body["discount_type"] ?? "amt";
     $billValue = $body["discountValue"] ?? $body["discount_value"] ?? $body["discount"] ?? 0;
     $extraCharges = pos_round8(max(0, (float) ($body["extraCharges"] ?? $body["extra_charges"] ?? 0)));

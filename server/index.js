@@ -1058,7 +1058,7 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("Invalid quantity");
         built.push(computeSaleLine(item, customer, { ...line, quantity_gm: qty }));
       }
-      await assertApparelSaleStock(conn, businessId, built);
+      if (!req.body?.offlineSync) await assertApparelSaleStock(conn, businessId, built);
 
       const D = globalThis.POSDiscount;
       const billInput = {
