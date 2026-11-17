@@ -57,17 +57,33 @@
     return (boot?.fields || []).map((field) => `<label>${esc(field.label)}<input name="${prefix}${esc(field.key)}" maxlength="180" /></label>`).join("");
   }
 
+  function pill(text, kind) {
+    return `<span class="crm-pill${kind ? ` is-${kind}` : ""}">${esc(text)}</span>`;
+  }
+
+  function empty(text) {
+    return `<p class="crm-empty">${esc(text)}</p>`;
+  }
+
+  function tone(value) {
+    const key = String(value || "").toLowerCase();
+    if (key === "missed" || key === "urgent" || key === "lost" || key === "high") return "alert";
+    if (key === "done" || key === "converted" || key === "paid") return "ok";
+    return "";
+  }
+
   function kpis(data) {
+    const missed = Number(data.missed) || 0;
     const rows = [
-      ["Total customers", data.customers],
-      ["Open leads", data.leads],
-      ["Follow-ups", data.followups],
-      ["Missed", data.missed],
-      ["Open tasks", data.tasks],
+      ["Total customers", data.customers || 0],
+      ["Open leads", data.leads || 0],
+      ["Follow-ups", data.followups || 0],
+      ["Missed", missed, missed ? "alert" : ""],
+      ["Open tasks", data.tasks || 0],
       ["Outstanding", money(data.outstanding)],
       ["Conversion", `${data.conversion || 0}%`],
     ];
-    return `<div class="crm-kpis">${rows.map(([label, value]) => `<article class="crm-kpi"><span>${esc(label)}</span><strong>${esc(value)}</strong></article>`).join("")}</div>`;
+    return `<div class="crm-kpis">${rows.map(([label, value, kind]) => `<article class="crm-kpi${kind ? " is-alert" : ""}"><span>${esc(label)}</span><strong>${esc(value)}</strong></article>`).join("")}</div>`;
   }
 
   function paintBrief(data) {
@@ -83,19 +99,20 @@
 
   async function paintDashboard() {
     const data = boot.kpis || {};
-    $("crm-body").innerHTML = `${kpis(data)}${paintBrief(data)}<div class="crm-timeline"><article><strong>How this desk works</strong><p class="crm-meta">Leads move from New Lead to Converted. Converting a lead links an existing customer when the mobile, email, or GSTIN already exists. WhatsApp, SMS, and email automations stay off until you enable a template and the customer has consented.</p></article></div>`;
+    $("crm-body").innerHTML = `${kpis(data)}${paintBrief(data)}<p class="crm-note">Converting a lead links the customer when the mobile, email, or GSTIN already exists. Messages stay off until a template is enabled and the customer has consented.</p>`;
   }
 
   async function paintPipeline() {
     const data = await root.api("/api/crm/leads");
     const columns = CRM().pipelineColumns(data.leads || []);
-    $("crm-body").innerHTML = `<div class="crm-board">${columns.map((column) => `<section class="crm-col"><h4>${esc(column.label)} (${column.leads.length})</h4>${column.leads.map((lead) => `<article class="crm-card"><strong>${esc(lead.name)}</strong><p>${esc(lead.mobile || lead.company_name || "")}</p><div class="crm-actions">${(() => { const next = CRM().STAGES.find((stage) => stage.sort === CRM().stageOf(lead.stage).sort + 1 && !stage.lost); return next ? `<button class="btn" type="button" data-crm-stage="${esc(lead.id)}" data-stage="${esc(next.key)}">${esc(next.label)}</button>` : ""; })()}${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : ""}</div></article>`).join("") || `<p class="crm-meta">No leads</p>`}</section>`).join("")}</div>`;
+    $("crm-body").innerHTML = `<div class="crm-board">${columns.map((column) => `<section class="crm-col"><header><h4>${esc(column.label)}</h4><span>${column.leads.length}</span></header>${column.leads.map((lead) => `<article class="crm-card"><strong>${esc(lead.name)}</strong><p>${esc(lead.mobile || lead.company_name || "No mobile")}</p><div class="crm-actions">${(() => { const next = CRM().STAGES.find((stage) => stage.sort === CRM().stageOf(lead.stage).sort + 1 && !stage.lost); return next ? `<button class="btn" type="button" data-crm-stage="${esc(lead.id)}" data-stage="${esc(next.key)}">${esc(next.label)}</button>` : ""; })()}${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : ""}</div></article>`).join("") || `<p class="crm-empty">No leads</p>`}</section>`).join("")}</div>`;
   }
 
   async function paintLeads() {
     const data = await root.api("/api/crm/leads");
     const rows = data.leads || [];
     $("crm-body").innerHTML = `<form class="crm-form" id="crm-lead-form">
+      <h4 class="crm-panel-title">New lead</h4>
       <label>Name<input name="name" required maxlength="180" /></label>
       <label>Mobile<input name="mobile" maxlength="32" /></label>
       <label>Email<input name="email" type="email" maxlength="160" /></label>
@@ -108,13 +125,18 @@
       <label class="crm-wide">Notes<textarea name="notes" rows="2" maxlength="1000"></textarea></label>
       <div class="crm-wide"><button class="btn primary" type="submit">Save lead</button></div>
     </form>
-    <div class="crm-list">${rows.map((lead) => `<article class="crm-row"><div><strong>${esc(lead.name)}</strong><p class="crm-meta">${esc(lead.mobile || "")} ${esc(lead.company_name || "")}</p></div><div>${esc(CRM().stageOf(lead.stage).label)} · ${esc(lead.priority || "normal")}</div><div class="crm-actions">${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : `<span class="crm-meta">Linked</span>`}</div></article>`).join("") || `<p class="crm-meta">No leads yet.</p>`}</div>`;
+    <div class="crm-list">${rows.map((lead) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(lead.name)}</strong><p class="crm-meta">${esc([lead.mobile, lead.company_name].filter(Boolean).join(" · "))}</p></div><div class="crm-row-mid">${pill(CRM().stageOf(lead.stage).label, tone(lead.stage))} ${pill(lead.priority || "normal", tone(lead.priority))}</div><div class="crm-actions">${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : pill("Linked", "ok")}</div></article>`).join("") || empty("No leads yet.")}</div>`;
   }
 
   async function paintCustomers() {
     const data = await root.api("/api/crm/customers");
     const rows = data.customers || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-customer-search"><label class="crm-wide">Search<input name="q" placeholder="Name, mobile, or business" /></label><div><button class="btn" type="submit">Show</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div><strong>${esc(row.name)}</strong><p class="crm-meta">${esc(row.mobile || "")} ${esc(row.business_name || "")}</p></div><div>Due ${esc(money(row.outstanding))}</div><div><button class="btn" type="button" data-crm-open="${esc(row.id)}">360° profile</button></div></article>`).join("") || `<p class="crm-meta">No customers.</p>`}</div>`;
+    $("crm-body").innerHTML = `<form class="crm-search" id="crm-customer-search"><input name="q" placeholder="Name, mobile, or business" maxlength="80" /><button class="btn" type="submit">Show</button></form><div class="crm-list">${rows.map(customerRow).join("") || empty("No customers.")}</div>`;
+  }
+
+  function customerRow(row) {
+    const due = Number(row.outstanding) || 0;
+    return `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.name)}</strong><p class="crm-meta">${esc([row.mobile, row.business_name].filter(Boolean).join(" · "))}</p></div><div class="crm-row-mid">${due > 0 ? pill(`Due ${money(due)}`, "alert") : pill("Clear", "ok")}</div><div class="crm-actions"><button class="btn" type="button" data-crm-open="${esc(row.id)}">360° profile</button></div></article>`;
   }
 
   async function paintProfile(id) {
@@ -130,8 +152,9 @@
     const quotes = (data.quotes || []).map((row) => `<article><strong>${esc(row.quotation_number || "Quotation")}</strong><p class="crm-meta">${esc(row.status || "")} · ${esc(money(row.total))}</p></article>`).join("");
     const logs = (data.logs || []).map((row) => `<article><strong>${esc(row.channel)} · ${esc(row.status)}</strong><p class="crm-meta">${esc(row.body || row.error || "")}</p></article>`).join("");
     $("crm-body").innerHTML = `<div class="crm-actions"><button class="btn" type="button" data-crm-tab="customers">Back to customers</button></div>
+      <article class="crm-summary"><div><strong>${esc(customer.name)}</strong><p class="crm-meta">${esc(customer.mobile || "No mobile")} · ${esc(customer.email || "No email")} · GSTIN ${esc(customer.gstin || "—")}</p></div><div class="crm-summary-stats"><span>Lifetime<strong>${esc(money(data.lifetime))}</strong></span><span>Credit limit<strong>${esc(money(customer.credit_limit))}</strong></span><span>Outstanding<strong>${esc(money(customer.outstanding))}</strong></span>${data.loyalty ? `<span>Points<strong>${esc(data.loyalty.points_balance)}</strong></span>` : ""}</div></article>
       <form class="crm-profile" id="crm-profile-form">
-        <div class="crm-wide"><strong>${esc(customer.name)}</strong><p class="crm-meta">${esc(customer.mobile || "")} · ${esc(customer.email || "")} · GSTIN ${esc(customer.gstin || "—")}</p><p class="crm-meta">Lifetime ${esc(money(data.lifetime))} · Credit limit ${esc(money(customer.credit_limit))} · Outstanding ${esc(money(customer.outstanding))}${data.loyalty ? ` · Points ${esc(data.loyalty.points_balance)}` : ""}</p></div>
+        <h4 class="crm-panel-title">Profile</h4>
         <label>Relationship manager<select name="assigned_to">${staffOptions(data.profile?.assigned_to || "")}</select></label>
         <label><input name="whatsapp_consent" type="checkbox"${customer.whatsapp_consent ? " checked" : ""} /> WhatsApp consent</label>
         <label><input name="whatsapp_opt_out" type="checkbox"${customer.whatsapp_opt_out ? " checked" : ""} /> WhatsApp opt-out</label>
@@ -140,32 +163,32 @@
         ${fields}
         <div class="crm-wide"><button class="btn primary" type="submit">Save profile</button></div>
       </form>
-      <form class="crm-form" id="crm-note-form"><label class="crm-wide">Note<textarea name="body" rows="2" required></textarea></label><div><button class="btn" type="submit">Add note</button></div></form>
-      <form class="crm-form" id="crm-contact-form"><label>Contact name<input name="name" required /></label><label>Role<input name="role_name" /></label><label>Mobile<input name="mobile" /></label><label>Address<input name="address" /></label><div><button class="btn" type="submit">Add contact</button></div></form>
-      <div class="crm-timeline"><h4>Invoices</h4>${orders || "<p class='crm-meta'>No invoices yet.</p>"}<h4>Quotations</h4>${quotes || "<p class='crm-meta'>No quotations yet.</p>"}<h4>Messages</h4>${logs || "<p class='crm-meta'>No messages yet.</p>"}</div>`;
+      <form class="crm-form" id="crm-note-form"><h4 class="crm-panel-title">Note</h4><label class="crm-wide">Note<textarea name="body" rows="2" required></textarea></label><div><button class="btn" type="submit">Add note</button></div></form>
+      <form class="crm-form" id="crm-contact-form"><h4 class="crm-panel-title">Contact</h4><label>Contact name<input name="name" required /></label><label>Role<input name="role_name" /></label><label>Mobile<input name="mobile" /></label><label>Address<input name="address" /></label><div><button class="btn" type="submit">Add contact</button></div></form>
+      <div class="crm-timeline"><h4>Invoices</h4>${orders || empty("No invoices yet.")}<h4>Quotations</h4>${quotes || empty("No quotations yet.")}<h4>Messages</h4>${logs || empty("No messages yet.")}</div>`;
   }
 
   async function paintFollowups() {
     const data = await root.api("/api/crm/followups");
     const rows = data.followups || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-follow-form"><label>Date<input name="due_on" type="date" required /></label><label>Kind<select name="kind"><option>call</option><option>meeting</option><option>whatsapp</option><option>visit</option></select></label><label>Assign<select name="assigned_to">${staffOptions("")}</select></label><label class="crm-wide">Note<input name="note" maxlength="500" /></label><div><button class="btn primary" type="submit">Add follow-up</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div><strong>${esc(row.kind)} · ${esc(row.due_on || "")}</strong><p class="crm-meta">${esc(row.note || "")}</p></div><div>${esc(row.state || row.status)}</div><div>${row.status === "done" ? "" : `<button class="btn" type="button" data-crm-done="follow" data-id="${esc(row.id)}">Done</button>`}</div></article>`).join("") || `<p class="crm-meta">No follow-ups.</p>`}</div>`;
+    $("crm-body").innerHTML = `<form class="crm-form" id="crm-follow-form"><h4 class="crm-panel-title">New follow-up</h4><label>Date<input name="due_on" type="date" required /></label><label>Kind<select name="kind"><option>call</option><option>meeting</option><option>whatsapp</option><option>visit</option></select></label><label>Assign<select name="assigned_to">${staffOptions("")}</select></label><label class="crm-wide">Note<input name="note" maxlength="500" /></label><div><button class="btn primary" type="submit">Add follow-up</button></div></form><div class="crm-list">${rows.map((row) => { const state = row.state || row.status; return `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.kind)} · ${esc(row.due_on || "")}</strong><p class="crm-meta">${esc(row.note || "")}</p></div><div class="crm-row-mid">${pill(state, tone(state))}</div><div class="crm-actions">${row.status === "done" ? "" : `<button class="btn" type="button" data-crm-done="follow" data-id="${esc(row.id)}">Done</button>`}</div></article>`; }).join("") || empty("No follow-ups.")}</div>`;
   }
 
   async function paintTasks() {
     const data = await root.api("/api/crm/tasks");
     const rows = data.tasks || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-task-form"><label>Task<input name="title" required maxlength="180" /></label><label>Due<input name="due_on" type="date" /></label><label>Assign<select name="assigned_to">${staffOptions("")}</select></label><label>Priority<select name="priority"><option>normal</option><option>high</option><option>urgent</option></select></label><div><button class="btn primary" type="submit">Add task</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div><strong>${esc(row.title)}</strong><p class="crm-meta">${esc(row.due_on || "No date")} · ${esc(row.priority || "")}</p></div><div>${esc(row.status)}</div><div>${row.status === "done" ? "" : `<button class="btn" type="button" data-crm-done="task" data-id="${esc(row.id)}">Done</button>`}</div></article>`).join("") || `<p class="crm-meta">No tasks.</p>`}</div>`;
+    $("crm-body").innerHTML = `<form class="crm-form" id="crm-task-form"><h4 class="crm-panel-title">New task</h4><label>Task<input name="title" required maxlength="180" /></label><label>Due<input name="due_on" type="date" /></label><label>Assign<select name="assigned_to">${staffOptions("")}</select></label><label>Priority<select name="priority"><option>normal</option><option>high</option><option>urgent</option></select></label><div><button class="btn primary" type="submit">Add task</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.title)}</strong><p class="crm-meta">${esc(row.due_on || "No date")}</p></div><div class="crm-row-mid">${pill(row.status, tone(row.status))} ${pill(row.priority || "normal", tone(row.priority))}</div><div class="crm-actions">${row.status === "done" ? "" : `<button class="btn" type="button" data-crm-done="task" data-id="${esc(row.id)}">Done</button>`}</div></article>`).join("") || empty("No tasks.")}</div>`;
   }
 
   async function paintTickets() {
     const data = await root.api("/api/crm/tickets");
     const rows = data.tickets || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-ticket-form"><label>Subject<input name="subject" required maxlength="180" /></label><label>Priority<select name="priority"><option>normal</option><option>high</option><option>urgent</option></select></label><label class="crm-wide">Details<textarea name="body" rows="2"></textarea></label><div><button class="btn primary" type="submit">Open ticket</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div><strong>${esc(row.subject)}</strong><p class="crm-meta">${esc(row.body || "")}</p></div><div>${esc(row.status)} · ${esc(row.priority)}</div></article>`).join("") || `<p class="crm-meta">No complaints or service requests.</p>`}</div>`;
+    $("crm-body").innerHTML = `<form class="crm-form" id="crm-ticket-form"><h4 class="crm-panel-title">New ticket</h4><label>Subject<input name="subject" required maxlength="180" /></label><label>Priority<select name="priority"><option>normal</option><option>high</option><option>urgent</option></select></label><label class="crm-wide">Details<textarea name="body" rows="2"></textarea></label><div><button class="btn primary" type="submit">Open ticket</button></div></form><div class="crm-list">${rows.map((row) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(row.subject)}</strong><p class="crm-meta">${esc(row.body || "")}</p></div><div class="crm-row-mid">${pill(row.status, tone(row.status))} ${pill(row.priority, tone(row.priority))}</div></article>`).join("") || empty("No complaints or service requests.")}</div>`;
   }
 
   async function paintMessages() {
     const rows = boot?.automations || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-auto-form"><p class="crm-wide crm-meta">Messages send only when the switch is on and the customer has consented. Opt-out stops WhatsApp. SMS stays logged until an SMS provider is connected. Invoice WhatsApp from billing is unchanged.</p>${rows.map((row) => `<label class="crm-wide"><input type="checkbox" name="enabled" data-key="${esc(row.key)}"${Number(row.enabled) === 1 ? " checked" : ""} /> ${esc(CRM().AUTOMATIONS.find((item) => item.key === row.key)?.label || row.key)}</label><label class="crm-wide">Template<textarea name="template" data-key="${esc(row.key)}" rows="2">${esc(row.template || "")}</textarea></label><label>Wait days<input name="days" data-key="${esc(row.key)}" type="number" min="0" max="365" value="${esc(row.wait_days || 0)}" /></label>`).join("")}<div class="crm-wide crm-actions"><button class="btn primary" type="submit">Save templates</button><button class="btn" type="button" id="crm-run">Run due messages</button></div></form>`;
+    $("crm-body").innerHTML = `<form class="crm-autos" id="crm-auto-form"><p class="crm-note">Messages send only when the switch is on and the customer has consented. Opt-out stops WhatsApp. SMS stays logged until an SMS provider is connected. Invoice WhatsApp from billing is unchanged.</p>${rows.map((row) => { const meta = CRM().AUTOMATIONS.find((item) => item.key === row.key); return `<article class="crm-auto"><label class="crm-auto-on"><input type="checkbox" name="enabled" data-key="${esc(row.key)}"${Number(row.enabled) === 1 ? " checked" : ""} /><span><strong>${esc(meta?.label || row.key)}</strong><em>${esc(meta?.trigger || "")}</em></span></label><label>Template<textarea name="template" data-key="${esc(row.key)}" rows="2">${esc(row.template || "")}</textarea></label><label>Wait days<input name="days" data-key="${esc(row.key)}" type="number" min="0" max="365" value="${esc(row.wait_days || 0)}" /></label></article>`; }).join("")}<div class="crm-actions"><button class="btn primary" type="submit">Save templates</button><button class="btn" type="button" id="crm-run">Run due messages</button></div></form>`;
   }
 
   async function show(next) {
@@ -245,7 +268,7 @@
         } else if (form.id === "crm-customer-search") {
           const data = await root.api(`/api/crm/customers?q=${encodeURIComponent(read("q"))}`);
           boot = boot || {};
-          $("crm-body").querySelector(".crm-list").innerHTML = (data.customers || []).map((row) => `<article class="crm-row"><div><strong>${esc(row.name)}</strong><p class="crm-meta">${esc(row.mobile || "")}</p></div><div>Due ${esc(money(row.outstanding))}</div><div><button class="btn" type="button" data-crm-open="${esc(row.id)}">360° profile</button></div></article>`).join("") || `<p class="crm-meta">No matching customers.</p>`;
+          $("crm-body").querySelector(".crm-list").innerHTML = (data.customers || []).map(customerRow).join("") || empty("No matching customers.");
         } else if (form.id === "crm-profile-form") {
           await root.api(`/api/crm/customers/${encodeURIComponent(profileId)}`, { method: "POST", body: JSON.stringify({ assigned_to: read("assigned_to"), whatsapp_consent: form.elements.whatsapp_consent.checked, whatsapp_opt_out: form.elements.whatsapp_opt_out.checked, sms_consent: form.elements.sms_consent.checked, email_consent: form.elements.email_consent.checked, custom: customFrom(form) }) });
           hint("Profile saved", "ok");

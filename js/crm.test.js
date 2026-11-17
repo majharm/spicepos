@@ -68,10 +68,14 @@ test("CRM stays off until enabled and links the customer master", () => {
   assert.doesNotMatch(index, /id="set-crm" checked/);
   assert.match(index, /Enable CRM/);
   assert.match(index, /js\/crm\.js\?v=20261117crm3/);
-  assert.match(index, /js\/crm-ui\.js\?v=20261117crm3/);
-  assert.match(index, /css\/crm\.css\?v=20261117crm3/);
+  assert.match(index, /js\/crm-ui\.js\?v=20261117crm4/);
+  assert.match(index, /css\/crm\.css\?v=20261117crm4/);
   assert.match(read("js/crm-ui.js"), /crmBrief/);
   assert.match(read("js/crm-ui.js"), /Advanced AI/);
+  assert.match(read("js/crm-ui.js"), /crm-pill/);
+  assert.match(read("js/crm-ui.js"), /crm-search/);
+  assert.match(read("css/crm.css"), /#crm-body/);
+  assert.match(read("css/crm.css"), /repeat\(7, minmax\(0, 1fr\)\)/);
   assert.match(php, /function pos_crm_kpis/);
   assert.match(app, /function crmOn/);
   assert.match(app, /view === "crm"\) btn\.hidden = !can\("customers"\) \|\| !crmOn\(\)/);
