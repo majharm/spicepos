@@ -118,6 +118,26 @@
     return round2(remaining) > 0.004;
   }
 
+  function counterSettlement({ bill = 0, previousDue = 0, paid = 0 } = {}) {
+    const total = round2(Math.max(0, Number(bill) || 0));
+    const previous = round2(Math.max(0, Number(previousDue) || 0));
+    const cash = round2(Math.max(0, Number(paid) || 0));
+    const onThis = round2(Math.min(cash, total));
+    const extra = round2(Math.max(0, cash - onThis));
+    const billDue = round2(Math.max(0, total - onThis));
+    const previousLeft = round2(Math.max(0, previous - extra));
+    return {
+      bill: total,
+      previous,
+      paid: cash,
+      onThis,
+      extra,
+      billDue,
+      previousLeft,
+      account: round2(previousLeft + billDue),
+    };
+  }
+
   function sourceVacantAfterShift(opts = {}) {
     const holdsLeft = Number(opts.sourceHoldCount) || 0;
     const openQr = Number(opts.sourceOpenQr) || 0;
@@ -136,6 +156,7 @@
     validatePaymentAttempt,
     splitPayments,
     keepTableAfterPayment,
+    counterSettlement,
     sourceVacantAfterShift,
   };
 })(typeof window !== "undefined" ? window : globalThis);

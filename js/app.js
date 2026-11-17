@@ -1685,7 +1685,6 @@ function paintCounterDue(c) {
     const t = cartTotals();
     bill = Number(t.total != null ? t.total : (t.taxable || 0) + (t.tax || 0)) || 0;
   }
-  const creditAfter = !walkIn && method === "credit" && bill > 0;
   const paidEl = $("pay-amount");
   const typedPaid = paidEl && paidEl.value !== "" ? Number(paidEl.value) : NaN;
   const paid = Number.isFinite(typedPaid)
@@ -1693,13 +1692,17 @@ function paintCounterDue(c) {
     : method === "credit"
       ? 0
       : bill;
-  const after = Math.max(0, due + bill - paid);
-  const formula = `Previous due ${money(due)} + invoice ${money(bill)} − paid ${money(paid)} = ${money(after)}`;
+  const settle = globalThis.POSPayIntegrity?.counterSettlement?.({ bill, previousDue: due, paid }) || {
+    billDue: Math.max(0, bill - Math.min(paid, bill)),
+    extra: Math.max(0, paid - bill),
+    previousLeft: due,
+    previous: due,
+    paid,
+  };
+  const formula = `This bill ${money(bill)} after discount and royalty. Paid ${money(paid)} leaves ${money(settle.billDue)} on this bill. Extra ${money(settle.extra)} clears previous due ${money(due)} → ${money(settle.previousLeft)}.`;
   let label = "";
   if (due > 0) {
-    label = after === due ? `Due ${money(due)}` : `Due ${money(due)} → ${money(after)}`;
-  } else if (bill > 0 && paid + 0.009 < bill) {
-    label = `Balance ${money(after)}`;
+    label = settle.extra > 0.009 ? `Due ${money(due)} → ${money(settle.previousLeft)}` : `Due ${money(due)}`;
   }
   const chip = $("bill-due");
   if (chip) {
@@ -1709,14 +1712,20 @@ function paintCounterDue(c) {
   }
   const row = $("due-row");
   if (row) row.hidden = !(due > 0);
-  if ($("due-total")) $("due-total").textContent = money(due);
-  if ($("balance-due")) $("balance-due").textContent = money(after);
-  if ($("balance-row")) $("balance-row").hidden = !(bill > 0 || due > 0);
-  if ($("face-balance")) $("face-balance").textContent = money(after);
+  if ($("due-total")) $("due-total").textContent = money(settle.previousLeft);
+  if ($("balance-due")) $("balance-due").textContent = money(settle.billDue);
+  if ($("balance-row")) $("balance-row").hidden = !(bill > 0);
+  if ($("face-balance")) $("face-balance").textContent = money(settle.billDue);
   if ($("face-paid")) $("face-paid").textContent = money(paid);
   const faceRow = $("face-due-row");
   if (faceRow) faceRow.hidden = !(due > 0);
-  if ($("face-due")) $("face-due").textContent = money(due);
+  if ($("face-due")) $("face-due").textContent = money(settle.previousLeft);
+  const hint = $("pay-this-hint");
+  if (hint) {
+    hint.textContent = settle.extra > 0.009
+      ? `Extra ${money(settle.extra)} clears previous due.`
+      : "This bill after discount and royalty. Extra can clear previous due.";
+  }
   $("customer")?.classList.toggle("has-due", due > 0);
 }
 
@@ -13155,7 +13164,10 @@ $("catalog-cats")?.addEventListener("click", (e) => {
   $("catalog")?.scrollTo({ top: 0 });
 });
 function paintPayAction() {
-  const payTotal = thisBillPayable();
+  const bill = thisBillPayable();
+  const method = String($("pay-method")?.value || "");
+  const collected = checkoutAmountPaid();
+  const payTotal = method === "credit" ? bill : collected == null ? bill : collected;
   const btn = $("btn-pay");
   if (btn) {
     btn.textContent = state.editingOrderId
@@ -14353,12 +14365,11 @@ $("customer").addEventListener("change", () => {
 });
 $("pay-method")?.addEventListener("change", () => {
   if ($("pay-amount")) delete $("pay-amount").dataset.dirty;
-  syncPayAmountDefault();
-  paintCounterDue();
+  paintPayAction();
 });
 $("pay-amount")?.addEventListener("input", () => {
   if ($("pay-amount")) $("pay-amount").dataset.dirty = "1";
-  paintCounterDue();
+  paintPayAction();
 });
 $("btn-clear").addEventListener("click", () => {
   if (state.editingOrderId) {

@@ -11,6 +11,23 @@ const R = globalThis.POSRestaurant;
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
 
+test("counter cash pays this bill first and only extra clears previous due", () => {
+  const partial = P.counterSettlement({ bill: 14750, previousDue: 9750, paid: 5000 });
+  assert.equal(partial.onThis, 5000);
+  assert.equal(partial.billDue, 9750);
+  assert.equal(partial.extra, 0);
+  assert.equal(partial.previousLeft, 9750);
+  assert.equal(partial.account, 19500);
+  const extra = P.counterSettlement({ bill: 14750, previousDue: 9750, paid: 19750 });
+  assert.equal(extra.onThis, 14750);
+  assert.equal(extra.billDue, 0);
+  assert.equal(extra.extra, 5000);
+  assert.equal(extra.previousLeft, 4750);
+  const noOldDue = P.counterSettlement({ bill: 14750, previousDue: 0, paid: 5000 });
+  assert.equal(noOldDue.billDue, 9750);
+  assert.equal(noOldDue.extra, 0);
+});
+
 test("partial payments accumulate without duplicating the same key", () => {
   const bill = 1000;
   const first = P.validatePaymentAttempt({ billTotal: bill, alreadyPaid: 0, amount: 400, idempotencyKey: "p1" });
@@ -94,7 +111,7 @@ test("Cafe, restaurant, and bar share shift and payment wiring", () => {
   const barPhp = read("pos-bar.php");
   const barUi = read("js/bar-ui.js");
   assert.match(index, /js\/pay-integrity\.js\?v=20261012table1/);
-  assert.match(index, /js\/app\.js\?v=20261117stk2/);
+  assert.match(index, /js\/app\.js\?v=20261117pay1/);
   assert.match(index, /js\/restaurant\.js\?v=20261012set4/);
   assert.match(index, /js\/bar-ui\.js\?v=20261012table1/);
   assert.match(app, /idempotencyKey/);
