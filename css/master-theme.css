@@ -986,43 +986,62 @@ body.master-dark #master-app {
   list-style: none;
 }
 #master-app .biz-more summary::-webkit-details-marker { display: none; }
-#master-app .ip-map-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-#master-app .ip-map-filters button,
-#master-app .ip-map-side button {
-  border: 1px solid var(--ma-line);
-  background: var(--ma-card);
-  color: var(--ma-text);
-  border-radius: 999px;
-  padding: 6px 12px;
-  cursor: pointer;
-  font-weight: 700;
+#master-app .ip-dash { color: #edf4ff; }
+#master-app .ip-dash-stats { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 14px; margin-bottom: 16px; }
+#master-app .ip-dash-stat,
+#master-app .ip-dash-panel { background: #121d30; border: 1px solid #263650; border-radius: 14px; }
+#master-app .ip-dash-stat { padding: 16px; }
+#master-app .ip-dash-stat label,
+#master-app .ip-dash-hint,
+#master-app .ip-dash-status,
+#master-app .ip-dash-muted,
+#master-app .ip-dash-foot { color: #91a4bf; }
+#master-app .ip-dash-stat label { font-size: 12px; }
+#master-app .ip-dash-stat strong { display: block; font-size: 26px; margin-top: 5px; color: #edf4ff; }
+#master-app .ip-dash-stat small { color: #35d39a; font-size: 11px; }
+#master-app .ip-dash-layout { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; }
+#master-app .ip-dash-panel { overflow: hidden; }
+#master-app .ip-dash-head { padding: 14px 16px; border-bottom: 1px solid #263650; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+#master-app .ip-dash-head h2,
+#master-app .ip-dash-section h2 { font-size: 14px; margin: 0; color: #edf4ff; }
+#master-app .ip-dash-legend { display: flex; gap: 14px; align-items: center; color: #91a4bf; font-size: 11px; }
+#master-app .ip-dash-legend i { width: 8px; height: 8px; display: inline-block; border-radius: 50%; background: #35d39a; margin-right: 5px; }
+#master-app #ip-leaflet { height: 590px; background: #101c2c; }
+#master-app .ip-dash-side { display: flex; flex-direction: column; gap: 16px; }
+#master-app .ip-dash-section { padding: 16px; }
+#master-app .ip-dash-section h2 { margin-bottom: 12px; }
+#master-app .ip-dash textarea,
+#master-app .ip-dash-search { width: 100%; background: #0c1626; color: #edf4ff; border: 1px solid #263650; border-radius: 9px; padding: 11px; outline: none; }
+#master-app .ip-dash textarea { min-height: 118px; resize: vertical; font: 12px/1.6 ui-monospace, monospace; }
+#master-app .ip-dash-search { margin-bottom: 10px; }
+#master-app .ip-dash textarea:focus,
+#master-app .ip-dash-search:focus { border-color: #52b7ff; }
+#master-app .ip-dash-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+#master-app .ip-dash-actions button { border: 0; border-radius: 8px; padding: 10px 12px; background: #52b7ff; color: #041321; font-weight: 700; cursor: pointer; }
+#master-app .ip-dash-actions button.secondary { background: #243550; color: #edf4ff; border: 1px solid #334863; }
+#master-app .ip-dash-actions button:disabled { opacity: 0.55; cursor: wait; }
+#master-app .ip-dash-hint,
+#master-app .ip-dash-status,
+#master-app .ip-dash-foot { font-size: 12px; margin-top: 10px; }
+#master-app .ip-dash-table { overflow: auto; max-height: 290px; }
+#master-app .ip-dash-records { width: 100%; border-collapse: collapse; font-size: 12px; }
+#master-app .ip-dash-records th { text-align: left; color: #91a4bf; font-weight: 600; padding: 9px 8px; border-bottom: 1px solid #263650; }
+#master-app .ip-dash-records td { padding: 10px 8px; border-bottom: 1px solid #202f46; }
+#master-app .ip-dash-records tr { cursor: pointer; }
+#master-app .ip-dash-records tr:hover { background: #192942; }
+#master-app .ip-dash-pill { display: inline-block; margin-top: 4px; background: #173b39; color: #6be1bd; border-radius: 20px; padding: 3px 7px; font-size: 10px; }
+#master-app .ip-dash .leaflet-popup-content-wrapper,
+#master-app .ip-dash .leaflet-popup-tip { background: #142238; color: #edf4ff; }
+#master-app .ip-dash .leaflet-popup-content { font-size: 12px; }
+#master-app .ip-dash .leaflet-container a { color: #6bc4ff; }
+@media (max-width: 1000px) {
+  #master-app .ip-dash-layout { grid-template-columns: 1fr; }
+  #master-app #ip-leaflet { height: 480px; }
 }
-#master-app .ip-map-filters button.is-on,
-#master-app .ip-map-side button.is-on { background: var(--ma-blue); color: #fff; border-color: var(--ma-blue); }
-#master-app .ip-map-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, 0.7fr); gap: 14px; }
-#master-app .ip-map-stage { background: #071426; border-radius: 16px; overflow: hidden; }
-#master-app .ip-map-stage svg { width: 100%; height: auto; display: block; }
-#master-app .ip-ocean { fill: #071426; }
-#master-app .ip-land { fill: #163a5f; stroke: #3d7eb8; stroke-width: 0.8; }
-#master-app .ip-graticule { stroke: rgba(255, 255, 255, 0.08); stroke-width: 0.6; }
-#master-app .ip-equator { stroke: rgba(255, 255, 255, 0.18); }
-#master-app .ip-pin.is-on { fill: #22d3ee; }
-#master-app .ip-pin.is-off { fill: #93c5fd; }
-#master-app .ip-pin-halo { fill: rgba(34, 211, 238, 0.28); }
-#master-app .ip-map-legend { display: flex; gap: 14px; color: #cbd5e1; font-size: 12px; padding: 10px 12px 0; }
-#master-app .ip-map-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-#master-app .ip-map-legend i.is-on { background: #22d3ee; }
-#master-app .ip-map-legend i.is-off { background: #93c5fd; }
-#master-app .ip-map-side,
-#master-app .ip-map-table { margin-top: 14px; }
-#master-app .ip-map-side { background: var(--ma-card); border: 1px solid var(--ma-line); border-radius: 16px; padding: 12px; margin-top: 0; }
-#master-app .ip-map-side h3 { margin: 0 0 8px; }
-#master-app .ip-map-side ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 440px; overflow: auto; }
-#master-app .ip-map-side button { width: 100%; text-align: left; border-radius: 10px; display: grid; gap: 2px; }
-#master-app .ip-map-side button span { font-weight: 500; color: var(--ma-muted); font-size: 12px; }
-#master-app .ip-map-side button.is-on span { color: rgba(255, 255, 255, 0.82); }
-@media (max-width: 900px) {
-  #master-app .ip-map-layout { grid-template-columns: 1fr; }
+@media (max-width: 650px) {
+  #master-app .ip-dash-stats { grid-template-columns: repeat(2, 1fr); }
+  #master-app #ip-leaflet { height: 420px; }
+  #master-app .ip-dash-stat strong { font-size: 22px; }
 }
 @media (max-width: 800px) {
   #master-app .biz-perm-row { grid-template-columns: 1fr 1fr; }

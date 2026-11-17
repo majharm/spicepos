@@ -107,9 +107,10 @@ test("website page views group by visitor IP and keep private traffic off the ma
   assert.equal(local.local, true);
   assert.equal(map.mapPins(places).length, 0);
   const html = map.render({ traffic: "website", places, countries: map.countryTotals(places) });
-  assert.match(html, />Page</);
-  assert.match(html, /3 views · 2 sessions · live/);
+  assert.match(html, /id="ip-leaflet"/);
   assert.match(html, /3 views/);
+  assert.match(html, /\/pricing/);
+  assert.equal(map.dashboardStats(places.map(map.toRecord)).plotted, 0);
 });
 
 test("the map dashboard escapes location text", () => {
@@ -128,14 +129,15 @@ test("the map dashboard escapes location text", () => {
     }],
     note: `Staff "sign-in" map`,
   });
-  assert.match(html, /class="ip-land"/);
-  assert.match(html, /class="ip-pin is-on"/);
-  assert.match(html, /aria-label="World map of staff sign-in locations"/);
+  assert.match(html, /id="ip-leaflet"/);
+  assert.match(html, /aria-label="World map of IP locations"/);
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
   assert.match(html, /A&amp;B/);
   assert.match(html, /Staff &quot;sign-in&quot; map/);
   assert.doesNotMatch(html, /<img/);
-  assert.match(html, /data-ip-filter="local"/);
-  assert.match(html, /cached for 30 days/);
-  assert.match(map.render({ places: [] }), /Private networks stay off the map/);
+  assert.match(html, /Locate IPs/);
+  assert.match(html, /Private networks stay off the map/);
+  assert.match(map.popupHtml(map.toRecord({ ip: "8.8.8.8", city: "<b>x</b>", country: "US", lat: 1, lon: 2 })), /&lt;b&gt;x&lt;\/b&gt;/);
+  assert.deepEqual(map.parseIpList("8.8.8.8, 1.1.1.1 8.8.8.8"), ["8.8.8.8", "1.1.1.1"]);
+  assert.match(map.recordsCsv([{ ip: "1.1.1.1", city: 'A"B', country: "US", lat: 1, lon: 2, views: 3 }]), /"A""B"/);
 });

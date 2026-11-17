@@ -2627,17 +2627,11 @@ async function render() {
     } else if (tab === "ipmap") {
       const data = await api("/api/master/ip-map");
       const geo = globalThis.POSIpMap;
-      const totals = data?.totals || {};
       body.innerHTML = masterDesk(
         "Website",
-        "Website traffic map",
-        data?.note || "Website page views from the last 14 days.",
-        [
-          { label: "Visitors", value: totals.ips ?? 0 },
-          { label: "Page views", value: totals.views ?? 0 },
-          { label: "Sessions", value: totals.sessions ?? 0 },
-          { label: "Countries", value: totals.countries ?? 0 },
-        ],
+        "Global IP geolocation",
+        data?.note || "Website visitors on a live world map. Locations are approximate.",
+        [],
         geo ? geo.render(data) : `<p class="hint">The map could not be drawn.</p>`,
       );
       geo?.bind(body, data, () => render());

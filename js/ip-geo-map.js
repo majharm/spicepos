@@ -1,20 +1,9 @@
-/* Original simplified continent outlines for the Master Admin IP map. */
+/* Leaflet world map for Master Admin website traffic and extra public IP lookups. */
 (function (root) {
   const ONLINE_MS = 5 * 60 * 1000;
   const WIDTH = 960;
   const HEIGHT = 480;
-  const LAND = [
-    [[-168, 71], [-153, 70], [-140, 70], [-128, 71], [-105, 73], [-88, 74], [-82, 68], [-70, 68], [-64, 60], [-56, 53], [-64, 47], [-70, 45], [-74, 40], [-76, 35], [-81, 25], [-80, 25], [-82, 30], [-90, 29], [-97, 26], [-97, 21], [-87, 21], [-90, 16], [-84, 10], [-77, 8], [-81, 8], [-87, 13], [-92, 16], [-97, 16], [-105, 21], [-110, 23], [-115, 32], [-124, 40], [-124, 48], [-130, 55], [-140, 60], [-153, 60], [-166, 65], [-168, 71]],
-    [[-81, 12], [-77, 7], [-71, 12], [-62, 8], [-51, 1], [-35, -5], [-35, -8], [-39, -16], [-40, -22], [-48, -28], [-52, -34], [-58, -38], [-62, -40], [-65, -47], [-68, -55], [-71, -55], [-75, -52], [-74, -45], [-72, -36], [-74, -18], [-70, -18], [-77, -5], [-80, 0], [-81, 8], [-81, 12]],
-    [[-10, 36], [-9, 43], [-8, 52], [-5, 58], [-6, 62], [0, 61], [5, 62], [10, 59], [12, 66], [20, 70], [28, 71], [30, 70], [30, 60], [24, 45], [20, 41], [16, 38], [10, 37], [0, 36], [-5, 36], [-10, 36]],
-    [[-5, 50], [-2, 51], [1, 51], [1, 53], [-2, 59], [-5, 58], [-8, 55], [-5, 50]],
-    [[-17, 15], [-17, 21], [-16, 28], [-10, 32], [-6, 36], [10, 37], [11, 32], [25, 32], [32, 31], [43, 12], [51, 12], [44, -1], [42, -16], [35, -26], [32, -29], [28, -34], [18, -35], [17, -29], [12, -18], [13, -6], [9, 4], [8, 4], [9, 13], [-5, 5], [-16, 12], [-17, 15]],
-    [[43, -12], [50, -15], [47, -25], [43, -25], [43, -12]],
-    [[26, 41], [32, 31], [36, 36], [44, 37], [48, 30], [56, 27], [62, 25], [68, 24], [72, 21], [73, 16], [77, 8], [80, 13], [88, 22], [92, 22], [98, 16], [104, 2], [109, 1], [104, 7], [109, 14], [120, 22], [122, 31], [129, 35], [132, 43], [140, 45], [142, 47], [135, 48], [128, 42], [126, 34], [120, 38], [118, 39], [110, 40], [100, 42], [90, 44], [80, 48], [70, 55], [60, 56], [50, 50], [40, 46], [32, 45], [28, 41]],
-    [[130, 31], [134, 33], [136, 35], [140, 35], [141, 41], [145, 43], [142, 40], [136, 34], [131, 31]],
-    [[113, -22], [122, -18], [128, -15], [136, -12], [142, -11], [146, -15], [153, -25], [153, -32], [150, -38], [146, -39], [140, -38], [135, -35], [128, -32], [124, -34], [115, -35], [114, -28], [113, -22]],
-    [[-73, 78], [-60, 76], [-44, 70], [-22, 70], [-20, 80], [-44, 83], [-62, 83], [-73, 78]],
-  ];
+  const SAMPLE_IPS = "8.8.8.8\n1.1.1.1\n208.67.222.222";
 
   function esc(value) {
     return String(value ?? "")
@@ -216,16 +205,6 @@
     };
   }
 
-  function landPath(width, height) {
-    return LAND.map((ring) => {
-      const commands = ring.map((point, index) => {
-        const spot = project(point[0], point[1], width, height);
-        return `${index ? "L" : "M"}${spot.x} ${spot.y}`;
-      });
-      return `${commands.join("")}Z`;
-    }).join("");
-  }
-
   function mapPins(places) {
     const groups = new Map();
     for (const place of places || []) {
@@ -257,49 +236,48 @@
     });
   }
 
-  function graticule(width, height) {
-    const lines = [];
-    for (let lon = -180; lon <= 180; lon += 30) {
-      const spot = project(lon, 0, width, height);
-      const cls = lon === 0 ? "ip-graticule ip-equator" : "ip-graticule";
-      lines.push(`<line class="${cls}" x1="${spot.x}" y1="0" x2="${spot.x}" y2="${height}" />`);
+  function parseIpList(text) {
+    return [...new Set(String(text || "").split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean))].slice(0, 25);
+  }
+
+  function toRecord(place) {
+    const lat = Number(place?.lat);
+    const lon = Number(place?.lon);
+    const local = !!place?.local || isPrivateIp(place?.ip);
+    return {
+      ip: String(place?.ip || ""),
+      city: local ? "" : String(place?.city || ""),
+      region: local ? "" : String(place?.region || ""),
+      country: local ? "Private network" : String(place?.country || ""),
+      isp: String(place?.isp || ""),
+      lat: Number.isFinite(lat) ? lat : NaN,
+      lon: Number.isFinite(lon) ? lon : NaN,
+      page: Array.isArray(place?.businesses) ? place.businesses.join(", ") : String(place?.page || ""),
+      views: Number(place?.views) || 0,
+      sessions: Number(place?.sessions) || 0,
+      live: Number(place?.online) > 0,
+      local,
+      manual: !!place?.manual,
+    };
+  }
+
+  function dashboardStats(records) {
+    const list = records || [];
+    return {
+      total: list.length,
+      countries: new Set(list.map((row) => row.country).filter((name) => name && name !== "Private network" && name !== "Lookup failed")).size,
+      cities: new Set(list.map((row) => row.city).filter(Boolean)).size,
+      plotted: list.filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lon) && !row.local).length,
+    };
+  }
+
+  function recordsCsv(records) {
+    const cols = ["ip", "city", "region", "country", "isp", "lat", "lon", "page", "views"];
+    const lines = [cols.join(",")];
+    for (const row of records || []) {
+      lines.push(cols.map((key) => `"${String(row[key] ?? "").replace(/"/g, '""')}"`).join(","));
     }
-    for (let lat = -60; lat <= 60; lat += 30) {
-      const spot = project(0, lat, width, height);
-      const cls = lat === 0 ? "ip-graticule ip-equator" : "ip-graticule";
-      lines.push(`<line class="${cls}" x1="0" y1="${spot.y}" x2="${width}" y2="${spot.y}" />`);
-    }
-    return lines.join("");
-  }
-
-  function worldSvg(places) {
-    const pins = mapPins(places);
-    const dots = pins.map((pin) => {
-      const spot = project(pin.lon, pin.lat);
-      const radius = Math.min(11, 3.5 + Math.sqrt(pin.sessions));
-      const cls = pin.online > 0 ? "ip-pin is-on" : "ip-pin is-off";
-      const halo = pin.online > 0 ? `<circle class="ip-pin-halo" cx="${spot.x}" cy="${spot.y}" r="${(radius + 4).toFixed(1)}" />` : "";
-      const title = `${pin.label} · ${pin.sessions} session${pin.sessions === 1 ? "" : "s"}`;
-      return `${halo}<g class="${cls}"><title>${esc(title)}</title><circle cx="${spot.x}" cy="${spot.y}" r="${radius.toFixed(1)}" /></g>`;
-    }).join("");
-    return `<div class="ip-map-legend"><span><i class="is-on"></i>Online</span><span><i class="is-off"></i>Recent</span></div>
-      <svg viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img" aria-label="World map of staff sign-in locations">
-        <rect class="ip-ocean" width="${WIDTH}" height="${HEIGHT}" />
-        ${graticule(WIDTH, HEIGHT)}
-        <path class="ip-land" d="${landPath(WIDTH, HEIGHT)}" />
-        ${dots}
-      </svg>`;
-  }
-
-  function locationText(place) {
-    if (place.local) return "Private network";
-    const parts = [place.city, place.region, place.country].map((part) => String(part || "").trim()).filter(Boolean);
-    return parts.length ? parts.join(", ") : "Not mapped yet";
-  }
-
-  function whenText(value) {
-    if (!value) return "—";
-    return String(value).replace("T", " ").replace(/\.\d+Z$/, "").replace(/Z$/, "").slice(0, 16);
+    return lines.join("\n");
   }
 
   function countLabel(n, word) {
@@ -307,98 +285,217 @@
     return `${count} ${word}${count === 1 ? "" : "s"}`;
   }
 
-  function activityText(place) {
-    if (place.views != null) {
-      return `${countLabel(place.views, "view")} · ${countLabel(place.sessions, "session")}${Number(place.online) > 0 ? " · live" : ""}`;
-    }
-    return `${Number(place.online) || 0} online · ${Number(place.sessions) || 0}`;
+  function popupHtml(row) {
+    const where = [row.city, row.region, row.country].filter(Boolean).join(", ");
+    const coords = Number.isFinite(row.lat) && Number.isFinite(row.lon) ? `${row.lat.toFixed(4)}, ${row.lon.toFixed(4)}` : "unavailable";
+    const extra = row.page ? `<br>Page: ${esc(row.page)}` : "";
+    const traffic = row.views ? `<br>${esc(countLabel(row.views, "view"))} · ${esc(countLabel(row.sessions, "session"))}` : "";
+    return `<b>${esc(row.ip)}</b><br>${esc(where)}<br>ISP: ${esc(row.isp || "Unknown")}<br>Coordinates: ${esc(coords)}${extra}${traffic}`;
   }
 
-  function placeRows(places) {
-    if (!places?.length) return `<tr><td colspan="5">No website visits in this view.</td></tr>`;
-    return places.map((place) => `<tr>
-      <td>${esc(locationText(place))}</td>
-      <td>${esc(place.businesses?.length ? place.businesses.join(", ") : "—")}</td>
-      <td><code>${esc(place.ip)}</code></td>
-      <td>${esc(activityText(place))}</td>
-      <td>${esc(whenText(place.lastSeen))}</td>
-    </tr>`).join("");
-  }
-
-  function countryList(countries) {
-    if (!countries?.length) return `<li class="hint">No locations yet.</li>`;
-    return countries.map((row) => {
-      const amount = Number(row.views) > 0 ? `${Number(row.views)} views` : `${Number(row.sessions) || 0} sessions`;
-      return `<li><button type="button" data-ip-country="${esc(row.country)}"><strong>${esc(row.country)}</strong><span>${Number(row.ips) || 0} IPs · ${amount}</span></button></li>`;
+  function recordRows(records) {
+    if (!records?.length) return `<tr><td colspan="2">No IP locations yet</td></tr>`;
+    return records.map((row) => {
+      const where = [row.city, row.region].filter(Boolean).join(", ") || (row.local ? "Private network" : "Location unavailable");
+      const page = row.page ? `<br><span class="ip-dash-muted">${esc(row.page)}</span>` : "";
+      const pill = row.views ? `<div class="ip-dash-pill">${esc(countLabel(row.views, "view"))}</div>` : "";
+      return `<tr data-ip="${esc(row.ip)}"><td><b>${esc(row.ip)}</b><br><span class="ip-dash-muted">${esc(where)}</span>${page}</td><td>${esc(row.country || "—")}${pill}</td></tr>`;
     }).join("");
   }
 
   function render(payload) {
     const places = Array.isArray(payload?.places) ? payload.places : [];
-    const countries = Array.isArray(payload?.countries) && payload.countries.length ? payload.countries : countryTotals(places);
-    const website = payload?.traffic !== "staff";
+    const records = places.map(toRecord);
+    const stats = dashboardStats(records);
     const note = payload?.note || "Website page views from the last 14 days. Locations are estimated from the visitor IP. Private networks stay off the map.";
-    const subject = website ? "Page" : "Business";
-    return `<div id="ip-map-board">
-      <div class="ip-map-filters">
-        <button type="button" data-ip-filter="all" class="is-on">All</button>
-        <button type="button" data-ip-filter="online">Online</button>
-        <button type="button" data-ip-filter="mapped">On map</button>
-        <button type="button" data-ip-filter="local">Private</button>
-        <button type="button" data-ip-refresh>Refresh</button>
-      </div>
-      <div class="ip-map-layout">
-        <div class="ip-map-stage" id="ip-map-stage">${worldSvg(places)}</div>
-        <aside class="ip-map-side">
-          <h3>Countries</h3>
-          <ul>${countryList(countries)}</ul>
+    return `<div class="ip-dash" id="ip-map-board">
+      <section class="ip-dash-stats">
+        <div class="ip-dash-stat"><label>IP addresses</label><strong id="ip-total">${stats.total}</strong><small>Loaded into dashboard</small></div>
+        <div class="ip-dash-stat"><label>Countries</label><strong id="ip-countries">${stats.countries}</strong><small>Unique countries found</small></div>
+        <div class="ip-dash-stat"><label>Cities</label><strong id="ip-cities">${stats.cities}</strong><small>Unique cities found</small></div>
+        <div class="ip-dash-stat"><label>Locations plotted</label><strong id="ip-plotted">${stats.plotted}</strong><small>With valid coordinates</small></div>
+      </section>
+      <section class="ip-dash-layout">
+        <div class="ip-dash-panel">
+          <div class="ip-dash-head"><h2>World map · IP locations</h2><div class="ip-dash-legend"><span><i></i>Resolved IP</span><span>Click a marker for details</span></div></div>
+          <div id="ip-leaflet" role="region" aria-label="World map of IP locations"></div>
+        </div>
+        <aside class="ip-dash-side">
+          <div class="ip-dash-panel ip-dash-section">
+            <h2>Add IP addresses</h2>
+            <textarea id="ip-lookup" placeholder="Enter one public IP address per line"></textarea>
+            <div class="ip-dash-actions">
+              <button type="button" id="ip-resolve">Locate IPs</button>
+              <button type="button" class="secondary" id="ip-sample">Load sample</button>
+              <button type="button" class="secondary" id="ip-clear">Clear added</button>
+              <button type="button" class="secondary" id="ip-refresh">Refresh traffic</button>
+            </div>
+            <div class="ip-dash-status" id="ip-status">Website visits are already on the map. Add public IPs, then select Locate IPs.</div>
+            <p class="ip-dash-hint">Uses the ipwho.is geolocation service. Requests may be rate-limited. Private networks stay off the map.</p>
+          </div>
+          <div class="ip-dash-panel ip-dash-section">
+            <h2>Location records</h2>
+            <input class="ip-dash-search" id="ip-filter" placeholder="Filter IP, city, country or ISP…" />
+            <div class="ip-dash-table"><table class="ip-dash-records"><thead><tr><th>IP / Location</th><th>Country</th></tr></thead><tbody id="ip-rows">${recordRows(records)}</tbody></table></div>
+            <div class="ip-dash-actions"><button type="button" class="secondary" id="ip-export">Export CSV</button></div>
+          </div>
         </aside>
-      </div>
-      <div class="ip-map-table table-wrap"><table class="master-data data"><thead><tr>
-        <th>Location</th><th>${subject}</th><th>IP</th><th>Traffic</th><th>Last seen</th>
-      </tr></thead><tbody id="ip-map-rows">${placeRows(places)}</tbody></table></div>
-      <p class="hint">${esc(note)} Public addresses are located once and cached for 30 days.</p>
+      </section>
+      <p class="ip-dash-foot">${esc(note)} Geolocation is an estimate. It does not identify a person's exact address.</p>
     </div>`;
   }
+
+  let activeMap = null;
 
   function bind(root, payload, onRefresh) {
     const board = root?.querySelector?.("#ip-map-board");
     if (!board) return;
-    let filter = "all";
-    let country = "";
-    const paint = () => {
-      const places = filterPlaces(payload?.places, filter, country);
-      const stage = board.querySelector("#ip-map-stage");
-      const rows = board.querySelector("#ip-map-rows");
-      if (stage) stage.innerHTML = worldSvg(places);
-      if (rows) rows.innerHTML = placeRows(places);
-      board.querySelectorAll("[data-ip-filter]").forEach((button) => {
-        button.classList.toggle("is-on", !country && button.getAttribute("data-ip-filter") === filter);
-      });
-      board.querySelectorAll("[data-ip-country]").forEach((button) => {
-        button.classList.toggle("is-on", button.getAttribute("data-ip-country") === country);
+    if (activeMap) {
+      activeMap.remove();
+      activeMap = null;
+    }
+    const traffic = (Array.isArray(payload?.places) ? payload.places : []).map(toRecord);
+    let manual = [];
+    const all = () => traffic.concat(manual);
+    const leaflet = root.L || globalThis.L;
+    const mapEl = board.querySelector("#ip-leaflet");
+    let markers = null;
+    if (leaflet && mapEl) {
+      const map = leaflet.map(mapEl, { worldCopyJump: true }).setView([22, 12], 2);
+      leaflet.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri",
+        maxZoom: 16,
+      }).addTo(map);
+      leaflet.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 16,
+        pane: "overlayPane",
+      }).addTo(map);
+      markers = leaflet.featureGroup().addTo(map);
+      activeMap = map;
+      setTimeout(() => map.invalidateSize(), 80);
+    } else if (mapEl) {
+      mapEl.textContent = "The world map did not load.";
+    }
+    const paintMarkers = () => {
+      if (!markers || !activeMap || !leaflet) return;
+      markers.clearLayers();
+      for (const row of all()) {
+        if (!Number.isFinite(row.lat) || !Number.isFinite(row.lon) || row.local) continue;
+        const marker = leaflet.circleMarker([row.lat, row.lon], {
+          radius: 8,
+          color: "#75e3c1",
+          weight: 2,
+          fillColor: "#24b88b",
+          fillOpacity: 0.85,
+          ip: row.ip,
+        }).addTo(markers);
+        marker.bindPopup(popupHtml(row));
+      }
+      if (markers.getLayers().length) activeMap.fitBounds(markers.getBounds().pad(0.2), { maxZoom: 5 });
+    };
+    const paintTable = () => {
+      const query = String(board.querySelector("#ip-filter")?.value || "").toLowerCase();
+      const records = all();
+      const visible = records.filter((row) => [row.ip, row.city, row.region, row.country, row.isp, row.page].join(" ").toLowerCase().includes(query));
+      const rows = board.querySelector("#ip-rows");
+      if (rows) rows.innerHTML = recordRows(visible.length || !query ? visible : []);
+      if (rows && query && !visible.length) rows.innerHTML = `<tr><td colspan="2">No matching records</td></tr>`;
+      const stats = dashboardStats(records);
+      const set = (id, value) => {
+        const node = board.querySelector(id);
+        if (node) node.textContent = String(value);
+      };
+      set("#ip-total", stats.total);
+      set("#ip-countries", stats.countries);
+      set("#ip-cities", stats.cities);
+      set("#ip-plotted", stats.plotted);
+      rows?.querySelectorAll("tr[data-ip]").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          const row = records.find((item) => item.ip === tr.getAttribute("data-ip"));
+          if (!row || !activeMap || !Number.isFinite(row.lat) || !Number.isFinite(row.lon)) return;
+          activeMap.setView([row.lat, row.lon], 7);
+          markers?.getLayers().find((item) => item.options.ip === row.ip)?.openPopup();
+        });
       });
     };
-    board.addEventListener("click", (event) => {
-      const refresh = event.target.closest?.("[data-ip-refresh]");
-      if (refresh) {
-        onRefresh?.();
+    const paint = () => {
+      paintMarkers();
+      paintTable();
+    };
+    paint();
+    board.querySelector("#ip-filter")?.addEventListener("input", paintTable);
+    board.querySelector("#ip-sample")?.addEventListener("click", () => {
+      const box = board.querySelector("#ip-lookup");
+      if (box) box.value = SAMPLE_IPS;
+      const status = board.querySelector("#ip-status");
+      if (status) status.textContent = "Sample public IPs loaded. Click Locate IPs.";
+    });
+    board.querySelector("#ip-clear")?.addEventListener("click", () => {
+      manual = [];
+      const box = board.querySelector("#ip-lookup");
+      if (box) box.value = "";
+      const status = board.querySelector("#ip-status");
+      if (status) status.textContent = "Added addresses cleared. Website traffic remains on the map.";
+      paint();
+    });
+    board.querySelector("#ip-refresh")?.addEventListener("click", () => onRefresh?.());
+    board.querySelector("#ip-export")?.addEventListener("click", () => {
+      const records = all();
+      const status = board.querySelector("#ip-status");
+      if (!records.length) {
+        if (status) status.textContent = "No records to export.";
         return;
       }
-      const filterBtn = event.target.closest?.("[data-ip-filter]");
-      if (filterBtn) {
-        filter = filterBtn.getAttribute("data-ip-filter") || "all";
-        country = "";
-        paint();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([recordsCsv(records)], { type: "text/csv" }));
+      link.download = "global-ip-locations.csv";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+    board.querySelector("#ip-resolve")?.addEventListener("click", async () => {
+      const button = board.querySelector("#ip-resolve");
+      const status = board.querySelector("#ip-status");
+      const ips = parseIpList(board.querySelector("#ip-lookup")?.value);
+      if (!ips.length) {
+        if (status) status.textContent = "Enter at least one IP address.";
         return;
       }
-      const countryBtn = event.target.closest?.("[data-ip-country]");
-      if (countryBtn) {
-        const next = countryBtn.getAttribute("data-ip-country") || "";
-        country = country === next ? "" : next;
-        filter = "all";
-        paint();
+      const bad = ips.filter((ip) => !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip) && !ip.includes(":"));
+      if (bad.length) {
+        if (status) status.textContent = `Check IP format: ${bad.join(", ")}`;
+        return;
       }
+      const blocked = ips.filter((ip) => isPrivateIp(ip));
+      if (blocked.length) {
+        if (status) status.textContent = `Private networks stay off the map: ${blocked.join(", ")}`;
+        return;
+      }
+      if (button) button.disabled = true;
+      let done = 0;
+      let failed = 0;
+      for (const ip of ips) {
+        if (all().some((row) => row.ip === ip)) {
+          done += 1;
+          continue;
+        }
+        if (status) status.textContent = `Looking up ${ip} (${done + failed + 1}/${ips.length})…`;
+        try {
+          const res = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`);
+          if (!res.ok) throw new Error(`Lookup failed (HTTP ${res.status})`);
+          const body = await res.json();
+          const parsed = parseWhois(body);
+          if (!parsed) throw new Error(body?.message || "IP lookup failed");
+          manual.push(toRecord({ ...parsed, ip, isp: body?.connection?.isp || "", manual: true }));
+        } catch (err) {
+          failed += 1;
+          manual.push(toRecord({ ip, country: "Lookup failed", isp: err.message, manual: true }));
+        }
+        done += 1;
+        paint();
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      if (status) status.textContent = `Finished: ${done} processed, ${failed} lookup errors.`;
+      if (button) button.disabled = false;
     });
   }
 
@@ -413,6 +510,11 @@
     project,
     mapPins,
     filterPlaces,
+    parseIpList,
+    toRecord,
+    dashboardStats,
+    recordsCsv,
+    popupHtml,
     render,
     bind,
   };
