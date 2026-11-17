@@ -189,6 +189,8 @@ test("stock API attaches on-hand batches for this business and does not insert s
   assert.match(css, /\.stock-desk button\.items-stat/);
   assert.match(css, /\.stock-desk \.items-library \{ order: -1; \}/);
   assert.match(css, /\.stock-desk\.is-list \.items-split/);
+  assert.match(css, /\.stock-list-table \{[^}]*font-size: 12px/);
+  assert.match(css, /\.stock-list-table td\.num \{\s*font-size: 12px/);
   assert.match(css, /#stock-table\.items-library-list\.is-table/);
   assert.match(app, /classList\.toggle\("is-list"/);
   assert.ok(S.STOCK_COLUMNS.findIndex((col) => col.id === "stock") < S.STOCK_COLUMNS.findIndex((col) => col.id === "sku"));

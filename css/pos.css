@@ -8075,14 +8075,15 @@ body.pharmacy-mode .stock-desk .items-library-list {
   grid-template-columns: minmax(0, 1fr);
 }
 .stock-desk.is-list .items-library { order: -1; }
-.stock-list-table { min-width: 960px; width: 100%; font-size: 14px; }
+.stock-list-table { min-width: 860px; width: 100%; font-size: 12px; }
 .stock-list-table th,
 .stock-list-table td {
-  padding: 14px 12px;
+  padding: 7px 8px;
 }
-.stock-list-table .stock-name { min-width: 180px; }
+.stock-list-table td { font-size: 12px; }
+.stock-list-table .stock-name { min-width: 140px; }
 .stock-list-table td.num {
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 800;
 }
 .stock-list-table thead th:not(:last-child) { cursor: pointer; }
@@ -8096,7 +8097,7 @@ body.pharmacy-mode .stock-desk .items-library-list {
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 650;
 }
 .stock-list-table tr.is-exp-expired { box-shadow: inset 3px 0 0 #dc2626; }
