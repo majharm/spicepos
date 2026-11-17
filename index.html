@@ -5,36 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pharmacy Medical POS</title>
     <meta http-equiv="Cache-Control" content="no-store" />
-    <meta name="app-version" content="pos-11" />
+    <meta name="app-version" content="pos-13" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=pos-11" />
+    <link rel="stylesheet" href="./css/pos.css?v=pos-13" />
   </head>
   <body>
     <div class="app">
       <nav class="nav" aria-label="App">
         <div class="brand">
           <img id="shop-logo" class="brand-logo" alt="Company logo" hidden />
-          <strong id="shop-name">Pharmacy Medical POS</strong>
-          <span id="shop-place">Pharmacy · Medicines · Batches · Bills</span>
+          <span class="brand-mark" id="brand-mark" aria-hidden="true">P</span>
+          <div class="brand-copy">
+            <strong id="shop-name">Pharmacy Medical POS</strong>
+            <span id="shop-place">Pharmacy · Medicines · Batches · Bills</span>
+          </div>
         </div>
-        <button class="nav-btn active" type="button" data-view="counter">Pharmacy Bill</button>
-        <button class="nav-btn" type="button" data-view="items">Medicines</button>
-        <button class="nav-btn" type="button" data-view="customers">Customers</button>
-        <button class="nav-btn" type="button" data-view="batches">Stock / Expiry</button>
-        <button class="nav-btn" type="button" data-view="orders">Bills</button>
-        <button class="nav-btn" type="button" data-view="purchases">Purchases</button>
-        <button class="nav-btn" type="button" data-view="suppliers">Suppliers</button>
-        <button class="nav-btn" type="button" data-view="returns">Returns</button>
-        <button class="nav-btn" type="button" data-view="qr">QR code <span id="qr-pending-nav" hidden>0</span></button>
-        <button class="nav-btn" type="button" data-view="support">Support</button>
-        <button class="nav-btn" type="button" data-view="reports">Reports</button>
-        <button class="nav-btn" type="button" data-view="settings">Settings</button>
+        <button class="nav-btn active" type="button" data-view="counter"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></span><span class="nav-label">Menu</span></button>
+        <button class="nav-btn" type="button" data-view="items"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8l1 3H7l1-3z"/><path d="M6 7h12l-1 13H7L6 7z"/></svg></span><span class="nav-label">Medicines</span></button>
+        <button class="nav-btn" type="button" data-view="customers"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.6-4.5 5.5-4.5S14.4 16 15 19"/><circle cx="17" cy="9" r="2.2"/><path d="M16.2 14.6c2.2.3 3.8 1.6 4.3 4.4"/></svg></span><span class="nav-label">Customers</span></button>
+        <button class="nav-btn" type="button" data-view="batches"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span><span class="nav-label">Stock / Expiry</span></button>
+        <button class="nav-btn" type="button" data-view="orders"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7V3z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><span class="nav-label">Bills</span></button>
+        <button class="nav-btn" type="button" data-view="purchases"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h11v8H3z"/><path d="M14 10h4l3 3v2h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg></span><span class="nav-label">Purchases</span></button>
+        <button class="nav-btn" type="button" data-view="suppliers"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg></span><span class="nav-label">Suppliers</span></button>
+        <button class="nav-btn" type="button" data-view="returns"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 7H4v4"/><path d="M4 11a8 8 0 1 0 2.3-5.7L4 8"/></svg></span><span class="nav-label">Returns</span></button>
+        <button class="nav-btn" type="button" data-view="qr"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/></svg></span><span class="nav-label">QR code</span><span id="qr-pending-nav" hidden>0</span></button>
+        <button class="nav-btn" type="button" data-view="support"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2"/></svg></span><span class="nav-label">Support</span></button>
+        <button class="nav-btn" type="button" data-view="reports"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-7"/></svg></span><span class="nav-label">Reports</span></button>
+        <button class="nav-btn" type="button" data-view="settings"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></svg></span><span class="nav-label">Settings</span></button>
         <div class="nav-foot">
           <div class="chip" id="vertical-chip">Pharmacy</div>
-          <div class="chip" id="app-version-chip">pos-11</div>
+          <div class="chip" id="app-version-chip">pos-13</div>
           <div class="chip">Today <b id="today-total">₹0.00</b></div>
           <div class="chip">Bills <b id="today-count">0</b></div>
           <div class="chip" id="clock">--:--</div>
@@ -42,48 +45,92 @@
       </nav>
 
       <div class="stage">
-        <section class="view" id="view-counter">
-          <header class="topbar">
-            <form class="search" id="search-form">
-              <input id="search" type="search" placeholder="Search medicine, generic, barcode, or code" autocomplete="off" />
-            </form>
-            <select id="customer" class="select"></select>
-            <input id="bill-doctor" class="select" placeholder="Doctor name" />
-            <input id="bill-rx" class="select" placeholder="Prescription no." />
-            <select id="pay-method" class="select">
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="credit">Credit</option>
-              <option value="bank">Bank</option>
-            </select>
-            <a class="btn primary" href="./qr.html" target="_blank" rel="noopener">QR code</a>
-          </header>
+        <section class="view counter-view" id="view-counter">
           <div class="workspace">
-            <div class="catalog" id="catalog"></div>
-            <aside class="ticket">
-              <h2>Pharmacy bill</h2>
-              <div class="ticket-pack" id="chosen-pack">Retail</div>
-              <div class="bill-meta">
+            <div class="counter-main">
+              <header class="counter-top">
+                <button class="icon-btn" id="nav-toggle" type="button" aria-label="Menu">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                </button>
+                <form class="search" id="search-form">
+                  <span class="search-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg></span>
+                  <input id="search" type="search" placeholder="Search Product here..." autocomplete="off" />
+                </form>
+                <button class="icon-btn" id="bill-filter" type="button" aria-label="Bill details" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                </button>
+              </header>
+              <div class="bill-drawer" id="bill-drawer" hidden>
+                <label>Customer
+                  <select id="customer" class="select"></select>
+                </label>
+                <label class="pharmacy-only">Doctor
+                  <input id="bill-doctor" placeholder="Doctor name" />
+                </label>
+                <label class="pharmacy-only">Prescription
+                  <input id="bill-rx" placeholder="Prescription no." />
+                </label>
+                <label>Payment
+                  <select id="pay-method" class="select">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI / QR</option>
+                    <option value="card">Credit/Debit Card</option>
+                    <option value="credit">Credit</option>
+                    <option value="bank">Bank</option>
+                  </select>
+                </label>
                 <label>Discount ₹ <input id="bill-discount" type="number" step="0.01" value="0" /></label>
                 <label>Amount paid <input id="bill-paid" type="number" step="0.01" /></label>
+                <a class="btn" href="./qr.html" target="_blank" rel="noopener">Customer QR menu</a>
+              </div>
+              <div class="cat-row" id="cat-row"></div>
+              <div class="catalog" id="catalog"></div>
+              <div class="party-strip" id="party-strip"></div>
+            </div>
+            <aside class="ticket">
+              <header class="ticket-head">
+                <div>
+                  <h2 id="ticket-title">Counter</h2>
+                  <p class="ticket-who" id="ticket-who">Dine in</p>
+                </div>
+                <button class="icon-btn" id="ticket-edit" type="button" aria-label="Edit bill details">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4z"/><path d="M13 7l4 4"/></svg>
+                </button>
+              </header>
+              <div class="ticket-pack" id="chosen-pack" hidden>Retail</div>
+              <div class="service-tabs" id="service-tabs" role="tablist">
+                <button class="service-tab active" type="button" data-service="dine-in" role="tab" aria-selected="true">Dine in</button>
+                <button class="service-tab" type="button" data-service="takeaway" role="tab" aria-selected="false">Take Away</button>
+                <button class="service-tab" type="button" data-service="delivery" role="tab" aria-selected="false">Delivery</button>
               </div>
               <div class="lines" id="lines"></div>
               <div class="totals">
-                <div><span>Qty</span><span id="qty-total">0</span></div>
-                <div><span>Subtotal</span><span id="taxable">₹0.00</span></div>
+                <div><span>Sub Total</span><span id="taxable">₹0.00</span></div>
                 <div><span>Discount</span><span id="disc-total">₹0.00</span></div>
                 <div><span>CGST</span><span id="cgst-total">₹0.00</span></div>
                 <div><span>SGST / IGST</span><span id="sgst-total">₹0.00</span></div>
                 <div><span>Round off</span><span id="round-total">₹0.00</span></div>
-                <div class="grand"><span>Grand total</span><span id="total">₹0.00</span></div>
+                <div class="grand"><span>Total Amount</span><span id="total">₹0.00</span></div>
                 <div><span>Balance / due</span><span id="due-total">₹0.00</span></div>
+                <div class="quiet"><span>Qty</span><span id="qty-total">0</span></div>
+              </div>
+              <div class="pay-methods" id="pay-methods">
+                <button class="pay-method active" type="button" data-pay="cash">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.2"/></svg>
+                  Cash
+                </button>
+                <button class="pay-method" type="button" data-pay="card">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>
+                  Credit/Debit Card
+                </button>
+                <button class="pay-method" type="button" data-pay="upi">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2.2v2.2H14zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/></svg>
+                  QR Code
+                </button>
               </div>
               <div class="pay">
-                <button class="btn danger" id="btn-clear" type="button">Clear</button>
-                <div class="pay-row">
-                  <button class="btn primary" id="btn-pay" type="button">Save & print</button>
-                </div>
+                <button class="btn primary place-order" id="btn-pay" type="button">Place Order</button>
+                <button class="btn ghost clear-bill" id="btn-clear" type="button">Clear</button>
                 <div class="hint" id="hint"></div>
               </div>
             </aside>
@@ -346,7 +393,7 @@
         </div>
       </div>
     </div>
-    <script src="./js/qrcode.iife.js?v=pos-11"></script>
-    <script type="module" src="./js/app.js?v=pos-11"></script>
+    <script src="./js/qrcode.iife.js?v=pos-13"></script>
+    <script type="module" src="./js/app.js?v=pos-13"></script>
   </body>
 </html>

@@ -19,6 +19,8 @@ const state = {
   barcodes: [],
   cart: [],
   query: "",
+  category: "All",
+  service: "dine-in",
   customerId: "",
   lastPack: null,
   editingOrderId: null,
@@ -55,6 +57,92 @@ function stockOf(item) {
 
 function isGarmentShop() {
   return Garment.isGarmentCategory(state.company?.business_category);
+}
+
+function isRestaurantShop() {
+  return /restaurant|cafe|food|dine/i.test(String(state.company?.business_category || ""));
+}
+
+const SERVICES = [
+  { id: "dine-in", label: "Dine in" },
+  { id: "takeaway", label: "Take Away" },
+  { id: "delivery", label: "Delivery" },
+];
+
+function serviceLabel(id) {
+  return SERVICES.find((row) => row.id === id)?.label || "Dine in";
+}
+
+function itemGroup(item) {
+  if (isGarmentShop() || isRestaurantShop()) return item.category || "Other";
+  return item.medicine_type || item.category || "Other";
+}
+
+function tileStyle(id) {
+  const palettes = [
+    ["#fff1e6", "#ffd7b0"],
+    ["#e9f9ef", "#bfe8cc"],
+    ["#ffeef0", "#f8c9cf"],
+    ["#eef3ff", "#d0dcf8"],
+    ["#fff8dc", "#f6e7a8"],
+    ["#f6efff", "#e0d0f6"],
+    ["#e8f7f6", "#c5ebe6"],
+    ["#fff4ea", "#f6d2b5"],
+  ];
+  let hash = 0;
+  const key = String(id || "");
+  for (let i = 0; i < key.length; i += 1) hash = (hash + key.charCodeAt(i) * (i + 1)) % palettes.length;
+  const [from, to] = palettes[hash];
+  return `background: linear-gradient(160deg, ${from}, ${to});`;
+}
+
+function cardArt() {
+  return `<svg class="card-art" viewBox="0 0 80 64" width="96" height="76" aria-hidden="true">
+    <ellipse cx="40" cy="42" rx="28" ry="14" fill="#fff" opacity="0.9"/>
+    <ellipse cx="40" cy="36" rx="20" ry="11" fill="#f0b27a"/>
+    <circle cx="33" cy="34" r="3" fill="#e07a3d"/>
+    <circle cx="45" cy="37" r="2.4" fill="#6fbf73"/>
+    <circle cx="40" cy="31" r="2" fill="#f4d35e"/>
+  </svg>`;
+}
+
+function catIcon(name) {
+  const key = String(name || "").toLowerCase();
+  const icons = {
+    all: `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>`,
+    breakfast: `<svg viewBox="0 0 24 24"><path d="M6 9h8a4 4 0 0 1 0 8H6z"/><path d="M16 11h2a2 2 0 0 1 0 4h-2"/><path d="M8 17v2M12 17v2"/></svg>`,
+    soup: `<svg viewBox="0 0 24 24"><path d="M5 11h14v2a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2z"/><path d="M8 8c.5-1 0-2 1-3M12 8c.5-1 0-2 1-3"/></svg>`,
+    pasta: `<svg viewBox="0 0 24 24"><path d="M7 6c2 3 2 9 0 12M12 6c2 3 2 9 0 12M17 6c2 3 2 9 0 12"/></svg>`,
+    burger: `<svg viewBox="0 0 24 24"><path d="M5 10c0-3 3-5 7-5s7 2 7 5H5z"/><path d="M4 13h16M6 16h12"/><path d="M5 16c0 2 3 3 7 3s7-1 7-3"/></svg>`,
+    tablet: `<svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="4"/><path d="M8 12h8"/></svg>`,
+    capsule: `<svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M7 12h10"/></svg>`,
+  };
+  if (icons[key]) return icons[key];
+  if (key.includes("soup")) return icons.soup;
+  if (key.includes("break")) return icons.breakfast;
+  if (key.includes("pasta") || key.includes("noodle")) return icons.pasta;
+  if (key.includes("burg") || key.includes("main")) return icons.burger;
+  if (key.includes("tab") || key.includes("cap")) return icons.tablet;
+  return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 8v4l3 2"/></svg>`;
+}
+
+function dietOf(item) {
+  const text = `${item.name || ""} ${item.category || ""} ${item.medicine_type || ""}`.toLowerCase();
+  if (/(chicken|mutton|meat|fish|shrimp|prawn|eggs?|bacon|beef|pork|non[\s-]?veg)/.test(text)) {
+    return { kind: "nonveg", label: "Non Veg" };
+  }
+  if (isRestaurantShop() || /\b(veg|vegetable|salad|paneer|tofu)\b/.test(text)) {
+    return { kind: "veg", label: "Veg" };
+  }
+  return { kind: "type", label: item.medicine_type || item.category || "Item" };
+}
+
+function offPercent(item) {
+  const mrp = Number(item.mrp) || 0;
+  const rate = Number(item.selling_price || item.retail_rate) || 0;
+  if (mrp <= rate || mrp <= 0) return 0;
+  const pct = Math.round((1 - rate / mrp) * 100);
+  return pct >= 1 ? pct : 0;
 }
 
 function itemColour(item) {
@@ -182,6 +270,14 @@ function showLogo(img, url) {
     img.removeAttribute("src");
     img.hidden = true;
   }
+  const mark = $("brand-mark");
+  if (mark && img.id === "shop-logo") {
+    mark.hidden = Boolean(url);
+    if (!url) {
+      const name = state.company?.name || $("shop-name")?.textContent || "P";
+      mark.textContent = String(name).trim().charAt(0).toUpperCase() || "P";
+    }
+  }
 }
 
 function clearBillFields() {
@@ -257,22 +353,51 @@ function activeItems() {
 
 function filteredItems() {
   const q = state.query.trim().toLowerCase();
-  const list = activeItems();
-  if (!q) return list;
-  return list.filter((i) =>
-    [i.name, i.local_name, i.generic_name, i.code, i.barcode, i.manufacturer, i.category, i.medicine_type, i.colour].join(" ").toLowerCase().includes(q),
-  );
+  return activeItems().filter((i) => {
+    if (state.category && state.category !== "All" && itemGroup(i) !== state.category) return false;
+    if (!q) return true;
+    return [i.name, i.local_name, i.generic_name, i.code, i.barcode, i.manufacturer, i.category, i.medicine_type, i.colour]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
+}
+
+function renderCategories() {
+  const row = $("cat-row");
+  if (!row) return;
+  const left = row.scrollLeft;
+  const counts = new Map();
+  for (const item of activeItems()) {
+    const group = itemGroup(item);
+    counts.set(group, (counts.get(group) || 0) + 1);
+  }
+  const groups = [...counts.keys()];
+  if (state.category !== "All" && !groups.includes(state.category)) state.category = "All";
+  const cards = [{ name: "All", count: activeItems().length }, ...groups.map((name) => ({ name, count: counts.get(name) }))];
+  row.innerHTML = cards
+    .map(
+      (card) => `<button class="cat-card ${state.category === card.name ? "active" : ""}" type="button" data-category="${escapeHtml(card.name)}">
+        <span class="cat-ico">${catIcon(card.name)}</span>
+        <strong>${escapeHtml(card.name)}</strong>
+        <span>${card.count} Item${card.count === 1 ? "" : "s"}</span>
+      </button>`,
+    )
+    .join("");
+  row.scrollLeft = left;
 }
 
 function renderCatalog() {
+  renderCategories();
   const items = filteredItems();
   const garment = isGarmentShop();
-  $("catalog").innerHTML = items.length
+  const scroller = $("catalog");
+  const top = scroller.scrollTop;
+  scroller.innerHTML = items.length
     ? items
         .map((i) => {
           const low = sellableOf(i) <= Number(i.reorder_level_gm);
           const out = sellableOf(i) <= 0;
-          const colour = itemColour(i);
           const variants = garment ? Garment.sizeStockVariants(sizeStockRows(), i.id) : [];
           const multiColour = new Set(variants.map((v) => v.colour)).size > 1;
           const chips = variants
@@ -281,18 +406,41 @@ function renderCatalog() {
               return `<button class="size-chip" type="button" data-add-size="${escapeHtml(i.id)}" data-size="${escapeHtml(v.size)}" data-colour="${escapeHtml(v.colour)}" ${v.qty <= 0 ? "disabled" : ""}>${escapeHtml(label)} ${v.qty}</button>`;
             })
             .join("");
-          return `<div class="card" ${out && !garment ? "data-disabled=1" : ""}>
-        <button class="card-hit" type="button" data-add="${escapeHtml(i.id)}" ${out && !garment ? "disabled" : ""}>
-        <div class="sku">${escapeHtml(garment ? colour || i.category || "Garment" : i.medicine_type || i.category || "Medical")} · ${escapeHtml(garment ? "Piece" : i.pack_unit || "Strip")}</div>
-        <div class="name">${escapeHtml(i.name)} <small>${escapeHtml(genericOf(i))}</small></div>
-        <div class="meta"><span>${sellableOf(i)} ${escapeHtml(garment ? "pcs" : Pharmacy.looseUnitLabel(i))}</span><span>${money(rateFor(i))}${garment ? "/pc" : `/${escapeHtml(Pharmacy.looseUnitLabel(i))}`}${!garment && Pharmacy.unitsPerPack(i) > 1 ? ` · ${money(packRateFor(i))}/${escapeHtml(i.pack_unit || "Pack")}` : ""}</span></div>
-        <div class="stock ${out ? "out" : low ? "low" : "ok"}">${escapeHtml(i.code)} · GST ${escapeHtml(i.gst_rate)}%</div>
-        </button>
-        ${garment ? `<div class="size-chips">${chips || `<span class="hint">No size stock</span>`}</div>` : ""}
-      </div>`;
+          const lines = state.cart.filter((line) => line.itemId === i.id);
+          const plain = lines.find((line) => !line.size && !line.barcode);
+          const inCart = lines.length > 0;
+          const diet = dietOf(i);
+          const off = offPercent(i);
+          const action = garment
+            ? `<div class="size-chips">${chips || `<span class="hint">No size stock</span>`}</div>`
+            : out
+              ? `<button class="add-dish" type="button" disabled>Out of stock</button>`
+              : plain?.qty
+                ? `<div class="card-stepper">
+                    <button type="button" data-chg="${escapeHtml(i.id)}" data-d="-1" aria-label="Reduce ${escapeHtml(i.name)}">−</button>
+                    <span>${plain.qty}</span>
+                    <button type="button" data-chg="${escapeHtml(i.id)}" data-d="1" aria-label="Add ${escapeHtml(i.name)}">+</button>
+                  </div>`
+                : `<button class="add-dish" type="button" data-add="${escapeHtml(i.id)}">Add to Dish</button>`;
+          return `<article class="card ${inCart ? "is-in-cart" : ""}" ${out && !garment ? "data-disabled=1" : ""}>
+        <div class="card-photo" style="${tileStyle(i.id)}">
+          ${off ? `<span class="off-badge">${off}% Off</span>` : ""}
+          ${cardArt()}
+        </div>
+        <div class="card-body">
+          <div class="name">${escapeHtml(i.name)}</div>
+          <div class="card-price-row">
+            <span class="price">${money(rateFor(i))}</span>
+            <span class="diet diet-${diet.kind}"><i></i>${escapeHtml(diet.label)}</span>
+          </div>
+          ${low && !out ? `<div class="sku stock low">Low · ${sellableOf(i)} left</div>` : ""}
+        </div>
+        ${action}
+      </article>`;
         })
         .join("")
-    : `<p class="hint">${state.query ? "No products match this search." : garment ? "No garments yet. Add them in Products, then receive size-wise stock in Purchases." : "No medicines yet. Add them in Medicines, then receive stock in Purchases."}</p>`;
+    : `<p class="hint">${state.query || (state.category && state.category !== "All") ? "No products match this search." : garment ? "No garments yet. Add them in Products, then receive size-wise stock in Purchases." : "No medicines yet. Add them in Medicines, then receive stock in Purchases."}</p>`;
+  scroller.scrollTop = top;
 }
 
 function cartTotals() {
@@ -327,50 +475,57 @@ function lineCalc(item, line) {
 }
 
 function renderCart() {
-  if ($("chosen-pack")) $("chosen-pack").textContent = packLabel();
+  const pack = packLabel();
+  if ($("chosen-pack")) {
+    $("chosen-pack").textContent = pack;
+    $("chosen-pack").hidden = pack === "Retail" || pack === "Wholesale";
+  }
+  const person = customer();
+  if ($("ticket-title")) $("ticket-title").textContent = person?.business_name || person?.name || "Counter";
+  if ($("ticket-who")) $("ticket-who").textContent = serviceLabel(state.service);
+  document.querySelectorAll(".service-tab").forEach((btn) => {
+    const on = btn.dataset.service === state.service;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const method = $("pay-method")?.value;
+  document.querySelectorAll(".pay-method").forEach((btn) => {
+    const on = btn.dataset.pay === method;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  renderPartyStrip();
   if (!state.cart.length) {
-    $("lines").innerHTML = `<p class="hint">${isGarmentShop() ? "Tap a size chip to add a piece. Stock is tracked by size and colour." : "Tap a medicine to add 1 loose unit. Use +/− for qty. Batch is picked FEFO (earliest expiry first)."}</p>`;
+    $("lines").innerHTML = `<p class="hint empty-order">${isGarmentShop() ? "Tap a size to add a piece." : "Add a product to start this order."}</p>`;
   } else {
-    $("lines").innerHTML = `<div class="pharm-bill-wrap"><table class="pharm-bill-table">
-      <thead><tr>
-        <th>${isGarmentShop() ? "Product" : "Medicine"}</th>
-        <th>${isGarmentShop() ? "Size" : "Batch No."}</th>
-        <th>${isGarmentShop() ? "Colour" : "Expiry"}</th>
-        <th>Pack</th>
-        <th>Qty</th>
-        <th class="pharm-n">MRP</th>
-        <th class="pharm-n">Rate</th>
-        <th class="pharm-n">GST</th>
-        <th class="pharm-n">Amount</th>
-      </tr></thead>
-      <tbody>${state.cart
-        .map((line) => {
-          const item = state.items.find((i) => i.id === line.itemId);
-          if (!item) return "";
-          const live = batchesFor(item.id);
-          const batch = Pharmacy.cartBatchPreview(live, item, line.qty, allBatchesFor(item.id));
-          const calc = lineCalc(item, line);
-          const unit = Pharmacy.looseUnitLabel(item);
-          return `<tr>
-            <td class="pharm-med">${escapeHtml(item.name)}${line.size ? ` · ${escapeHtml(line.size)}` : ""}${line.colour ? ` · ${escapeHtml(line.colour)}` : ""}</td>
-            <td>${escapeHtml(isGarmentShop() ? line.size || "—" : batch.batchNo)}</td>
-            <td>${escapeHtml(isGarmentShop() ? line.colour || "—" : batch.expiry)}</td>
-            <td>${escapeHtml(batch.pack)}</td>
-            <td>
-              <div class="qty">
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1" data-size="${escapeHtml(line.size || "")}" data-colour="${escapeHtml(line.colour || "")}" data-barcode="${escapeHtml(line.barcode || "")}">−</button>
-                <span>${line.qty} ${escapeHtml(line.size ? `${line.size}` : unit)}</span>
-                <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1" data-size="${escapeHtml(line.size || "")}" data-colour="${escapeHtml(line.colour || "")}" data-barcode="${escapeHtml(line.barcode || "")}">+</button>
-              </div>
-            </td>
-            <td class="pharm-n">${money(Pharmacy.looseMrp(item))}</td>
-            <td class="pharm-n">${money(rateFor(item))}</td>
-            <td class="pharm-n">${escapeHtml(String(Number(item.gst_rate) || 0))}%</td>
-            <td class="pharm-n">${money(calc.taxable + calc.gst)}</td>
-          </tr>`;
-        })
-        .join("")}</tbody>
-    </table></div>`;
+    $("lines").innerHTML = state.cart
+      .map((line) => {
+        const item = state.items.find((i) => i.id === line.itemId);
+        if (!item) return "";
+        const live = batchesFor(item.id);
+        const batch = Pharmacy.cartBatchPreview(live, item, line.qty, allBatchesFor(item.id));
+        const calc = lineCalc(item, line);
+        const batchBits = [batch.batchNo, batch.expiry].filter((bit) => bit && bit !== "—" && bit !== "OPEN" && bit !== "-");
+        const detail = isGarmentShop()
+          ? [line.size, line.colour].filter(Boolean).join(" · ")
+          : batchBits.join(" · ");
+        return `<article class="order-line">
+          <div class="order-thumb" style="${tileStyle(item.id)}">${escapeHtml((item.name || "?").charAt(0).toUpperCase())}</div>
+          <div class="order-copy">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span class="order-price">${money(rateFor(item))}${detail ? ` · ${escapeHtml(detail)}` : ""}</span>
+          </div>
+          <div class="order-side">
+            <span class="order-amt">${money(calc.taxable)}</span>
+            <div class="qty">
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="-1" data-size="${escapeHtml(line.size || "")}" data-colour="${escapeHtml(line.colour || "")}" data-barcode="${escapeHtml(line.barcode || "")}" aria-label="Reduce">−</button>
+              <span>${line.qty}X</span>
+              <button type="button" data-chg="${escapeHtml(item.id)}" data-d="1" data-size="${escapeHtml(line.size || "")}" data-colour="${escapeHtml(line.colour || "")}" data-barcode="${escapeHtml(line.barcode || "")}" aria-label="Add">+</button>
+            </div>
+          </div>
+        </article>`;
+      })
+      .join("");
   }
   const t = cartTotals();
   $("qty-total").textContent = String(t.qty);
@@ -383,6 +538,23 @@ function renderCart() {
   if ($("due-total")) $("due-total").textContent = money(t.due);
   $("btn-pay").disabled = state.cart.length === 0;
   $("btn-clear").disabled = state.cart.length === 0;
+}
+
+function renderPartyStrip() {
+  const row = $("party-strip");
+  if (!row) return;
+  const people = state.customers.slice(0, 12);
+  row.innerHTML = people
+    .map((c, index) => {
+      const name = c.business_name || c.name || "Customer";
+      const active = c.id === state.customerId;
+      const kind = c.type === "b2b" ? "Wholesale" : "Retail";
+      return `<button type="button" class="party-chip ${active ? "active" : ""}" data-customer="${escapeHtml(c.id)}">
+        <span class="party-badge">C${index + 1}</span>
+        <span class="party-copy"><span class="party-name">${escapeHtml(name)}</span><span class="party-meta">${kind}${active ? " · Active" : ""}</span></span>
+      </button>`;
+    })
+    .join("");
 }
 
 function renderCustomersSelect() {
@@ -398,6 +570,7 @@ function renderCustomersSelect() {
     state.customerId = walk?.id || "";
     if (state.customerId) $("customer").value = state.customerId;
   }
+  renderPartyStrip();
 }
 
 function renderPackChoice() {}
@@ -699,15 +872,17 @@ function paintHeader() {
 function applyVerticalUi() {
   const garment = isGarmentShop();
   document.body.classList.toggle("vertical-garment", garment);
+  document.body.classList.toggle("vertical-restaurant", isRestaurantShop());
   const chip = $("vertical-chip");
   if (chip) chip.textContent = garment ? "Garment" : state.company.business_category || "Pharmacy";
   const navMap = {
-    counter: garment ? "Counter bill" : "Pharmacy Bill",
+    counter: "Menu",
     items: garment ? "Products" : "Medicines",
     batches: garment ? "Inventory" : "Stock / Expiry",
   };
   document.querySelectorAll(".nav-btn[data-view]").forEach((btn) => {
-    if (navMap[btn.dataset.view]) btn.textContent = navMap[btn.dataset.view];
+    const label = btn.querySelector(".nav-label");
+    if (label && navMap[btn.dataset.view]) label.textContent = navMap[btn.dataset.view];
   });
   if ($("stock-heading")) $("stock-heading").textContent = garment ? "Size-wise inventory" : "Stock / Expiry";
   if ($("stock-lede")) {
@@ -757,6 +932,8 @@ function previewVerticalFromUrl() {
   state.company = { ...state.company, business_category: vertical };
   applyVerticalUi();
   if ($("po-lines")) $("po-lines").innerHTML = poLineHtml(activeItems()[0]);
+  renderCatalog();
+  renderCart();
 }
 
 async function loadToday() {
@@ -1216,26 +1393,40 @@ function paintReturnLines() {
     .join("") || `<p class="hint">Select a bill.</p>`;
 }
 
+function changeLineFrom(btn) {
+  addItem(btn.dataset.chg, Number(btn.dataset.d), {
+    size: btn.dataset.size,
+    colour: btn.dataset.colour,
+    barcode: btn.dataset.barcode,
+  });
+  renderCatalog();
+}
+
 $("catalog").addEventListener("click", (e) => {
+  const qtyBtn = e.target.closest("[data-chg]");
+  if (qtyBtn) {
+    changeLineFrom(qtyBtn);
+    return;
+  }
   const sizeBtn = e.target.closest("[data-add-size]");
   if (sizeBtn) {
     addItem(sizeBtn.dataset.addSize, 1, {
       size: sizeBtn.dataset.size,
       colour: sizeBtn.dataset.colour,
     });
+    renderCatalog();
     return;
   }
   const btn = e.target.closest("[data-add]");
-  if (btn) addItem(btn.dataset.add, 1);
+  if (btn) {
+    addItem(btn.dataset.add, 1);
+    renderCatalog();
+  }
 });
 $("lines").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-chg]");
   if (!btn) return;
-  addItem(btn.dataset.chg, Number(btn.dataset.d), {
-    size: btn.dataset.size,
-    colour: btn.dataset.colour,
-    barcode: btn.dataset.barcode,
-  });
+  changeLineFrom(btn);
 });
 
 $("items-table").addEventListener("click", async (e) => {
@@ -1330,6 +1521,7 @@ $("order-pane").addEventListener("click", (e) => {
     if ($("bill-paid")) $("bill-paid").value = o.amount_paid ?? "";
     showView("counter");
     renderCart();
+    renderCatalog();
     setHint(`Editing ${o.order_number}`, "ok");
   }
 });
@@ -1365,6 +1557,43 @@ $("customer").addEventListener("change", () => {
   renderCatalog();
   renderCart();
 });
+$("cat-row")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-category]");
+  if (!btn) return;
+  state.category = btn.dataset.category;
+  renderCatalog();
+});
+$("party-strip")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-customer]");
+  if (!btn || !$("customer")) return;
+  $("customer").value = btn.dataset.customer;
+  $("customer").dispatchEvent(new Event("change"));
+});
+$("service-tabs")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-service]");
+  if (!btn) return;
+  state.service = btn.dataset.service;
+  renderCart();
+});
+$("pay-methods")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-pay]");
+  if (!btn || !$("pay-method")) return;
+  $("pay-method").value = btn.dataset.pay;
+  $("pay-method").dispatchEvent(new Event("change"));
+});
+function toggleBillDrawer(force) {
+  const drawer = $("bill-drawer");
+  if (!drawer) return;
+  const open = typeof force === "boolean" ? force : drawer.hidden;
+  drawer.hidden = !open;
+  $("bill-filter")?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) $("customer")?.focus();
+}
+$("bill-filter")?.addEventListener("click", () => toggleBillDrawer());
+$("ticket-edit")?.addEventListener("click", () => toggleBillDrawer(true));
+$("nav-toggle")?.addEventListener("click", () => {
+  document.querySelector(".app")?.classList.toggle("nav-collapsed");
+});
   $("btn-clear").addEventListener("click", () => {
   state.cart = [];
   state.lastPack = null;
@@ -1372,6 +1601,7 @@ $("customer").addEventListener("change", () => {
   clearBillFields();
   setHint("Cart cleared");
   renderCart();
+  renderCatalog();
 });
 
 $("btn-pay").addEventListener("click", async () => {
