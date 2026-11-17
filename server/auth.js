@@ -448,7 +448,7 @@ export function registerAuth(app) {
         ],
       );
       await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE id = ?", [sid]);
-      await recordAdminLogin(user, clientIp(req));
+      await recordAdminLogin(user, clientIp(req), req.body || {});
       setCookie(res, "pos_sid", token, ttl, req);
       runTenant({ businessId: user.business_id, branchId: user.branch_id, user }, async () => {
         await audit("User Login", { module: "auth" }, req);
@@ -622,7 +622,7 @@ export function registerAuth(app) {
         ],
       );
       await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", [sha256(token)]);
-      await recordAdminLogin(user, clientIp(req));
+      await recordAdminLogin(user, clientIp(req), req.body || {});
       setCookie(res, "pos_sid", token, ttl, req);
       res.json({
         ok: true,
@@ -693,7 +693,7 @@ export function registerAuth(app) {
     if (token) {
       const staff = await loadStaffSession(token);
       await query("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", [sha256(token)]);
-      if (staff?.user && !staff.impersonatorAdminId) await recordAdminLogout(staff.user);
+      if (staff?.user && !staff.impersonatorAdminId) await recordAdminLogout(staff.user, req.body || {});
     }
     if (master) {
       await query("UPDATE platform_sessions SET revoked_at = NOW() WHERE token_hash = ?", [

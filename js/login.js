@@ -44,6 +44,7 @@ loginForm.addEventListener("submit", async (e) => {
         identifier: fd.get("identifier"),
         password: fd.get("password"),
         remember: Boolean(fd.get("remember")),
+        ...(window.POSDevice?.payload?.() || {}),
       }),
     });
     if (!res.ok) {

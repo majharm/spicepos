@@ -250,8 +250,39 @@ function pos_ensure_business_presence() {
     pos_ensure_columns("business_admin_presence", [
       "location_source" => "VARCHAR(16) NULL",
       "accuracy_m" => "INT NULL",
+      "device_id" => "VARCHAR(64) NOT NULL DEFAULT ''",
+      "device_label" => "VARCHAR(40) NULL",
     ]);
   }
+  $res = $db->query("SHOW INDEX FROM business_admin_presence WHERE Key_name = 'PRIMARY'");
+  $cols = [];
+  if ($res) {
+    while ($row = $res->fetch_assoc()) $cols[] = (string) ($row["Column_name"] ?? "");
+    $res->free();
+  }
+  $cols = array_values(array_unique(array_filter($cols)));
+  sort($cols);
+  if ($cols === ["staff_user_id"]) {
+    @$db->query("ALTER TABLE business_admin_presence DROP PRIMARY KEY, ADD PRIMARY KEY (staff_user_id, device_id)");
+  }
+}
+
+function pos_device_id($body) {
+  $raw = is_array($body) ? trim((string) ($body["deviceId"] ?? $body["device_id"] ?? "")) : "";
+  return preg_match('/^[A-Za-z0-9_-]{8,64}$/', $raw) ? $raw : "";
+}
+
+function pos_device_label($body) {
+  $raw = is_array($body) ? trim((string) ($body["deviceLabel"] ?? $body["device_label"] ?? "")) : "";
+  $raw = preg_replace('/\s+/', " ", $raw);
+  return substr($raw, 0, 40);
+}
+
+function pos_drop_blank_device($userId, $device) {
+  if ($device === "") return;
+  try {
+    pos_q("DELETE FROM business_admin_presence WHERE staff_user_id = ? AND device_id = ''", "s", [(string) $userId]);
+  } catch (Exception $e) { /* the legacy row can stay until the next heartbeat */ }
 }
 
 function pos_device_point($body) {
@@ -270,18 +301,20 @@ function pos_admin_role($role) {
   return in_array((string) $role, ["business_admin", "resort_owner"], true);
 }
 
-function pos_record_admin_login($user, $ip) {
+function pos_record_admin_login($user, $ip, $body = null) {
   if (!is_array($user) || !pos_admin_role($user["role"] ?? "")) return;
   $id = (string) ($user["id"] ?? "");
   $biz = (string) ($user["business_id"] ?? "");
   if ($id === "" || $biz === "") return;
   try {
     pos_ensure_business_presence();
+    $device = pos_device_id($body);
     pos_q(
-      "INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
-       VALUES (?, ?, ?, NOW(), NULL, NULL)
+      "INSERT INTO business_admin_presence (staff_user_id, business_id, device_id, device_label, ip, login_at, heartbeat_at, logout_at)
+       VALUES (?, ?, ?, ?, ?, NOW(), NULL, NULL)
        ON DUPLICATE KEY UPDATE
          business_id = VALUES(business_id),
+         device_label = IF(VALUES(device_label) = '', device_label, VALUES(device_label)),
          country = IF(ip <=> VALUES(ip), country, NULL),
          region = IF(ip <=> VALUES(ip), region, NULL),
          city = IF(ip <=> VALUES(ip), city, NULL),
@@ -292,9 +325,10 @@ function pos_record_admin_login($user, $ip) {
          heartbeat_at = NULL,
          logout_at = NULL,
          updated_at = NOW()",
-      "sss",
-      [$id, $biz, substr(trim((string) $ip), 0, 64)]
+      "sssss",
+      [$id, $biz, $device, pos_device_label($body), substr(trim((string) $ip), 0, 64)]
     );
+    pos_drop_blank_device($id, $device);
   } catch (Exception $e) { /* presence must not block sign-in */ }
 }
 
@@ -304,14 +338,17 @@ function pos_record_admin_heartbeat($user, $ip, $body = null) {
   $id = (string) $user["id"];
   $biz = (string) $user["business_id"];
   $clean = substr(trim((string) $ip), 0, 64);
+  $deviceId = pos_device_id($body);
+  $label = pos_device_label($body);
   $device = pos_device_point($body);
   if ($device) {
     pos_q(
       "INSERT INTO business_admin_presence
-         (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at, lat, lon, location_source, accuracy_m)
-       VALUES (?, ?, ?, NULL, NOW(), NULL, ?, ?, 'device', ?)
+         (staff_user_id, business_id, device_id, device_label, ip, login_at, heartbeat_at, logout_at, lat, lon, location_source, accuracy_m)
+       VALUES (?, ?, ?, ?, ?, NULL, NOW(), NULL, ?, ?, 'device', ?)
        ON DUPLICATE KEY UPDATE
          business_id = VALUES(business_id),
+         device_label = IF(VALUES(device_label) = '', device_label, VALUES(device_label)),
          heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
          logout_at = NULL,
          ip = VALUES(ip),
@@ -323,15 +360,16 @@ function pos_record_admin_heartbeat($user, $ip, $body = null) {
          region = NULL,
          city = NULL,
          updated_at = NOW()",
-      "sssddi",
-      [$id, $biz, $clean, $device["lat"], $device["lon"], $device["accuracy"]]
+      "sssssddi",
+      [$id, $biz, $deviceId, $label, $clean, $device["lat"], $device["lon"], $device["accuracy"]]
     );
   } else {
     pos_q(
-      "INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
-       VALUES (?, ?, ?, NULL, NOW(), NULL)
+      "INSERT INTO business_admin_presence (staff_user_id, business_id, device_id, device_label, ip, login_at, heartbeat_at, logout_at)
+       VALUES (?, ?, ?, ?, ?, NULL, NOW(), NULL)
        ON DUPLICATE KEY UPDATE
          business_id = VALUES(business_id),
+         device_label = IF(VALUES(device_label) = '', device_label, VALUES(device_label)),
          heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
          logout_at = NULL,
          country = IF(IFNULL(location_source, '') = 'device', country, IF(ip <=> VALUES(ip), country, NULL)),
@@ -341,18 +379,28 @@ function pos_record_admin_heartbeat($user, $ip, $body = null) {
          lon = IF(IFNULL(location_source, '') = 'device', lon, IF(ip <=> VALUES(ip), lon, NULL)),
          ip = VALUES(ip),
          updated_at = NOW()",
-      "sss",
-      [$id, $biz, $clean]
+      "sssss",
+      [$id, $biz, $deviceId, $label, $clean]
     );
   }
+  pos_drop_blank_device($id, $deviceId);
   return ["ok" => true, "tracked" => true, "onlineWindowSeconds" => 90];
 }
 
-function pos_record_admin_logout($user) {
+function pos_record_admin_logout($user, $body = null) {
   if (!is_array($user) || !pos_admin_role($user["role"] ?? "")) return;
   try {
     pos_ensure_business_presence();
-    pos_q("UPDATE business_admin_presence SET logout_at = NOW(), updated_at = NOW() WHERE staff_user_id = ?", "s", [(string) $user["id"]]);
+    $device = pos_device_id($body);
+    if ($device !== "") {
+      pos_q(
+        "UPDATE business_admin_presence SET logout_at = NOW(), updated_at = NOW() WHERE staff_user_id = ? AND device_id = ?",
+        "ss",
+        [(string) $user["id"], $device]
+      );
+    } else {
+      pos_q("UPDATE business_admin_presence SET logout_at = NOW(), updated_at = NOW() WHERE staff_user_id = ?", "s", [(string) $user["id"]]);
+    }
   } catch (Exception $e) { /* presence must not block sign-out */ }
 }
 
@@ -4102,7 +4150,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $branchId]
       );
       try { pos_q("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($token)]); } catch (Exception $e) { /* seen-at is optional */ }
-      pos_record_admin_login($user, pos_ip());
+      pos_record_admin_login($user, pos_ip(), $body);
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
         "ok" => true,
@@ -4190,7 +4238,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         [pos_uuid(), $user["id"], pos_sha256($token), $ttl, $user["business_id"], pos_ip(), pos_ua(), $user["branch_id"]]
       );
       try { pos_q("UPDATE staff_sessions SET last_seen_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($token)]); } catch (Exception $e) { /* seen-at is optional */ }
-      pos_record_admin_login($user, pos_ip());
+      pos_record_admin_login($user, pos_ip(), $body);
       pos_set_cookie("pos_sid", $token, $ttl);
       pos_send(200, [
         "ok" => true,
@@ -4206,7 +4254,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       if ($sid) {
         $staff = pos_staff_session();
         pos_q("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($sid)]);
-        if ($staff && empty($staff["impersonatorAdminId"])) pos_record_admin_logout($staff["user"] ?? null);
+        if ($staff && empty($staff["impersonatorAdminId"])) pos_record_admin_logout($staff["user"] ?? null, $body);
       }
       if ($master) pos_q("UPDATE platform_sessions SET revoked_at = NOW() WHERE token_hash = ?", "s", [pos_sha256($master)]);
       pos_clear_cookie("pos_sid");

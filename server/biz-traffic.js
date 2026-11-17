@@ -26,6 +26,27 @@ export async function ensureBusinessPresence() {
   );
   await query(`ALTER TABLE business_admin_presence ADD COLUMN location_source VARCHAR(16) NULL`).catch(() => {});
   await query(`ALTER TABLE business_admin_presence ADD COLUMN accuracy_m INT NULL`).catch(() => {});
+  await query(`ALTER TABLE business_admin_presence ADD COLUMN device_id VARCHAR(64) NOT NULL DEFAULT ''`).catch(() => {});
+  await query(`ALTER TABLE business_admin_presence ADD COLUMN device_label VARCHAR(40) NULL`).catch(() => {});
+  const keys = await query(`SHOW INDEX FROM business_admin_presence WHERE Key_name = 'PRIMARY'`).catch(() => []);
+  const cols = [...new Set((keys || []).map((row) => String(row.Column_name || row.column_name || "")))].filter(Boolean).sort();
+  if (cols.length === 1 && cols[0] === "staff_user_id") {
+    await query(`ALTER TABLE business_admin_presence DROP PRIMARY KEY, ADD PRIMARY KEY (staff_user_id, device_id)`);
+  }
+}
+
+function cleanDeviceId(point) {
+  const raw = String(point?.deviceId || point?.device_id || "").trim();
+  return /^[A-Za-z0-9_-]{8,64}$/.test(raw) ? raw : "";
+}
+
+function cleanDeviceLabel(point) {
+  return String(point?.deviceLabel || point?.device_label || "").replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+async function dropBlankDevice(userId, device) {
+  if (!device) return;
+  await query(`DELETE FROM business_admin_presence WHERE staff_user_id = ? AND device_id = ''`, [userId]).catch(() => {});
 }
 
 function devicePoint(point) {
@@ -46,16 +67,19 @@ function isAdmin(user) {
   return Boolean(user?.id && user?.business_id && ADMIN_ROLES.includes(String(user.role || "")));
 }
 
-export async function recordAdminLogin(user, ip) {
+export async function recordAdminLogin(user, ip, point) {
   if (!isAdmin(user)) return;
   try {
     await ensureBusinessPresence();
     const clean = String(ip || "").trim().slice(0, 64);
+    const device = cleanDeviceId(point);
+    const label = cleanDeviceLabel(point);
     await query(
-      `INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
-       VALUES (?, ?, ?, NOW(), NULL, NULL)
+      `INSERT INTO business_admin_presence (staff_user_id, business_id, device_id, device_label, ip, login_at, heartbeat_at, logout_at)
+       VALUES (?, ?, ?, ?, ?, NOW(), NULL, NULL)
        ON DUPLICATE KEY UPDATE
          business_id = VALUES(business_id),
+         device_label = IF(VALUES(device_label) = '', device_label, VALUES(device_label)),
          country = IF(ip <=> VALUES(ip), country, NULL),
          region = IF(ip <=> VALUES(ip), region, NULL),
          city = IF(ip <=> VALUES(ip), city, NULL),
@@ -66,8 +90,9 @@ export async function recordAdminLogin(user, ip) {
          heartbeat_at = NULL,
          logout_at = NULL,
          updated_at = NOW()`,
-      [user.id, user.business_id, clean],
+      [user.id, user.business_id, device, label, clean],
     );
+    await dropBlankDevice(user.id, device);
   } catch (err) {
     console.error("admin presence login", err.message);
   }
@@ -77,14 +102,17 @@ export async function recordAdminHeartbeat(user, ip, point) {
   if (!isAdmin(user)) return { ok: true, tracked: false };
   await ensureBusinessPresence();
   const clean = String(ip || "").trim().slice(0, 64);
+  const deviceId = cleanDeviceId(point);
+  const label = cleanDeviceLabel(point);
   const device = devicePoint(point);
   if (device) {
     await query(
       `INSERT INTO business_admin_presence
-         (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at, lat, lon, location_source, accuracy_m)
-       VALUES (?, ?, ?, NULL, NOW(), NULL, ?, ?, 'device', ?)
+         (staff_user_id, business_id, device_id, device_label, ip, login_at, heartbeat_at, logout_at, lat, lon, location_source, accuracy_m)
+       VALUES (?, ?, ?, ?, ?, NULL, NOW(), NULL, ?, ?, 'device', ?)
        ON DUPLICATE KEY UPDATE
          business_id = VALUES(business_id),
+         device_label = IF(VALUES(device_label) = '', device_label, VALUES(device_label)),
          heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
          logout_at = NULL,
          ip = VALUES(ip),
@@ -96,14 +124,15 @@ export async function recordAdminHeartbeat(user, ip, point) {
          region = NULL,
          city = NULL,
          updated_at = NOW()`,
-      [user.id, user.business_id, clean, device.lat, device.lon, device.accuracy],
+      [user.id, user.business_id, deviceId, label, clean, device.lat, device.lon, device.accuracy],
     );
   } else {
     await query(
-      `INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
-       VALUES (?, ?, ?, NULL, NOW(), NULL)
+      `INSERT INTO business_admin_presence (staff_user_id, business_id, device_id, device_label, ip, login_at, heartbeat_at, logout_at)
+       VALUES (?, ?, ?, ?, ?, NULL, NOW(), NULL)
        ON DUPLICATE KEY UPDATE
          business_id = VALUES(business_id),
+         device_label = IF(VALUES(device_label) = '', device_label, VALUES(device_label)),
          heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
          logout_at = NULL,
          country = IF(IFNULL(location_source, '') = 'device', country, IF(ip <=> VALUES(ip), country, NULL)),
@@ -113,20 +142,29 @@ export async function recordAdminHeartbeat(user, ip, point) {
          lon = IF(IFNULL(location_source, '') = 'device', lon, IF(ip <=> VALUES(ip), lon, NULL)),
          ip = VALUES(ip),
          updated_at = NOW()`,
-      [user.id, user.business_id, clean],
+      [user.id, user.business_id, deviceId, label, clean],
     );
   }
+  await dropBlankDevice(user.id, deviceId);
   return { ok: true, tracked: true, onlineWindowSeconds: 90 };
 }
 
-export async function recordAdminLogout(user) {
+export async function recordAdminLogout(user, point) {
   if (!isAdmin(user)) return;
   try {
     await ensureBusinessPresence();
-    await query(
-      `UPDATE business_admin_presence SET logout_at = NOW(), updated_at = NOW() WHERE staff_user_id = ?`,
-      [user.id],
-    );
+    const device = cleanDeviceId(point);
+    if (device) {
+      await query(
+        `UPDATE business_admin_presence SET logout_at = NOW(), updated_at = NOW() WHERE staff_user_id = ? AND device_id = ?`,
+        [user.id, device],
+      );
+    } else {
+      await query(
+        `UPDATE business_admin_presence SET logout_at = NOW(), updated_at = NOW() WHERE staff_user_id = ?`,
+        [user.id],
+      );
+    }
   } catch (err) {
     console.error("admin presence logout", err.message);
   }
@@ -153,6 +191,7 @@ export async function masterBizTraffic() {
               COALESCE(p.login_at, s.created_at) AS login_at,
               p.heartbeat_at, p.logout_at,
               p.country, p.region, p.city, p.lat, p.lon, p.location_source, p.accuracy_m,
+              COALESCE(p.device_id, '') AS device_id, COALESCE(p.device_label, '') AS device_label,
               CASE
                 WHEN p.heartbeat_at IS NOT NULL
                   AND p.heartbeat_at >= DATE_SUB(NOW(), INTERVAL 90 SECOND)
@@ -193,6 +232,8 @@ export async function masterBizTraffic() {
       lon: row.lon,
       locationSource: row.location_source === "device" ? "device" : "",
       accuracy: row.accuracy_m,
+      deviceId: row.device_id || "",
+      deviceLabel: row.device_label || "",
       status: row.status,
       activeToday: Number(row.active_today) === 1,
     }));

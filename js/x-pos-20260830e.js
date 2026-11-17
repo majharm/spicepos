@@ -324,10 +324,13 @@
         submit.textContent = "Signing in…";
       }
       try {
+        const device = window.POSDevice?.payload?.() || {};
         const payload = {
           identifier: fd.get("identifier"),
           password: fd.get("password"),
           remember: Boolean(fd.get("remember")),
+          deviceId: device.deviceId || "",
+          deviceLabel: device.deviceLabel || "",
         };
         let result = null;
         for (const url of LOGIN_URLS) {

@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#073B82" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ATAV POS" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/pwa-icon-192.png" />
     <meta name="robots" content="noindex, nofollow" />
     <meta http-equiv="Cache-Control" content="private, max-age=300" />
     <title>Sign in · ATAV POS</title>
@@ -11,7 +17,7 @@
     <link rel="stylesheet" href="./css/pos.css?v=20260905deploy136" />
     <link rel="stylesheet" href="./css/saas.css?v=20261030forgot1" />
     <link rel="stylesheet" href="./css/login-page.css?v=20261023sub1" />
-    <link rel="stylesheet" href="./css/mobile-app.css?v=20261030forgot1" />
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261118pwa1" />
   </head>
   <body class="auth-body auth-zoho">
     <section id="m-welcome" class="m-welcome" aria-label="Welcome to ATAV POS">
@@ -50,6 +56,8 @@
       <div class="m-welcome-actions">
         <button type="button" class="m-btn m-btn-primary" id="m-go-signup">Sign up</button>
         <button type="button" class="m-btn m-btn-ghost" id="m-go-signin">Sign in</button>
+        <button type="button" class="m-btn m-btn-ghost" data-pwa-install hidden>Install app on this device</button>
+        <p class="pwa-ios" data-pwa-ios hidden>On iPhone, tap Share, then Add to Home Screen. Each phone keeps its own ATAV POS.</p>
       </div>
     </section>
     <div class="auth-shell auth-shell-v2 auth-shell-zoho auth-shell-poster">
@@ -339,8 +347,9 @@
     </div>
     <script src="./js/support.js?v=20260905deploy136"></script>
     <script src="./js/pos-api.js?v=20261031growth2"></script>
+    <script src="./js/pos-device.js?v=20261118pwa1"></script>
     <script src="./js/login-page.js?v=20261023logo1"></script>
-    <script src="./js/x-pos-20260830e.js?v=20261030forgot1"></script>
+    <script src="./js/x-pos-20260830e.js?v=20261118pwa1"></script>
     <script src="./js/mobile-app.js?v=20261107profit1"></script>
     <script src="./js/ga4.js?v=20260927seo241" defer></script>
   </body>

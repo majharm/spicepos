@@ -18,7 +18,7 @@ test("Forgot password emails a code and saves a new password", () => {
   const phone = read("css/mobile-app.css");
   const panel = login.slice(login.indexOf('id="forgot-panel"'), login.indexOf('id="signup-form"'));
 
-  assert.match(login, /x-pos-20260830e\.js\?v=20261030forgot1/);
+  assert.match(login, /x-pos-20260830e\.js\?v=20261118pwa1/);
   assert.match(panel, /id="forgot-id"/);
   assert.match(panel, /id="forgot-code"/);
   assert.match(panel, /id="forgot-next"/);

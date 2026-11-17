@@ -715,7 +715,7 @@ function pos_master_biz_traffic() {
     "businesses" => [],
     "summary" => ["total" => 0, "online" => 0, "recent" => 0, "offline" => 0, "activeToday" => 0, "plotted" => 0],
     "pollSeconds" => 30,
-    "note" => "A pin is the business admin's device location when they allow it on their phone or computer. Otherwise it is estimated from the IP address and is not an exact street address. A login by itself does not mark a business online.",
+    "note" => "Each phone, tablet, and computer keeps its own pin. A pin is that device's location when the admin allows it. Otherwise it is estimated from the IP address and is not an exact street address. A login by itself does not mark a business online.",
   ];
   try {
     pos_ensure_business_presence();
@@ -741,6 +741,7 @@ function pos_master_biz_traffic() {
               COALESCE(p.login_at, s.created_at) AS login_at,
               p.heartbeat_at, p.logout_at,
               p.country, p.region, p.city, p.lat, p.lon, p.location_source, p.accuracy_m,
+              COALESCE(p.device_id, '') AS device_id, COALESCE(p.device_label, '') AS device_label,
               CASE
                 WHEN p.heartbeat_at IS NOT NULL
                   AND p.heartbeat_at >= DATE_SUB(NOW(), INTERVAL 90 SECOND)
@@ -767,6 +768,8 @@ function pos_master_biz_traffic() {
     $rank = ["offline" => 1, "recent" => 2, "online" => 3];
     foreach ($rows as $row) {
       $id = (string) $row["business_id"];
+      $deviceId = (string) ($row["device_id"] ?? "");
+      $key = $deviceId !== "" ? $id . "\n" . $deviceId : $id;
       $status = (string) ($row["status"] ?? "offline");
       $lat = isset($row["lat"]) ? (float) $row["lat"] : 0;
       $lon = isset($row["lon"]) ? (float) $row["lon"] : 0;
@@ -792,16 +795,18 @@ function pos_master_biz_traffic() {
         "lon" => $plotted ? $lon : null,
         "locationSource" => $device ? "device" : "",
         "accuracy" => isset($row["accuracy_m"]) ? (int) $row["accuracy_m"] : null,
+        "deviceId" => $deviceId,
+        "deviceLabel" => (string) ($row["device_label"] ?? ""),
         "status" => $status,
         "activeToday" => (int) ($row["active_today"] ?? 0) === 1,
         "local" => $local,
         "plotted" => $plotted,
       ];
-      if (!isset($best[$id]) || ($rank[$status] ?? 0) > ($rank[$best[$id]["status"]] ?? 0)) {
-        if (isset($best[$id]) && !empty($best[$id]["activeToday"])) $item["activeToday"] = true;
-        $best[$id] = $item;
+      if (!isset($best[$key]) || ($rank[$status] ?? 0) > ($rank[$best[$key]["status"]] ?? 0)) {
+        if (isset($best[$key]) && !empty($best[$key]["activeToday"])) $item["activeToday"] = true;
+        $best[$key] = $item;
       } elseif (!empty($item["activeToday"])) {
-        $best[$id]["activeToday"] = true;
+        $best[$key]["activeToday"] = true;
       }
     }
     $lookups = 0;
@@ -837,7 +842,7 @@ function pos_master_biz_traffic() {
       $best[$id]["plotted"] = true;
       try {
         pos_q(
-          "UPDATE business_admin_presence SET country = ?, region = ?, city = ?, lat = ?, lon = ? WHERE ip = ? AND (lat IS NULL OR lat = 0)",
+          "UPDATE business_admin_presence SET country = ?, region = ?, city = ?, lat = ?, lon = ? WHERE ip = ? AND IFNULL(location_source, '') <> 'device' AND (lat IS NULL OR lat = 0)",
           "sssdds",
           [$hit["country"] ?? "", $hit["region"] ?? "", $hit["city"] ?? "", (float) $hit["lat"], (float) $hit["lon"], $item["ip"]]
         );

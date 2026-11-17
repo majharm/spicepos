@@ -110,6 +110,42 @@ test("filters and popups keep business details and escape text", () => {
   assert.deepEqual(choices.category, ["Grocery", "Pharmacy"]);
 });
 
+test("each device of one business keeps its own pin", () => {
+  const rows = M.foldBusinessAdmins([
+    {
+      businessId: "b1",
+      businessName: "Spice",
+      deviceId: "phonephone",
+      deviceLabel: "Android app",
+      category: "Grocery",
+      ip: "10.1.1.1",
+      lat: 19.07,
+      lon: 72.87,
+      locationSource: "device",
+      heartbeatAt: new Date(now - 10 * 1000).toISOString(),
+    },
+    {
+      businessId: "b1",
+      businessName: "Spice",
+      deviceId: "countercounter",
+      deviceLabel: "Windows browser",
+      category: "Grocery",
+      ip: "10.1.1.2",
+      lat: 18.52,
+      lon: 73.85,
+      locationSource: "device",
+      heartbeatAt: new Date(now - 20 * 1000).toISOString(),
+    },
+  ], now);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].plotted, true);
+  assert.equal(rows[1].plotted, true);
+  assert.notEqual(rows[0].deviceId, rows[1].deviceId);
+  const html = M.popupHtml(rows.find((row) => row.deviceLabel === "Android app"));
+  assert.match(html, /Device Android app/);
+  assert.match(html, /Device location/);
+});
+
 test("a device fix is plotted even on a private network", () => {
   const rows = M.foldBusinessAdmins([{
     businessId: "b8",
@@ -163,11 +199,17 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   const auth = read("server/auth.js");
   const php = read("pos-php-core.php");
   assert.match(html, /data-tab="bizmap"/);
-  assert.match(html, /biz-traffic-map\.js\?v=20261117loc1/);
+  assert.match(html, /biz-traffic-map\.js\?v=20261118pwa1/);
   assert.match(html, /vendor\/leaflet\/leaflet\.js\?v=20261117map1/);
   assert.match(html, /master\.js\?v=20261117gmap2/);
-  assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261117loc1/);
+  assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261118pwa1/);
+  assert.match(read("index.html"), /manifest\.webmanifest/);
+  assert.match(read("index.html"), /pos-device\.js\?v=20261118pwa1/);
+  assert.match(read("login.html"), /manifest\.webmanifest/);
+  assert.match(read("sw.js"), /pathname\.startsWith\("\/api\/"\)/);
+  assert.match(read("js/pos-device.js"), /pos\.device\.id/);
   assert.match(read("js/admin-heartbeat.js"), /\/api\/session\/heartbeat/);
+  assert.match(read("js/admin-heartbeat.js"), /POSDevice/);
   assert.match(read("js/admin-heartbeat.js"), /enableHighAccuracy: true/);
   assert.match(read("js/admin-heartbeat.js"), /reply\?\.data\?\.tracked/);
   assert.match(read("js/admin-heartbeat.js"), /visibilityState === "hidden"/);
@@ -193,6 +235,8 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   assert.match(read("server/biz-traffic.js"), /location_source = 'device'/);
   assert.match(read("pos-master-live.php"), /shopCity/);
   assert.match(read("pos-php-core.php"), /function pos_device_point/);
+  assert.match(read("server/biz-traffic.js"), /ADD PRIMARY KEY \(staff_user_id, device_id\)/);
+  assert.match(read("pos-php-core.php"), /function pos_device_id/);
   const board = M.render({ businesses: [], summary: { total: 0, online: 0, offline: 0, activeToday: 0 } });
   assert.match(board, /Total businesses/);
   assert.match(board, /Online now/);

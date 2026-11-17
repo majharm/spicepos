@@ -6,6 +6,7 @@
   let track = false;
   let asking = false;
   let fix = null;
+  let fixAt = 0;
 
   function remember(pos) {
     const coords = pos?.coords;
@@ -15,11 +16,13 @@
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     const first = !fix;
     fix = { lat, lon, accuracy: Number(coords.accuracy) };
+    fixAt = Date.now();
     if (first && document.visibilityState !== "hidden") send();
   }
 
   function askLocation() {
     if (!track || asking || !navigator.geolocation) return;
+    if (fix && Date.now() - fixAt < 120000) return;
     asking = true;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -34,11 +37,12 @@
   function send() {
     if (document.visibilityState === "hidden") return;
     if (typeof window.posRequest !== "function") return;
-    const body = JSON.stringify(fix || {});
+    const device = window.POSDevice?.payload?.() || {};
+    const body = JSON.stringify({ ...(fix || {}), ...device });
     window.posRequest("/api/session/heartbeat", { method: "POST", body }).then((reply) => {
       if (reply?.data?.tracked === true) {
         track = true;
-        if (!fix) askLocation();
+        askLocation();
       } else if (reply?.data?.tracked === false) {
         track = false;
       }

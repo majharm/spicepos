@@ -1009,3 +1009,11 @@
   .daily-sales-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reports-desk .daily-sales-block .table-wrap { margin: 0 -4px; }
 }
+[data-pwa-install][hidden],
+[data-pwa-ios][hidden] { display: none !important; }
+.pwa-ios {
+  margin: 8px 0 0;
+  color: var(--m-muted, #64748b);
+  font-size: 13px;
+  line-height: 1.4;
+}

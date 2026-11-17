@@ -5,7 +5,7 @@
   const STATUS_RANK = { online: 3, recent: 2, offline: 1 };
   const COLORS = { online: "#22c55e", recent: "#f59e0b", offline: "#94a3b8" };
   const GOOGLE_MAP_KEY = "AIzaSyAG8q32DcFtFKmgK3V20L4K_FsN4lI3jB4";
-  const NOTE = "A pin is the business admin's device location when they allow it on their phone or computer. Otherwise it is estimated from the IP address and is not an exact street address. A login by itself does not mark a business online.";
+  const NOTE = "Each phone, tablet, and computer keeps its own pin. A pin is that device's location when the admin allows it. Otherwise it is estimated from the IP address and is not an exact street address. A login by itself does not mark a business online.";
   let activeMap = null;
 
   function esc(value) {
@@ -109,14 +109,17 @@
         lon: row?.lon,
         locationSource: row?.locationSource === "device" || row?.location_source === "device" ? "device" : "",
         accuracy: row?.accuracy,
+        deviceId: String(row?.deviceId || row?.device_id || "").trim(),
+        deviceLabel: String(row?.deviceLabel || row?.device_label || "").trim(),
         status,
         activeToday: Boolean(activeToday),
         local: isPrivateIp(row?.ip),
       };
       place.plotted = located(place);
-      const prev = byBusiness.get(businessId);
+      const key = place.deviceId ? `${businessId}\n${place.deviceId}` : businessId;
+      const prev = byBusiness.get(key);
       if (!prev) {
-        byBusiness.set(businessId, place);
+        byBusiness.set(key, place);
         continue;
       }
       const better = (STATUS_RANK[status] || 0) - (STATUS_RANK[prev.status] || 0);
@@ -124,7 +127,7 @@
       const newer = stamp(place.lastActive) - stamp(prev.lastActive);
       if (better > 0 || (better === 0 && (device > 0 || (device === 0 && newer > 0)))) {
         place.activeToday = place.activeToday || prev.activeToday;
-        byBusiness.set(businessId, place);
+        byBusiness.set(key, place);
       } else if (activeToday) {
         prev.activeToday = true;
       }
@@ -275,9 +278,11 @@
       : row.placeSource === "shop"
         ? "Plotted from the shop city. The admin IP did not resolve."
         : "Approximate IP location, not an exact address.";
+    const device = row.deviceLabel ? `<span>Device ${esc(row.deviceLabel)}</span>` : "";
     return `<div class="biz-pop">
       <strong>${esc(row.businessName)}</strong>
       <span class="biz-pop-status is-${esc(row.status)}">${esc(statusLabel(row.status))}</span>
+      ${device}
       <span>Business ID ${esc(row.businessId)}</span>
       <span>Owner ${esc(row.ownerName)}</span>
       <span>IP ${esc(row.ip || "—")}</span>
@@ -302,7 +307,7 @@
     const summary = summarize(rows);
     return `<div class="ip-dash biz-dash" id="biz-map-board">
       <div class="ip-dash-stats">
-        <div class="ip-dash-stat"><label>Total businesses</label><strong id="biz-total">${esc(summary.total || 0)}</strong><small>Registered admins</small></div>
+        <div class="ip-dash-stat"><label>Total businesses</label><strong id="biz-total">${esc(summary.total || 0)}</strong><small>Shops and devices</small></div>
         <div class="ip-dash-stat"><label>Online now</label><strong id="biz-online">${esc(summary.online || 0)}</strong><small>Heartbeat in 90 seconds</small></div>
         <div class="ip-dash-stat"><label>Offline</label><strong id="biz-offline">${esc(summary.offline || 0)}</strong><small>No recent heartbeat</small></div>
         <div class="ip-dash-stat"><label>Active today</label><strong id="biz-today">${esc(summary.activeToday || 0)}</strong><small>Heartbeat today</small></div>
@@ -448,7 +453,11 @@
       set("#biz-today", summary.activeToday);
     }
 
-    function paint() {
+    function pinId(row) {
+    return row?.deviceId ? `${row.businessId}:${row.deviceId}` : String(row?.businessId || "");
+  }
+
+  function paint() {
       const shown = filterBusinesses(rows, filters);
       paintStats();
       const line = board.querySelector("#biz-status-line");
@@ -458,8 +467,8 @@
       const body = board.querySelector("#biz-rows");
       if (body) {
         const slice = shown.slice(0, 100);
-        body.innerHTML = slice.map((row) => `<tr data-biz-id="${esc(row.businessId)}" class="${row.businessId === openId ? "is-on" : ""}">
-          <td><strong>${esc(row.businessName)}</strong><small>${esc(row.category)}</small></td>
+        body.innerHTML = slice.map((row) => `<tr data-pin-id="${esc(pinId(row))}" class="${pinId(row) === openId ? "is-on" : ""}">
+          <td><strong>${esc(row.businessName)}</strong><small>${esc([row.deviceLabel, row.category].filter(Boolean).join(" · "))}</small></td>
           <td>${esc(row.city || row.region || row.country || (row.local ? "Private network" : "—"))}</td>
           <td><span class="biz-status is-${esc(row.status)}">${esc(statusLabel(row.status))}</span></td>
         </tr>`).join("") || `<tr><td colspan="3">No businesses match these filters.</td></tr>`;
@@ -479,7 +488,7 @@
         const marker = new mapsApi.Marker({
           position,
           map,
-          title: row.businessName,
+          title: row.deviceLabel ? `${row.businessName} · ${row.deviceLabel}` : row.businessName,
           icon: {
             path: mapsApi.SymbolPath.CIRCLE,
             scale: row.status === "online" ? 9 : 7,
@@ -490,12 +499,12 @@
           },
         });
         marker.addListener("click", () => {
-          openId = row.businessId;
+          openId = pinId(row);
           info.setContent(popupHtml(row));
           info.open({ map, anchor: marker });
-          markRow(row.businessId);
+          markRow(openId);
         });
-        markers.set(row.businessId, { marker, row });
+        markers.set(pinId(row), { marker, row });
         bounds.extend(position);
         plotted += 1;
       }
@@ -520,10 +529,10 @@
     }
 
     function markRow(id) {
-      board.querySelectorAll("#biz-rows tr[data-biz-id]").forEach((tr) => {
-        tr.classList.toggle("is-on", tr.dataset.bizId === id);
+      board.querySelectorAll("#biz-rows tr[data-pin-id]").forEach((tr) => {
+        tr.classList.toggle("is-on", tr.dataset.pinId === id);
       });
-      const selected = id ? board.querySelector(`#biz-rows tr[data-biz-id="${CSS.escape(id)}"]`) : null;
+      const selected = id ? board.querySelector(`#biz-rows tr[data-pin-id="${CSS.escape(id)}"]`) : null;
       selected?.scrollIntoView({ block: "nearest" });
     }
 
@@ -538,10 +547,10 @@
       });
     });
     board.querySelector("#biz-rows")?.addEventListener("click", (event) => {
-      const rowEl = event.target.closest?.("[data-biz-id]");
-      const item = markers.get(rowEl?.dataset?.bizId || "");
+      const rowEl = event.target.closest?.("[data-pin-id]");
+      const item = markers.get(rowEl?.dataset?.pinId || "");
       if (!item || !map || !info) return;
-      openId = rowEl.dataset.bizId;
+      openId = rowEl.dataset.pinId;
       markRow(openId);
       map.panTo(item.marker.getPosition());
       const closeZoom = item.row.locationSource === "device" ? 16 : 6;

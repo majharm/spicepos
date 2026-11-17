@@ -1418,6 +1418,11 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get("/manifest.webmanifest", (req, res) => {
+  res.type("application/manifest+json");
+  res.sendFile(path.join(publicDir, "manifest.webmanifest"));
+});
+
 app.use(express.static(publicDir));
 
 const port = Number(process.env.PORT || 5173);
