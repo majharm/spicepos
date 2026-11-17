@@ -49,14 +49,16 @@ test("CRM stays off until enabled and links the customer master", () => {
   const node = read("server/crm.js");
   const php = read("pos-crm.php");
   const core = read("pos-php-core.php");
+  assert.match(index, /id="nav-crm-group"/);
   assert.match(index, /data-view="crm" hidden/);
+  assert.match(read("css/crm.css"), /#nav-crm-group:not\(:has\(\.nav-btn:not\(\[hidden\]\)\)\)/);
   assert.match(index, /id="view-crm"/);
   assert.match(index, /id="set-crm"/);
   assert.doesNotMatch(index, /id="set-crm" checked/);
   assert.match(index, /Enable CRM/);
   assert.match(index, /js\/crm\.js\?v=20261105crm1/);
-  assert.match(index, /js\/crm-ui\.js\?v=20261105crm1/);
-  assert.match(index, /css\/crm\.css\?v=20261105crm1/);
+  assert.match(index, /js\/crm-ui\.js\?v=20261117crm2/);
+  assert.match(index, /css\/crm\.css\?v=20261117crm2/);
   assert.match(app, /function crmOn/);
   assert.match(app, /view === "crm"\) btn\.hidden = !can\("customers"\) \|\| !crmOn\(\)/);
   assert.match(app, /payload\.crm_enabled = \$\("set-crm"\)\.checked \? 1 : 0/);

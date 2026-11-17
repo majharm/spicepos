@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="./css/pos.css?v=20261117stk3" />
     <link rel="stylesheet" href="./css/online-store.css?v=20261116storemenu1" />
     <link rel="stylesheet" href="./css/ecommerce.css?v=20261117ecom1" />
-    <link rel="stylesheet" href="./css/crm.css?v=20261105crm1" />
+    <link rel="stylesheet" href="./css/crm.css?v=20261117crm2" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
@@ -55,7 +55,6 @@
             <button class="nav-btn" type="button" data-view="orders"><span class="nav-icon" aria-hidden="true">▤</span><span data-i18n="nav.invoices">Invoices</span></button>
             <button class="nav-btn" type="button" data-view="recurring"><span class="nav-icon" aria-hidden="true">↻</span>Recurring Invoices</button>
             <button class="nav-btn" type="button" data-view="quotations" hidden><span class="nav-icon" aria-hidden="true">✎</span>Quotations</button>
-            <button class="nav-btn" type="button" data-view="crm" hidden><span class="nav-icon" aria-hidden="true">☺</span>CRM</button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns"><span class="nav-icon" aria-hidden="true">↺</span><span data-i18n="nav.returns">Manage Returns</span></button>
             <button class="nav-btn pharmacy-hide" type="button" data-view="qr-orders"><span class="nav-icon" aria-hidden="true">▦</span><span data-i18n="nav.qr_orders">QR Orders</span> <span class="nav-badge" id="qr-order-badge" hidden></span></button>
             <button class="nav-btn" type="button" data-view="online-store" hidden><span class="nav-icon" aria-hidden="true">▣</span>Online Store</button>
@@ -75,6 +74,10 @@
             <button class="nav-btn" type="button" data-view="customers"><span class="nav-icon" aria-hidden="true">◎</span><span data-i18n="nav.customers">Customers</span></button>
             <button class="nav-btn" type="button" data-view="dues"><span class="nav-icon" aria-hidden="true">₹</span>Outstanding</button>
             <button class="nav-btn" type="button" data-view="loyalty"><span class="nav-icon" aria-hidden="true">★</span><span data-i18n="nav.loyalty">Royalty</span></button>
+          </div>
+          <div class="nav-group" id="nav-crm-group">
+            <p class="nav-group-label">CRM</p>
+            <button class="nav-btn" type="button" data-view="crm" hidden><span class="nav-icon" aria-hidden="true">☺</span>CRM</button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.inventory">Products</p>
@@ -3055,12 +3058,12 @@
           <div class="items-desk crm-desk" id="crm-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
-                <p class="items-kicker">Customers</p>
-                <h3>CRM</h3>
+                <p class="items-kicker">CRM</p>
+                <h3>Customer relations</h3>
                 <p class="lede">Leads, follow-ups, and the customer record in one place. Bills, quotations, and WhatsApp stay on the customers you already use.</p>
               </div>
-              <div class="crm-nav" id="crm-nav"></div>
             </header>
+            <div class="crm-nav" id="crm-nav" role="tablist"></div>
             <p class="hint" id="crm-hint" role="status"></p>
             <div id="crm-body"></div>
           </div>
@@ -3968,7 +3971,7 @@
     <script src="./js/automation-shop.js?v=20261031auto1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261105edit1" defer></script>
-    <script src="./js/crm-ui.js?v=20261105crm1" defer></script>
+    <script src="./js/crm-ui.js?v=20261117crm2" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261027cust1" defer></script>

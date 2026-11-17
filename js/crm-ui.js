@@ -117,7 +117,7 @@
     const orders = (data.orders || []).map((row) => `<article><strong>${esc(row.order_number || "Invoice")}</strong><p class="crm-meta">${esc(money(row.total))} · ${esc(row.payment_status || "")}</p></article>`).join("");
     const quotes = (data.quotes || []).map((row) => `<article><strong>${esc(row.quotation_number || "Quotation")}</strong><p class="crm-meta">${esc(row.status || "")} · ${esc(money(row.total))}</p></article>`).join("");
     const logs = (data.logs || []).map((row) => `<article><strong>${esc(row.channel)} · ${esc(row.status)}</strong><p class="crm-meta">${esc(row.body || row.error || "")}</p></article>`).join("");
-    $("crm-body").innerHTML = `<div class="crm-actions" style="margin:0 24px"><button class="btn" type="button" data-crm-tab="customers">Back to customers</button></div>
+    $("crm-body").innerHTML = `<div class="crm-actions"><button class="btn" type="button" data-crm-tab="customers">Back to customers</button></div>
       <form class="crm-profile" id="crm-profile-form">
         <div class="crm-wide"><strong>${esc(customer.name)}</strong><p class="crm-meta">${esc(customer.mobile || "")} · ${esc(customer.email || "")} · GSTIN ${esc(customer.gstin || "—")}</p><p class="crm-meta">Lifetime ${esc(money(data.lifetime))} · Credit limit ${esc(money(customer.credit_limit))} · Outstanding ${esc(money(customer.outstanding))}${data.loyalty ? ` · Points ${esc(data.loyalty.points_balance)}` : ""}</p></div>
         <label>Relationship manager<select name="assigned_to">${staffOptions(data.profile?.assigned_to || "")}</select></label>
