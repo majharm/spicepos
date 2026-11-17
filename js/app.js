@@ -9797,6 +9797,7 @@ function showStockToast(message, kind) {
 function syncStockDeskControls() {
   loadStockDeskPrefs();
   const layout = state.stockLayout === "list" ? "list" : "grid";
+  document.querySelector(".stock-desk")?.classList.toggle("is-list", layout === "list");
   document.querySelectorAll("#stock-layout [data-stock-layout]").forEach((btn) => {
     const on = btn.dataset.stockLayout === layout;
     btn.classList.toggle("primary", on);

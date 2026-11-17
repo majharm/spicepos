@@ -6,16 +6,16 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const STOCK_COLUMNS = [
     { id: "name", label: "Product Name", locked: true },
+    { id: "stock", label: "Available Stock" },
+    { id: "status", label: "Stock Status" },
+    { id: "minimum", label: "Minimum Stock" },
+    { id: "expiry", label: "Expiry Date" },
     { id: "sku", label: "SKU / Barcode" },
     { id: "category", label: "Category" },
     { id: "batch", label: "Batch Number" },
     { id: "purchase", label: "Purchase Price" },
     { id: "selling", label: "Selling Price" },
-    { id: "stock", label: "Available Stock" },
-    { id: "minimum", label: "Minimum Stock" },
-    { id: "expiry", label: "Expiry Date" },
     { id: "value", label: "Stock Value" },
-    { id: "status", label: "Stock Status" },
     { id: "action", label: "Action", locked: true },
   ];
 

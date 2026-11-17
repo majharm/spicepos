@@ -7988,16 +7988,28 @@ body.pharmacy-mode .stock-desk .items-library-list {
   justify-self: start;
 }
 .stock-list-table th:first-child,
-.stock-list-table td:first-child {
+.stock-list-table td:first-child,
+.stock-list-table th:last-child,
+.stock-list-table td:last-child {
   position: sticky;
-  left: 0;
   z-index: 1;
   background: #fff;
 }
-.stock-list-table thead th:first-child { z-index: 2; background: var(--bg-tint, #f8fafc); }
-.stock-list-table tr.is-low td:first-child { background: #fffbeb; }
-.stock-list-table tr.is-out td:first-child { background: #fff7f7; }
-.stock-list-table tr.is-editing td:first-child { background: #f0fdfa; }
+.stock-list-table th:first-child,
+.stock-list-table td:first-child { left: 0; }
+.stock-list-table th:last-child,
+.stock-list-table td:last-child {
+  right: 0;
+  box-shadow: -8px 0 8px -8px rgba(15, 23, 42, 0.2);
+}
+.stock-list-table thead th:first-child,
+.stock-list-table thead th:last-child { z-index: 2; background: var(--bg-tint, #f8fafc); }
+.stock-list-table tr.is-low td:first-child,
+.stock-list-table tr.is-low td:last-child { background: #fffbeb; }
+.stock-list-table tr.is-out td:first-child,
+.stock-list-table tr.is-out td:last-child { background: #fff7f7; }
+.stock-list-table tr.is-editing td:first-child,
+.stock-list-table tr.is-editing td:last-child { background: #f0fdfa; }
 .stock-desk .items-stat strong {
   font-size: 18px;
   letter-spacing: -0.03em;
@@ -8054,7 +8066,25 @@ body.pharmacy-mode .stock-desk .items-library-list {
   overflow: auto;
   max-height: min(72vh, 880px);
 }
-.stock-list-table { min-width: 980px; font-size: 12.5px; }
+#stock-table.items-library-list.is-table {
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+.stock-desk.is-list .items-split {
+  grid-template-columns: minmax(0, 1fr);
+}
+.stock-desk.is-list .items-library { order: -1; }
+.stock-list-table { min-width: 960px; width: 100%; font-size: 14px; }
+.stock-list-table th,
+.stock-list-table td {
+  padding: 14px 12px;
+}
+.stock-list-table .stock-name { min-width: 180px; }
+.stock-list-table td.num {
+  font-size: 15px;
+  font-weight: 800;
+}
 .stock-list-table thead th:not(:last-child) { cursor: pointer; }
 .stock-list-table thead th:not(:last-child):hover { color: var(--text); }
 .stock-list-table th.num,
