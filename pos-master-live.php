@@ -715,7 +715,7 @@ function pos_master_biz_traffic() {
     "businesses" => [],
     "summary" => ["total" => 0, "online" => 0, "recent" => 0, "offline" => 0, "activeToday" => 0, "plotted" => 0],
     "pollSeconds" => 30,
-    "note" => "Locations are approximate, estimated from the business admin IP address. They are not an exact street address. A login by itself does not mark a business online.",
+    "note" => "A pin is the business admin's device location when they allow it on their phone or computer. Otherwise it is estimated from the IP address and is not an exact street address. A login by itself does not mark a business online.",
   ];
   try {
     pos_ensure_business_presence();
@@ -740,7 +740,7 @@ function pos_master_biz_traffic() {
               COALESCE(NULLIF(p.ip, ''), s.ip, '') AS ip,
               COALESCE(p.login_at, s.created_at) AS login_at,
               p.heartbeat_at, p.logout_at,
-              p.country, p.region, p.city, p.lat, p.lon,
+              p.country, p.region, p.city, p.lat, p.lon, p.location_source, p.accuracy_m,
               CASE
                 WHEN p.heartbeat_at IS NOT NULL
                   AND p.heartbeat_at >= DATE_SUB(NOW(), INTERVAL 90 SECOND)
@@ -772,7 +772,8 @@ function pos_master_biz_traffic() {
       $lon = isset($row["lon"]) ? (float) $row["lon"] : 0;
       $ip = (string) ($row["ip"] ?? "");
       $local = pos_ip_is_private($ip);
-      $plotted = !$local && $lat !== 0.0 && $lon !== 0.0;
+      $device = (string) ($row["location_source"] ?? "") === "device";
+      $plotted = ($device || !$local) && $lat !== 0.0 && $lon !== 0.0 && abs($lat) <= 90 && abs($lon) <= 180;
       $item = [
         "businessId" => $id,
         "businessName" => $row["business_name"] ?: "Business",
@@ -789,6 +790,8 @@ function pos_master_biz_traffic() {
         "shopState" => $row["shop_state"] ?? "",
         "lat" => $plotted ? $lat : null,
         "lon" => $plotted ? $lon : null,
+        "locationSource" => $device ? "device" : "",
+        "accuracy" => isset($row["accuracy_m"]) ? (int) $row["accuracy_m"] : null,
         "status" => $status,
         "activeToday" => (int) ($row["active_today"] ?? 0) === 1,
         "local" => $local,

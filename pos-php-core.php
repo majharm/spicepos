@@ -246,6 +246,24 @@ function pos_ensure_business_presence() {
       KEY idx_bap_heartbeat (heartbeat_at)
     )"
   );
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("business_admin_presence", [
+      "location_source" => "VARCHAR(16) NULL",
+      "accuracy_m" => "INT NULL",
+    ]);
+  }
+}
+
+function pos_device_point($body) {
+  if (!is_array($body)) return null;
+  if (!isset($body["lat"]) || !isset($body["lon"])) return null;
+  $lat = (float) $body["lat"];
+  $lon = (float) $body["lon"];
+  if ($lat == 0.0 && $lon == 0.0) return null;
+  if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) return null;
+  $accuracy = isset($body["accuracy"]) ? (int) round((float) $body["accuracy"]) : 0;
+  if ($accuracy < 0 || $accuracy > 100000) $accuracy = 0;
+  return ["lat" => round($lat, 5), "lon" => round($lon, 5), "accuracy" => $accuracy];
 }
 
 function pos_admin_role($role) {
@@ -267,8 +285,8 @@ function pos_record_admin_login($user, $ip) {
          country = IF(ip <=> VALUES(ip), country, NULL),
          region = IF(ip <=> VALUES(ip), region, NULL),
          city = IF(ip <=> VALUES(ip), city, NULL),
-         lat = IF(ip <=> VALUES(ip), lat, NULL),
-         lon = IF(ip <=> VALUES(ip), lon, NULL),
+         lat = IF(IFNULL(location_source, '') = 'device', lat, IF(ip <=> VALUES(ip), lat, NULL)),
+         lon = IF(IFNULL(location_source, '') = 'device', lon, IF(ip <=> VALUES(ip), lon, NULL)),
          ip = VALUES(ip),
          login_at = NOW(),
          heartbeat_at = NULL,
@@ -280,26 +298,53 @@ function pos_record_admin_login($user, $ip) {
   } catch (Exception $e) { /* presence must not block sign-in */ }
 }
 
-function pos_record_admin_heartbeat($user, $ip) {
+function pos_record_admin_heartbeat($user, $ip, $body = null) {
   if (!is_array($user) || !pos_admin_role($user["role"] ?? "")) return ["ok" => true, "tracked" => false];
   pos_ensure_business_presence();
-  pos_q(
-    "INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
-     VALUES (?, ?, ?, NULL, NOW(), NULL)
-     ON DUPLICATE KEY UPDATE
-       business_id = VALUES(business_id),
-       heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
-       logout_at = NULL,
-       country = IF(ip <=> VALUES(ip), country, NULL),
-       region = IF(ip <=> VALUES(ip), region, NULL),
-       city = IF(ip <=> VALUES(ip), city, NULL),
-       lat = IF(ip <=> VALUES(ip), lat, NULL),
-       lon = IF(ip <=> VALUES(ip), lon, NULL),
-       ip = VALUES(ip),
-       updated_at = NOW()",
-    "sss",
-    [(string) $user["id"], (string) $user["business_id"], substr(trim((string) $ip), 0, 64)]
-  );
+  $id = (string) $user["id"];
+  $biz = (string) $user["business_id"];
+  $clean = substr(trim((string) $ip), 0, 64);
+  $device = pos_device_point($body);
+  if ($device) {
+    pos_q(
+      "INSERT INTO business_admin_presence
+         (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at, lat, lon, location_source, accuracy_m)
+       VALUES (?, ?, ?, NULL, NOW(), NULL, ?, ?, 'device', ?)
+       ON DUPLICATE KEY UPDATE
+         business_id = VALUES(business_id),
+         heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
+         logout_at = NULL,
+         ip = VALUES(ip),
+         lat = VALUES(lat),
+         lon = VALUES(lon),
+         location_source = 'device',
+         accuracy_m = VALUES(accuracy_m),
+         country = NULL,
+         region = NULL,
+         city = NULL,
+         updated_at = NOW()",
+      "sssddi",
+      [$id, $biz, $clean, $device["lat"], $device["lon"], $device["accuracy"]]
+    );
+  } else {
+    pos_q(
+      "INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
+       VALUES (?, ?, ?, NULL, NOW(), NULL)
+       ON DUPLICATE KEY UPDATE
+         business_id = VALUES(business_id),
+         heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
+         logout_at = NULL,
+         country = IF(IFNULL(location_source, '') = 'device', country, IF(ip <=> VALUES(ip), country, NULL)),
+         region = IF(IFNULL(location_source, '') = 'device', region, IF(ip <=> VALUES(ip), region, NULL)),
+         city = IF(IFNULL(location_source, '') = 'device', city, IF(ip <=> VALUES(ip), city, NULL)),
+         lat = IF(IFNULL(location_source, '') = 'device', lat, IF(ip <=> VALUES(ip), lat, NULL)),
+         lon = IF(IFNULL(location_source, '') = 'device', lon, IF(ip <=> VALUES(ip), lon, NULL)),
+         ip = VALUES(ip),
+         updated_at = NOW()",
+      "sss",
+      [$id, $biz, $clean]
+    );
+  }
   return ["ok" => true, "tracked" => true, "onlineWindowSeconds" => 90];
 }
 
@@ -4267,7 +4312,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $staff = pos_staff_session();
       if (!$staff) pos_send(401, ["error" => "Sign in required"]);
       if (!empty($staff["impersonatorAdminId"])) pos_send(200, ["ok" => true, "tracked" => false]);
-      pos_send(200, pos_record_admin_heartbeat($staff["user"] ?? null, pos_ip()));
+      pos_send(200, pos_record_admin_heartbeat($staff["user"] ?? null, pos_ip(), $body));
     }
 
     $auth = pos_require_master($path);

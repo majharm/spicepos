@@ -24,6 +24,22 @@ export async function ensureBusinessPresence() {
       KEY idx_bap_heartbeat (heartbeat_at)
     )`,
   );
+  await query(`ALTER TABLE business_admin_presence ADD COLUMN location_source VARCHAR(16) NULL`).catch(() => {});
+  await query(`ALTER TABLE business_admin_presence ADD COLUMN accuracy_m INT NULL`).catch(() => {});
+}
+
+function devicePoint(point) {
+  const lat = Number(point?.lat);
+  const lon = Number(point?.lon ?? point?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat === 0 && lon === 0) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  const accuracy = Number(point?.accuracy);
+  return {
+    lat: Math.round(lat * 1e5) / 1e5,
+    lon: Math.round(lon * 1e5) / 1e5,
+    accuracy: Number.isFinite(accuracy) && accuracy >= 0 && accuracy <= 100000 ? Math.round(accuracy) : null,
+  };
 }
 
 function isAdmin(user) {
@@ -43,8 +59,8 @@ export async function recordAdminLogin(user, ip) {
          country = IF(ip <=> VALUES(ip), country, NULL),
          region = IF(ip <=> VALUES(ip), region, NULL),
          city = IF(ip <=> VALUES(ip), city, NULL),
-         lat = IF(ip <=> VALUES(ip), lat, NULL),
-         lon = IF(ip <=> VALUES(ip), lon, NULL),
+         lat = IF(IFNULL(location_source, '') = 'device', lat, IF(ip <=> VALUES(ip), lat, NULL)),
+         lon = IF(IFNULL(location_source, '') = 'device', lon, IF(ip <=> VALUES(ip), lon, NULL)),
          ip = VALUES(ip),
          login_at = NOW(),
          heartbeat_at = NULL,
@@ -57,26 +73,49 @@ export async function recordAdminLogin(user, ip) {
   }
 }
 
-export async function recordAdminHeartbeat(user, ip) {
+export async function recordAdminHeartbeat(user, ip, point) {
   if (!isAdmin(user)) return { ok: true, tracked: false };
   await ensureBusinessPresence();
   const clean = String(ip || "").trim().slice(0, 64);
-  await query(
-    `INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
-     VALUES (?, ?, ?, NULL, NOW(), NULL)
-     ON DUPLICATE KEY UPDATE
-       business_id = VALUES(business_id),
-       heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
-       logout_at = NULL,
-       country = IF(ip <=> VALUES(ip), country, NULL),
-       region = IF(ip <=> VALUES(ip), region, NULL),
-       city = IF(ip <=> VALUES(ip), city, NULL),
-       lat = IF(ip <=> VALUES(ip), lat, NULL),
-       lon = IF(ip <=> VALUES(ip), lon, NULL),
-       ip = VALUES(ip),
-       updated_at = NOW()`,
-    [user.id, user.business_id, clean],
-  );
+  const device = devicePoint(point);
+  if (device) {
+    await query(
+      `INSERT INTO business_admin_presence
+         (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at, lat, lon, location_source, accuracy_m)
+       VALUES (?, ?, ?, NULL, NOW(), NULL, ?, ?, 'device', ?)
+       ON DUPLICATE KEY UPDATE
+         business_id = VALUES(business_id),
+         heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
+         logout_at = NULL,
+         ip = VALUES(ip),
+         lat = VALUES(lat),
+         lon = VALUES(lon),
+         location_source = 'device',
+         accuracy_m = VALUES(accuracy_m),
+         country = NULL,
+         region = NULL,
+         city = NULL,
+         updated_at = NOW()`,
+      [user.id, user.business_id, clean, device.lat, device.lon, device.accuracy],
+    );
+  } else {
+    await query(
+      `INSERT INTO business_admin_presence (staff_user_id, business_id, ip, login_at, heartbeat_at, logout_at)
+       VALUES (?, ?, ?, NULL, NOW(), NULL)
+       ON DUPLICATE KEY UPDATE
+         business_id = VALUES(business_id),
+         heartbeat_at = IF(heartbeat_at IS NULL OR heartbeat_at < DATE_SUB(NOW(), INTERVAL 20 SECOND), NOW(), heartbeat_at),
+         logout_at = NULL,
+         country = IF(IFNULL(location_source, '') = 'device', country, IF(ip <=> VALUES(ip), country, NULL)),
+         region = IF(IFNULL(location_source, '') = 'device', region, IF(ip <=> VALUES(ip), region, NULL)),
+         city = IF(IFNULL(location_source, '') = 'device', city, IF(ip <=> VALUES(ip), city, NULL)),
+         lat = IF(IFNULL(location_source, '') = 'device', lat, IF(ip <=> VALUES(ip), lat, NULL)),
+         lon = IF(IFNULL(location_source, '') = 'device', lon, IF(ip <=> VALUES(ip), lon, NULL)),
+         ip = VALUES(ip),
+         updated_at = NOW()`,
+      [user.id, user.business_id, clean],
+    );
+  }
   return { ok: true, tracked: true, onlineWindowSeconds: 90 };
 }
 
@@ -113,7 +152,7 @@ export async function masterBizTraffic() {
               COALESCE(NULLIF(p.ip, ''), s.ip, '') AS ip,
               COALESCE(p.login_at, s.created_at) AS login_at,
               p.heartbeat_at, p.logout_at,
-              p.country, p.region, p.city, p.lat, p.lon,
+              p.country, p.region, p.city, p.lat, p.lon, p.location_source, p.accuracy_m,
               CASE
                 WHEN p.heartbeat_at IS NOT NULL
                   AND p.heartbeat_at >= DATE_SUB(NOW(), INTERVAL 90 SECOND)
@@ -152,6 +191,8 @@ export async function masterBizTraffic() {
       shopState: row.shop_state || "",
       lat: row.lat,
       lon: row.lon,
+      locationSource: row.location_source === "device" ? "device" : "",
+      accuracy: row.accuracy_m,
       status: row.status,
       activeToday: Number(row.active_today) === 1,
     }));
@@ -161,13 +202,13 @@ export async function masterBizTraffic() {
     if (geos.size) {
       businesses = businesses.map((row) => {
         const hit = geos.get(row.ip);
-        if (!hit || row.plotted) return row;
+        if (!hit || row.plotted || row.locationSource === "device") return row;
         return api.foldBusinessAdmins([{ ...row, ...hit, status: row.status, activeToday: row.activeToday }])[0] || row;
       });
       await Promise.all([...geos.entries()].map(([ip, hit]) => query(
         `UPDATE business_admin_presence
          SET country = ?, region = ?, city = ?, lat = ?, lon = ?
-         WHERE ip = ? AND (lat IS NULL OR lat = 0)`,
+         WHERE ip = ? AND IFNULL(location_source, '') <> 'device' AND (lat IS NULL OR lat = 0)`,
         [hit.country || "", hit.region || "", hit.city || "", hit.lat, hit.lon, ip],
       ).catch(() => {})));
     }

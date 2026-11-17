@@ -383,7 +383,7 @@ export function registerAuth(app) {
       return;
     }
     try {
-      res.json(await recordAdminHeartbeat(staff.user, clientIp(req)));
+      res.json(await recordAdminHeartbeat(staff.user, clientIp(req), req.body || {}));
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }

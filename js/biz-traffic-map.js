@@ -5,7 +5,7 @@
   const STATUS_RANK = { online: 3, recent: 2, offline: 1 };
   const COLORS = { online: "#22c55e", recent: "#f59e0b", offline: "#94a3b8" };
   const GOOGLE_MAP_KEY = "AIzaSyAG8q32DcFtFKmgK3V20L4K_FsN4lI3jB4";
-  const NOTE = "Locations are approximate, estimated from the business admin IP address. They are not an exact street address. A login by itself does not mark a business online.";
+  const NOTE = "A pin is the business admin's device location when they allow it on their phone or computer. Otherwise it is estimated from the IP address and is not an exact street address. A login by itself does not mark a business online.";
   let activeMap = null;
 
   function esc(value) {
@@ -79,6 +79,7 @@
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
     if (lat === 0 && lon === 0) return false;
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return false;
+    if (row?.locationSource === "device" || row?.placeSource === "device") return true;
     return !isPrivateIp(row?.ip);
   }
 
@@ -106,6 +107,8 @@
         shopState: String(row?.shopState || row?.shop_state || ""),
         lat: row?.lat,
         lon: row?.lon,
+        locationSource: row?.locationSource === "device" || row?.location_source === "device" ? "device" : "",
+        accuracy: row?.accuracy,
         status,
         activeToday: Boolean(activeToday),
         local: isPrivateIp(row?.ip),
@@ -117,8 +120,9 @@
         continue;
       }
       const better = (STATUS_RANK[status] || 0) - (STATUS_RANK[prev.status] || 0);
+      const device = (place.locationSource === "device" ? 1 : 0) - (prev.locationSource === "device" ? 1 : 0);
       const newer = stamp(place.lastActive) - stamp(prev.lastActive);
-      if (better > 0 || (better === 0 && newer > 0)) {
+      if (better > 0 || (better === 0 && (device > 0 || (device === 0 && newer > 0)))) {
         place.activeToday = place.activeToday || prev.activeToday;
         byBusiness.set(businessId, place);
       } else if (activeToday) {
@@ -264,9 +268,13 @@
 
   function popupHtml(row) {
     const place = [row.city, row.region, row.country].filter(Boolean).join(", ") || (row.local ? "Private network" : "Location unavailable");
-    const source = row.placeSource === "shop"
-      ? "Plotted from the shop city. The admin IP did not resolve."
-      : "Approximate IP location, not an exact address.";
+    const accuracy = Number(row.accuracy);
+    const accurate = Number.isFinite(accuracy) && accuracy > 0 ? ` Within ${Math.round(accuracy)} m.` : "";
+    const source = row.locationSource === "device"
+      ? `Device location from this admin's phone or computer.${accurate}`
+      : row.placeSource === "shop"
+        ? "Plotted from the shop city. The admin IP did not resolve."
+        : "Approximate IP location, not an exact address.";
     return `<div class="biz-pop">
       <strong>${esc(row.businessName)}</strong>
       <span class="biz-pop-status is-${esc(row.status)}">${esc(statusLabel(row.status))}</span>
@@ -493,8 +501,9 @@
       }
       if (!fitted && plotted) {
         map.fitBounds(bounds, 48);
+        const cap = shown.some((row) => row.locationSource === "device" && row.plotted) ? 16 : 6;
         mapsApi.event.addListenerOnce(map, "idle", () => {
-          if ((map.getZoom() || 0) > 6) map.setZoom(6);
+          if ((map.getZoom() || 0) > cap) map.setZoom(cap);
         });
         fitted = true;
         viewed = true;
@@ -535,7 +544,8 @@
       openId = rowEl.dataset.bizId;
       markRow(openId);
       map.panTo(item.marker.getPosition());
-      if ((map.getZoom() || 0) < 6) map.setZoom(6);
+      const closeZoom = item.row.locationSource === "device" ? 16 : 6;
+      if ((map.getZoom() || 0) < closeZoom) map.setZoom(closeZoom);
       info.setContent(popupHtml(item.row));
       info.open({ map, anchor: item.marker });
     });
