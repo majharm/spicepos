@@ -23,6 +23,7 @@ import { companyTimezone, normalizeTimezone, shopTimezonePayload, tzOffsetFor } 
 import { attachAuth, registerAuth, requireStaff, requirePerm } from "./auth.js";
 import { normalizeLocale, normalizeInvoiceLanguage, normalizeWhatsappLanguage, clipInvoiceText, attachInvoiceText, invoiceMarkUrl } from "./i18n.js";
 import { registerMaster } from "./master.js";
+import { registerSyncEngine } from "./sync-engine.js";
 import { ackNotifyCampaigns, listShopNotices } from "./notify-routes.js";
 import { registerTenant } from "./tenant.js";
 import { registerHub } from "./hub.js";
@@ -253,6 +254,7 @@ app.use((req, res, next) => {
   return requireStaff(req, res, next);
 });
 registerMaster(app);
+registerSyncEngine(app);
 registerOnlineStoreMaster(app);
 registerEcommerceMaster(app);
 registerCustomerDedupeMaster(app);

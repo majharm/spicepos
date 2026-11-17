@@ -73,7 +73,10 @@ test("invoices, payments, purchases, and stock adjustments are local operations"
 });
 
 test("offline replay is wired on the app, both servers, and the installed shell", () => {
-  assert.match(read("index.html"), /pos-offline\.js\?v=20261118off3/);
+  assert.match(read("index.html"), /pos-offline\.js\?v=20261118off4/);
+  assert.match(read("index.html"), /sync-engine\.js\?v=20261118eng1/);
+  assert.match(read("js/pos-offline.js"), /\/api\/sync\/batch/);
+  assert.match(read("server/index.js"), /registerSyncEngine/);
   assert.match(read("js/pos-offline.js"), /ensureRow/);
   assert.match(read("js/pos-offline.js"), /\/api\/sync\/status/);
   assert.match(read("server/index.js"), /if \(!req\.body\?\.offlineSync\) await assertApparelSaleStock/);

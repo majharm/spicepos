@@ -4371,6 +4371,13 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(!empty($reported["ok"]) ? 200 : 400, $reported);
     }
 
+    if ($path === "sync/batch" && $method === "POST") {
+      $staff = pos_staff_session();
+      if (!$staff) pos_send(401, ["error" => "Sign in required"]);
+      require_once __DIR__ . "/pos-sync.php";
+      pos_send(200, pos_sync_batch($staff, is_array($body) ? $body : []));
+    }
+
     $auth = pos_require_master($path);
 
     if (strpos($path, "master/online-store") === 0) {

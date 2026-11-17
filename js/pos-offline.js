@@ -140,12 +140,13 @@
   function openDb() {
     if (!dbPromise) {
       dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB, 1);
+        const req = indexedDB.open(DB, 2);
         req.onupgradeneeded = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains("snapshot")) db.createObjectStore("snapshot");
           if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath: "idempotencyKey" });
           if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
+          if (!db.objectStoreNames.contains("audit")) db.createObjectStore("audit", { keyPath: "transactionId" });
         };
         req.onsuccess = () => {
           req.result.onclose = () => { dbPromise = null; };
@@ -316,14 +317,36 @@
     return buildLocalOrder(row.payload, row.offlineNumber, snapshot);
   }
 
+  async function putAudit(row) {
+    const transactionId = row.transactionId || row.idempotencyKey;
+    if (!transactionId) return;
+    const db = await openDb();
+    const tx = db.transaction("audit", "readwrite");
+    tx.objectStore("audit").put({
+      transactionId,
+      kind: row.kind || "checkout",
+      status: row.status,
+      offlineNumber: row.offlineNumber || "",
+      serverNumber: row.serverNumber || "",
+      serverOrderId: row.serverOrderId || "",
+      total: row.payload?.total ?? null,
+      syncedAt: row.syncedAt || new Date().toISOString(),
+    });
+    await txDone(tx);
+  }
+
   async function ensureRow(kind, path, payload) {
-    const key = String(payload.idempotencyKey || "");
+    const engine = globalThis.POSSyncEngine;
+    let key = String(payload.idempotencyKey || "");
+    if (!key) key = engine?.transactionId?.(globalThis.POSDevice?.id?.()) || `txn_${Date.now()}`;
+    payload.idempotencyKey = key;
     const existing = await getOutbox(key);
     if (existing) return existing;
     const snapshot = memorySnapshot;
     const offlineNumber = await nextOfflineNumber();
     const row = {
       idempotencyKey: key,
+      transactionId: key,
       kind,
       path,
       payload,
@@ -435,6 +458,7 @@
       row.serverOrderId = result.data?.order?.id || result.data?.purchase?.id || row.serverOrderId || "";
       row.syncedAt = new Date().toISOString();
       await putOutbox(row);
+      await putAudit(row).catch(() => {});
       return { ok: true, reply: result };
     } finally {
       inflight.delete(row.idempotencyKey);
@@ -483,20 +507,81 @@
     throw err;
   }
 
+  function batchBody(rows) {
+    return {
+      deviceId: globalThis.POSDevice?.id?.() || rows[0]?.deviceId || "",
+      deviceLabel: globalThis.POSDevice?.label?.() || rows[0]?.deviceLabel || "",
+      since: memorySnapshot?.syncSince || "",
+      transactions: rows.map((row) => ({
+        transactionId: row.transactionId || row.idempotencyKey,
+        kind: row.kind || "checkout",
+        path: row.path || "",
+        businessId: row.businessId || "",
+        deviceId: row.deviceId || globalThis.POSDevice?.id?.() || "",
+        held: Boolean(row.held),
+        createdAt: row.createdAt,
+        payload: { ...(row.payload || {}), idempotencyKey: row.transactionId || row.idempotencyKey },
+      })),
+    };
+  }
+
+  async function readyPath(row) {
+    if ((row.kind || "checkout") !== "payment") return row;
+    const path = await paymentPath(row);
+    if (!path) return null;
+    return { ...row, path };
+  }
+
   let syncing = false;
   async function syncNow() {
     if (syncing || navigator.onLine === false) return;
     if (typeof api._send !== "function") return;
+    const engine = globalThis.POSSyncEngine;
     syncing = true;
     let syncedAny = false;
     try {
+      const size = engine?.BATCH_SIZE || 20;
       const rows = (await readOutbox())
         .filter((row) => row.status !== "synced" && row.status !== "conflict")
         .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      const ready = [];
       for (const row of rows) {
-        const sent = await sendOne(row);
-        if (sent?.offline) break;
-        if (sent?.ok) syncedAny = true;
+        if (ready.length >= size) break;
+        const next = await readyPath(row);
+        if (next) ready.push(next);
+      }
+      if (!ready.length) return;
+      let result;
+      try {
+        result = await api._send("/api/sync/batch", { method: "POST", body: JSON.stringify(batchBody(ready)) });
+      } catch (err) {
+        if (shouldQueue(err)) return;
+        result = null;
+      }
+      const data = result?.res?.ok ? result.data : null;
+      const updated = data && engine ? engine.applyBatchAck(ready, data) : ready;
+      if (data) {
+        for (const row of updated) {
+          if (row.status !== "synced" && row.status !== "conflict") continue;
+          await putOutbox(row);
+          if (row.status === "synced") {
+            syncedAny = true;
+            await putAudit(row).catch(() => {});
+          }
+        }
+        if (data.changes && engine) {
+          const base = memorySnapshot || await readSnapshot().catch(() => null);
+          if (base) writeSnapshot(engine.mergeChanges(base, data.changes));
+        }
+      }
+      if (!data || data.fallback) {
+        const done = new Set(updated.filter((row) => row.status === "synced" || row.status === "conflict").map((row) => row.transactionId || row.idempotencyKey));
+        for (const row of ready) {
+          if (done.has(row.transactionId || row.idempotencyKey)) continue;
+          const sent = await sendOne(row);
+          if (sent?.offline) break;
+          if (sent?.ok) syncedAny = true;
+        }
       }
     } finally {
       syncing = false;
