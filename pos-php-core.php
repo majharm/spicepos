@@ -884,6 +884,7 @@ function pos_ensure_business_columns() {
     "swiggy_allowed" => "TINYINT(1) NOT NULL DEFAULT 0",
     "qr_module" => "TINYINT(1) NOT NULL DEFAULT 0",
     "online_store" => "TINYINT(1) NOT NULL DEFAULT 0",
+    "ecommerce_store" => "TINYINT(1) NOT NULL DEFAULT 0",
     "store_banner_allowed" => "TINYINT(1) NOT NULL DEFAULT 1",
     "created_at" => "TIMESTAMP(3) NULL",
     "updated_at" => "TIMESTAMP(3) NULL",
@@ -1751,6 +1752,7 @@ function pos_staff_me_payload($staff) {
       "qr_module" => ((int) ($staff["business"]["qr_module"] ?? 0)) === 1 ? 1 : 0,
       "online_store" => pos_online_store_flag($staff["business"]["online_store"] ?? 0),
       "store_banner_allowed" => pos_online_store_flag($staff["business"]["store_banner_allowed"] ?? 0),
+      "ecommerce_store" => pos_online_store_flag($staff["business"]["ecommerce_store"] ?? 0),
       "plan_id" => $staff["business"]["plan_id"] ?? null,
       "subscription_expires_at" => $staff["business"]["subscription_expires_at"] ?? null,
     ],
@@ -3440,6 +3442,13 @@ function pos_register_business($raw, $yearly = false) {
   try {
     pos_q("UPDATE businesses SET online_store = ? WHERE id = ?", "is", [pos_online_store_for_signup($raw), $id]);
   } catch (Exception $e) { /* column added on schema boot; missing means the shop stays off */ }
+  try {
+    $ecom = 0;
+    if (is_array($raw) && (array_key_exists("ecommerce_store", $raw) || array_key_exists("ecommerceStore", $raw))) {
+      $ecom = pos_online_store_flag(array_key_exists("ecommerce_store", $raw) ? $raw["ecommerce_store"] : $raw["ecommerceStore"]);
+    }
+    pos_q("UPDATE businesses SET ecommerce_store = ? WHERE id = ?", "is", [$ecom, $id]);
+  } catch (Exception $e) { /* column added on schema boot; missing means the shop stays off */ }
   $amId = trim((string) ($b["account_manager_id"] ?? ""));
   if ($amId !== "") {
     pos_ensure_account_managers();
@@ -3534,6 +3543,12 @@ function pos_update_business($id, $raw) {
   if (is_array($raw) && (array_key_exists("online_store", $raw) || array_key_exists("onlineStore", $raw))) {
     try {
       pos_q("UPDATE businesses SET online_store = ? WHERE id = ?", "is", [pos_online_store_for_signup($raw), $id]);
+    } catch (Exception $e) { /* column added on schema boot */ }
+  }
+  if (is_array($raw) && (array_key_exists("ecommerce_store", $raw) || array_key_exists("ecommerceStore", $raw))) {
+    $ecom = array_key_exists("ecommerce_store", $raw) ? $raw["ecommerce_store"] : $raw["ecommerceStore"];
+    try {
+      pos_q("UPDATE businesses SET ecommerce_store = ? WHERE id = ?", "is", [pos_online_store_flag($ecom), $id]);
     } catch (Exception $e) { /* column added on schema boot */ }
   }
   if (is_array($raw) && (array_key_exists("store_banner_allowed", $raw) || array_key_exists("storeBannerAllowed", $raw))) {
@@ -3712,6 +3727,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if (strpos($path, "store/") === 0) {
       require_once __DIR__ . "/pos-online-store.php";
       if (pos_online_store_public_dispatch($path, $method)) return;
+    }
+    if (strpos($path, "shop/") === 0) {
+      require_once __DIR__ . "/pos-online-store.php";
+      require_once __DIR__ . "/pos-ecommerce.php";
+      if (pos_ecommerce_public_dispatch($path, $method, $body)) return;
     }
     if ($path === "qr/menu" || $path === "qr/orders" || $path === "qr/order" || $path === "qr/table") {
       require_once __DIR__ . "/pos-qr-ordering.php";
@@ -3953,6 +3973,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
           "qr_module" => ((int) ($business["qr_module"] ?? 0)) === 1 ? 1 : 0,
           "online_store" => pos_online_store_flag($business["online_store"] ?? 0),
           "store_banner_allowed" => pos_online_store_flag($business["store_banner_allowed"] ?? 0),
+          "ecommerce_store" => pos_online_store_flag($business["ecommerce_store"] ?? 0),
           "subscription_expires_at" => $business["subscription_expires_at"] ?? null,
         ],
       ]);
@@ -4133,6 +4154,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if (strpos($path, "master/online-store") === 0) {
       require_once __DIR__ . "/pos-online-store.php";
       if (pos_online_store_master_dispatch($path, $method, $body)) return;
+    }
+    if (strpos($path, "master/ecommerce") === 0) {
+      require_once __DIR__ . "/pos-online-store.php";
+      require_once __DIR__ . "/pos-ecommerce.php";
+      if (pos_ecommerce_master_dispatch($path, $method, $body)) return;
     }
 
     if (is_file(__DIR__ . "/pos-master-live.php")) {

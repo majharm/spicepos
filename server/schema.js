@@ -153,6 +153,7 @@ export async function ensureSchema() {
     await query("UPDATE businesses SET qr_module = 1");
   }
   await addColumn("businesses", "online_store", "TINYINT(1) NOT NULL DEFAULT 0");
+  await addColumn("businesses", "ecommerce_store", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("businesses", "store_banner_allowed", "TINYINT(1) NOT NULL DEFAULT 1");
   await addColumn("company_settings", "table_shifting_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
   await addColumn("company_settings", "scale_enabled", "TINYINT(1) NOT NULL DEFAULT 0");

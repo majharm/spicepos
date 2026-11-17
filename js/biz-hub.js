@@ -28,6 +28,7 @@
     { id: "counter", group: "sales", title: "Counter POS", view: "counter", perm: "counter", blurb: "Till for a new tax invoice" },
     { id: "invoices", group: "sales", title: "Sales Invoice", view: "orders", perm: "orders", blurb: "Tax invoices billed on Counter" },
     { id: "online-store", group: "sales", title: "Online Store", view: "online-store", perm: "orders", blurb: "Store link, products, stock, and online orders" },
+    { id: "ecommerce", group: "sales", title: "E-Commerce Store", view: "ecommerce", perm: "orders", blurb: "Public shop with cart and cash on delivery" },
     { id: "new-invoice", group: "sales", title: "New Invoice", view: "counter", perm: "counter", blurb: "Open Counter and bill now" },
     { id: "quotation", group: "sales", title: "Quotation", view: "hub-sales", perm: "orders", desk: "quotation", blurb: "Price offer — no stock, no GST invoice" },
     { id: "sales-order", group: "sales", title: "Sales Order", view: "hub-sales", perm: "orders", desk: "sales-order", blurb: "Confirmed order before challan or invoice" },
@@ -412,7 +413,7 @@
 
   const SALES_SECTIONS = [
     { id: "billing", title: "Tax invoices", ids: ["counter", "invoices", "new-invoice", "cancelled", "recurring"] },
-    { id: "online", title: "Online", ids: ["online-store"] },
+    { id: "online", title: "Online", ids: ["online-store", "ecommerce"] },
     { id: "docs", title: "Other invoice types", ids: ["quotation", "sales-order", "challan"] },
     { id: "returns", title: "Returns", ids: ["credit-note", "sales-return"] },
     { id: "money", title: "Collections", ids: ["receipt", "customer-due", "customer-ledger"] },
@@ -446,6 +447,10 @@
   function modulesFor(biz) {
     return MODULES.filter((m) => matchKinds(m.kinds, kindsFor(biz))).filter((m) => {
       if (m.id === "online-store") return storeModuleOn(biz);
+      if (m.id === "ecommerce") {
+        const value = biz?.ecommerce_store;
+        return value === true || value === 1 || value === "1" || value === "true" || value === "yes" || value === "on";
+      }
       if (m.view !== "qr-orders") return true;
       return Number(biz?.qr_module) === 1;
     });

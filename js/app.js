@@ -588,10 +588,31 @@ function paintOnlineStoreNav() {
   if (sales && !sales.hidden) globalThis.POSBizHubUi?.paintSalesDesk?.();
 }
 
+function ecommerceOn() {
+  return moduleBitOn(state.businessMeta?.ecommerce_store);
+}
+
+function ecommerceAllowed() {
+  if (!ecommerceOn()) return false;
+  const role = String(state.session?.role || "").trim();
+  if (role === "business_admin" || role === "resort_owner") return true;
+  return can("settings") || can("items") || can("orders");
+}
+
+function paintEcommerceNav() {
+  const show = ecommerceAllowed();
+  document.querySelectorAll('[data-view="ecommerce"], [data-m-view="ecommerce"], [data-ecommerce]').forEach((el) => {
+    el.hidden = !show;
+  });
+  const sales = document.getElementById("view-hub-sales");
+  if (sales && !sales.hidden) globalThis.POSBizHubUi?.paintSalesDesk?.();
+}
+
 function applyBusinessFlags(row) {
   if (!row || typeof row !== "object") return;
   if (!state.businessMeta) state.businessMeta = {};
   if (Object.prototype.hasOwnProperty.call(row, "online_store")) state.businessMeta.online_store = moduleBitOn(row.online_store) ? 1 : 0;
+  if (Object.prototype.hasOwnProperty.call(row, "ecommerce_store")) state.businessMeta.ecommerce_store = moduleBitOn(row.ecommerce_store) ? 1 : 0;
   if (Object.prototype.hasOwnProperty.call(row, "store_banner_allowed")) state.businessMeta.store_banner_allowed = moduleBitOn(row.store_banner_allowed) ? 1 : 0;
   if (Object.prototype.hasOwnProperty.call(row, "qr_module")) state.businessMeta.qr_module = moduleBitOn(row.qr_module) ? 1 : 0;
 }
@@ -1145,6 +1166,7 @@ const VIEW_META = {
   "qr-orders": { title: "QR Orders", subtitle: "Incoming customer self-orders" },
   "online-orders": { title: "Online orders", subtitle: "Zomato and Swiggy kitchen tickets" },
   "online-store": { title: "Online Store", subtitle: "Your shop on the web" },
+  ecommerce: { title: "E-Commerce Store", subtitle: "Public shop, cart, and cash on delivery" },
   prescriptions: { title: "Prescription Orders", subtitle: "Customer QR uploads for this pharmacy" },
   kot: { title: "Kitchen KOT", subtitle: "Captain fires tickets; kitchen marks preparing and ready" },
   purchases: { title: "Purchases", subtitle: "Search and select items for a purchase bill" },
@@ -3168,6 +3190,7 @@ function applyNav() {
     if (view === "packs" && !isSpiceShop()) btn.hidden = true;
     if (view === "qr-orders" && !qrModuleOn()) btn.hidden = true;
     if (view === "online-store") btn.hidden = !onlineStoreAllowed();
+    if (view === "ecommerce") btn.hidden = !ecommerceAllowed();
     if (view === "online-orders") btn.hidden = !aggregatorDeskAllowed() || !can("orders");
     if (view === "prescriptions") btn.hidden = !isPharmacyShop() || !can("orders");
     if (view === "returns") btn.hidden = !isClassicBillShop() || !can("orders");
@@ -3186,6 +3209,7 @@ function applyNav() {
     });
   }
   paintOnlineStoreNav();
+  paintEcommerceNav();
   paintStaffRoleOptions();
   const growthBtn = $("open-growth");
   if (growthBtn) growthBtn.hidden = !(can("growth") || can("reports"));
@@ -3526,6 +3550,7 @@ function showView(name) {
   if (name === "qr-orders" && isPharmacyShop()) name = "prescriptions";
   else if (name === "qr-orders" && !qrModuleOn()) name = landingView();
   if (name === "online-store" && !onlineStoreAllowed()) name = landingView();
+  if (name === "ecommerce" && !ecommerceAllowed()) name = landingView();
   if (name === "prescriptions" && !isPharmacyShop()) name = can("counter") ? "counter" : landingView();
   if (name === "kot" && (!isRestaurantShop() || !can("kot"))) name = can("counter") ? "counter" : landingView();
   if (name === "recurring" && !can("orders")) name = landingView();
@@ -3572,6 +3597,7 @@ function showView(name) {
   if (name === "returns") loadReturnsView();
   if (name === "qr-orders") loadQrOrders();
   if (name === "online-store") globalThis.POSOnlineStore?.open?.();
+  if (name === "ecommerce") globalThis.POSEcommerce?.open?.();
   if (name === "online-orders") loadAggregatorOrders();
   if (name === "prescriptions") loadPrescriptions();
   if (name === "kot") {
@@ -11668,15 +11694,20 @@ function startQrModuleWatch() {
       const prev = Number(state.businessMeta.qr_module) === 1 ? 1 : 0;
       const nextStore = moduleBitOn(me.business.online_store) ? 1 : 0;
       const prevStore = moduleBitOn(state.businessMeta.online_store) ? 1 : 0;
+      const nextShop = moduleBitOn(me.business.ecommerce_store) ? 1 : 0;
+      const prevShop = moduleBitOn(state.businessMeta.ecommerce_store) ? 1 : 0;
       state.businessMeta.qr_module = next;
       state.businessMeta.online_store = nextStore;
+      state.businessMeta.ecommerce_store = nextShop;
       state.businessMeta.store_banner_allowed = moduleBitOn(me.business.store_banner_allowed) ? 1 : 0;
-      if (next === prev && nextStore === prevStore) return;
+      if (next === prev && nextStore === prevStore && nextShop === prevShop) return;
       applyNav();
       if (next) startQrOrderWatch();
       else if (state.currentView === "qr-orders") showView(landingView());
       if (!nextStore && state.currentView === "online-store") showView(landingView());
       if (nextStore && state.currentView === "online-store") globalThis.POSOnlineStore?.open?.();
+      if (!nextShop && state.currentView === "ecommerce") showView(landingView());
+      if (nextShop && state.currentView === "ecommerce") globalThis.POSEcommerce?.open?.();
     } catch {
       /* keep the last flag until the next check */
     }

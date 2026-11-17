@@ -241,6 +241,13 @@ export async function registerBusiness(raw, opts = {}) {
     } catch {
       /* column added on schema boot; missing means the shop stays off */
     }
+    try {
+      const ecomRaw = raw?.ecommerce_store ?? raw?.ecommerceStore;
+      const ecom = ecomRaw == null ? 0 : normalizeOnlineStore(ecomRaw);
+      await conn.query("UPDATE businesses SET ecommerce_store = ? WHERE id = ?", [ecom, id]);
+    } catch {
+      /* column added on schema boot; missing means the shop stays off */
+    }
     if (!expiry) {
       await conn.query(
         opts.yearly
@@ -394,6 +401,13 @@ export async function updateBusiness(id, raw) {
     await query("UPDATE businesses SET qr_module = ? WHERE id = ?", [b.qr_module, id]);
   } catch {
     /* column added on schema boot; missing means the shop stays off */
+  }
+  if (Object.prototype.hasOwnProperty.call(raw || {}, "ecommerce_store") || Object.prototype.hasOwnProperty.call(raw || {}, "ecommerceStore")) {
+    try {
+      await query("UPDATE businesses SET ecommerce_store = ? WHERE id = ?", [normalizeOnlineStore(raw.ecommerce_store ?? raw.ecommerceStore), id]);
+    } catch {
+      /* column added on schema boot */
+    }
   }
   if (Object.prototype.hasOwnProperty.call(raw || {}, "online_store") || Object.prototype.hasOwnProperty.call(raw || {}, "onlineStore")) {
     try {

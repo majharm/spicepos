@@ -2627,14 +2627,22 @@ async function render() {
         </div>`,
       );
     } else if (tab === "biz") {
-      const [rows, plans, managers, storePerm] = await Promise.all([
+      const [rows, plans, managers, storePerm, ecomPerm] = await Promise.all([
         api("/api/master/businesses"),
         api("/api/master/plans"),
         api("/api/master/account-managers").catch(() => []),
         api("/api/master/online-store").catch(() => ({ forAll: 0, businesses: [] })),
+        api("/api/master/ecommerce").catch(() => ({ businesses: [] })),
       ]);
       window.__storeForAll = Number(storePerm?.forAll) === 1 ? 1 : 0;
-      const storeRows = Array.isArray(storePerm?.businesses) && storePerm.businesses.length ? storePerm.businesses : rows;
+      const ecomById = new Map((Array.isArray(ecomPerm?.businesses) ? ecomPerm.businesses : []).map((b) => [b.id, b]));
+      const storeRows = (Array.isArray(storePerm?.businesses) && storePerm.businesses.length ? storePerm.businesses : rows).map((b) => ({
+        ...b,
+        ecommerce_store: ecomById.get(b.id)?.ecommerce_store ?? b.ecommerce_store ?? 0,
+      }));
+      rows.forEach((b) => {
+        if (ecomById.has(b.id)) b.ecommerce_store = ecomById.get(b.id).ecommerce_store;
+      });
       const planOptions = plans
         .map((p) => `<option value="${p.id}">${p.name} · ${money(p.fee_monthly)} / year</option>`)
         .join("");
@@ -2700,6 +2708,7 @@ async function render() {
                       ${Number(b.swiggy_allowed) === 1 ? `<span class="item-chip">Swiggy allowed</span>` : ""}
                       ${Number(b.qr_module) === 1 ? `<span class="item-chip is-ok">QR module</span>` : ""}
                       <span class="item-chip${Number(b.online_store) === 1 ? " is-ok" : " is-muted"}" data-store-chip="${attr(b.id)}">${Number(b.online_store) === 1 ? "Online store" : "Store off"}</span>
+                      <span class="item-chip${Number(b.ecommerce_store) === 1 ? " is-ok" : " is-muted"}" data-ecom-chip="${attr(b.id)}">${Number(b.ecommerce_store) === 1 ? "E-Commerce" : "E-Commerce off"}</span>
                     </div>
                   </div>
                   <div class="biz-shop-actions">
@@ -2821,6 +2830,10 @@ async function render() {
                   <input type="checkbox" name="storeBannerAllowed" checked />
                   <span><strong>Login banner</strong><small>Let this business upload the banner on its own Online Store login page.</small></span>
                 </label>
+                <label class="full biz-check">
+                  <input type="checkbox" name="ecommerceStore" />
+                  <span><strong>E-Commerce Store</strong><small>Let this business publish a public shop. Visitors browse products and pay cash on delivery.</small></span>
+                </label>
               </fieldset>
               <fieldset class="item-block">
                 <legend>Owner</legend>
@@ -2935,6 +2948,30 @@ async function render() {
                 </label>
               </article>`;
             }).join("") : `<div class="item-empty-card"><strong>No businesses yet</strong><p>Create a shop on the Shops tab, then allow its Online Store here.</p></div>`}
+          </div>
+          <div class="ma-section-head">
+            <div>
+              <h3>E-Commerce Store</h3>
+              <p class="hint"><span id="ecom-perm-count">${storeRows.filter((b) => Number(b.ecommerce_store) === 1).length} of ${storeRows.length} businesses enabled.</span> A public shop with a cart and cash on delivery. New businesses stay off until you enable them.</p>
+            </div>
+          </div>
+          <div class="biz-perm-toolbar">
+            <button class="btn primary" type="button" id="ecom-enable-all">Enable E-Commerce for All Businesses</button>
+            <button class="btn" type="button" id="ecom-disable-all">Disable E-Commerce for All Businesses</button>
+            <p class="hint" id="ecom-perm-hint"></p>
+          </div>
+          <div class="biz-perm-list" id="ecom-perm-body">
+            ${storeRows.length ? storeRows.map((b) => {
+              const on = Number(b.ecommerce_store) === 1;
+              return `<article class="biz-perm-row">
+                <div class="biz-perm-who"><strong>${attr(b.name)}</strong><span>${attr(b.business_type || b.category || "—")}</span></div>
+                <span class="item-chip${on ? " is-ok" : " is-muted"}" data-ecom-status="${attr(b.id)}">${on ? "Enabled" : "Disabled"}</span>
+                <label class="biz-switch">
+                  <input type="checkbox" data-ecom-toggle="${attr(b.id)}" ${on ? "checked" : ""} aria-label="E-Commerce Store for ${attr(b.name)}" />
+                  <span>E-Commerce Store</span>
+                </label>
+              </article>`;
+            }).join("") : ""}
           </div>
         </section>
         <section class="item-composer" id="biz-sub-history" hidden>
@@ -3054,6 +3091,63 @@ async function render() {
           permHint.textContent = err.message;
         }
       });
+      function paintEcomStatus(id, on) {
+        const chip = body.querySelector(`[data-ecom-status="${id}"]`);
+        const listed = body.querySelector(`[data-ecom-chip="${id}"]`);
+        if (chip) {
+          chip.className = `item-chip${on ? " is-ok" : " is-muted"}`;
+          chip.textContent = on ? "Enabled" : "Disabled";
+        }
+        if (listed) {
+          listed.className = `item-chip${on ? " is-ok" : " is-muted"}`;
+          listed.textContent = on ? "E-Commerce" : "E-Commerce off";
+        }
+        const row = storeRows.find((r) => r.id === id);
+        if (row) row.ecommerce_store = on ? 1 : 0;
+        const count = $("ecom-perm-count");
+        if (count) count.textContent = `${storeRows.filter((r) => Number(r.ecommerce_store) === 1).length} of ${storeRows.length} businesses enabled.`;
+      }
+      body.querySelectorAll("[data-ecom-toggle]").forEach((box) => {
+        box.onchange = async () => {
+          const on = box.checked;
+          const hintBox = $("ecom-perm-hint");
+          try {
+            if (hintBox) hintBox.textContent = "Saving…";
+            const saved = await api(`/api/master/ecommerce/businesses/${box.dataset.ecomToggle}`, { method: "PUT", body: JSON.stringify({ ecommerce_store: on ? 1 : 0 }) });
+            paintEcomStatus(box.dataset.ecomToggle, Number(saved.ecommerce_store) === 1);
+            if (hintBox) hintBox.textContent = "Saved.";
+          } catch (err) {
+            box.checked = !on;
+            if (hintBox) hintBox.textContent = err.message;
+          }
+        };
+      });
+      $("ecom-enable-all")?.addEventListener("click", async () => {
+        if (!confirm("Enable E-Commerce Store for every existing business?")) return;
+        const hintBox = $("ecom-perm-hint");
+        try {
+          if (hintBox) hintBox.textContent = "Saving…";
+          await api("/api/master/ecommerce/enable-all", { method: "POST", body: "{}" });
+          body.querySelectorAll("[data-ecom-toggle]").forEach((el) => { el.checked = true; });
+          storeRows.forEach((r) => paintEcomStatus(r.id, true));
+          if (hintBox) hintBox.textContent = "E-Commerce Store enabled for every business.";
+        } catch (err) {
+          if (hintBox) hintBox.textContent = err.message;
+        }
+      });
+      $("ecom-disable-all")?.addEventListener("click", async () => {
+        if (!confirm("Disable E-Commerce Store for every existing business? Saved shops and orders stay on file.")) return;
+        const hintBox = $("ecom-perm-hint");
+        try {
+          if (hintBox) hintBox.textContent = "Saving…";
+          await api("/api/master/ecommerce/disable-all", { method: "POST", body: "{}" });
+          body.querySelectorAll("[data-ecom-toggle]").forEach((el) => { el.checked = false; });
+          storeRows.forEach((r) => paintEcomStatus(r.id, false));
+          if (hintBox) hintBox.textContent = "E-Commerce Store disabled for every business. Saved shop data is still kept.";
+        } catch (err) {
+          if (hintBox) hintBox.textContent = err.message;
+        }
+      });
       $("store-disable-all")?.addEventListener("click", async () => {
         if (!confirm("Disable Online Store for every existing business? Saved stores and orders stay on file.")) return;
         try {
@@ -3111,6 +3205,7 @@ async function render() {
         if (form.swiggyAllowed) form.swiggyAllowed.checked = Number(b?.swiggy_allowed) === 1;
         if (form.qrModule) form.qrModule.checked = Number(b?.qr_module) === 1;
         if (form.onlineStore) form.onlineStore.checked = b ? Number(b.online_store) === 1 : Number(window.__storeForAll) === 1;
+        if (form.ecommerceStore) form.ecommerceStore.checked = b ? Number(b.ecommerce_store) === 1 : false;
         if (form.storeBannerAllowed) form.storeBannerAllowed.checked = b ? Number(b.store_banner_allowed) === 1 : true;
         const editing = Boolean(b);
         setAdminRequired(!editing);
@@ -3179,6 +3274,7 @@ async function render() {
         payload.swiggyAllowed = foodModule && form.swiggyAllowed?.checked ? 1 : 0;
         payload.qrModule = qrModuleTypeAllowed(form.businessType.value, form.businessCategory.value) && form.qrModule?.checked ? 1 : 0;
         payload.onlineStore = form.onlineStore?.checked ? 1 : 0;
+        payload.ecommerceStore = form.ecommerceStore?.checked ? 1 : 0;
         payload.storeBannerAllowed = form.storeBannerAllowed?.checked ? 1 : 0;
         const id = payload.business_id;
         delete payload.business_id;

@@ -433,6 +433,7 @@ export function registerAuth(app) {
           qr_module: Number(business?.qr_module) === 1 ? 1 : 0,
           online_store: moduleBit(business?.online_store),
           store_banner_allowed: moduleBit(business?.store_banner_allowed),
+          ecommerce_store: moduleBit(business?.ecommerce_store),
           subscription_expires_at: business?.subscription_expires_at,
         },
       });
@@ -710,6 +711,7 @@ export function registerAuth(app) {
           qr_module: Number(req.auth.business?.qr_module) === 1 ? 1 : 0,
           online_store: moduleBit(req.auth.business?.online_store),
           store_banner_allowed: moduleBit(req.auth.business?.store_banner_allowed),
+          ecommerce_store: moduleBit(req.auth.business?.ecommerce_store),
           plan_id: req.auth.business?.plan_id,
           subscription_expires_at: req.auth.business?.subscription_expires_at,
         },
