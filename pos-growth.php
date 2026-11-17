@@ -239,9 +239,24 @@ function pos_analyze_growth($snap) {
     $why[] = ($bestHour["label"] ?? "Peak hours") . " sales are stronger than " . ($quietHour["label"] ?? "slower hours") . ".";
   }
   if (!$why) $why[] = "Keep billing every walk-in and restock your best sellers.";
-  $summary = $salesGrowth >= 0
+  $happened = $salesGrowth >= 0
     ? "Your sales increased by {$salesGrowth}% this week compared with last week. " . implode(" ", $why)
     : "Your sales are " . abs($salesGrowth) . "% vs last week. " . implode(" ", $why);
+  $overText = $oversell["items"]
+    ? $oversell["items"] . " items were oversold for " . pos_growth_inr($oversell["amount"]) . " (" . $oversell["qty"] . " units)."
+    : "No item was sold beyond the stock on hand.";
+  $nextText = "If the recent trend holds, tomorrow is about " . pos_growth_inr($tomorrow) . ", next 7 days " . pos_growth_inr($tomorrow * 7) . ". This is a shop-data estimate, not an external market forecast.";
+  $actionText = $oversell["items"]
+    ? "Buy or transfer stock for the oversold items before the next bill, and open the item-wise overselling report."
+    : (($out || $low) ? "Improve inventory availability for your top products and reorder before they stock out." : ($inactiveCount ? "Increase repeat-customer campaigns for shoppers who have gone quiet." : "Protect margin on high-volume items and keep evening hours fully staffed."));
+  $brief = [
+    "happened" => $happened,
+    "why" => implode(" ", $why),
+    "over" => $overText,
+    "next" => $nextText,
+    "action" => $actionText,
+  ];
+  $summary = "What happened: {$happened} Why: " . implode(" ", $why) . " Overselling: {$overText} What may happen next: {$nextText} What you should do: {$actionText}";
 
   $alerts = [];
   if ($oversell["items"]) $alerts[] = $oversell["items"] . " items sold past the stock on hand this month (" . pos_growth_inr($oversell["amount"]) . ").";
@@ -269,7 +284,9 @@ function pos_analyze_growth($snap) {
 
   return [
     "summary" => $summary,
-    "opportunity" => $oversell["items"] ? "Buy or transfer stock for the oversold items before the next bill, and open the item-wise overselling report." : (($out || $low) ? "Improve inventory availability for your top products and reorder before they stock out." : ($inactiveCount ? "Increase repeat-customer campaigns for shoppers who have gone quiet." : "Protect margin on high-volume items and keep evening hours fully staffed.")),
+    "brief" => $brief,
+    "engine" => "advanced",
+    "opportunity" => $actionText,
     "score" => $score,
     "compare" => ["todayVsYesterday" => $todayGrowth, "weekVsLast" => $salesGrowth, "monthVsLast" => $monthGrowth, "yearVsLast" => $yearGrowth],
     "kpis" => [
@@ -345,39 +362,42 @@ function pos_analyze_growth($snap) {
 }
 
 function pos_growth_ask($question, $analysis) {
-  $q = strtolower((string) $question);
+  $q = strtolower(trim((string) $question));
   $a = $analysis ?: [];
-  if (preg_match("/why.*drop|sales drop|decreased|down/", $q)) return $a["alerts"][0] ?? ($a["summary"] ?? "");
-  if (preg_match("/profit|margin/", $q) && preg_match("/product|item/", $q)) {
-    $p = $a["products"]["profit"][0] ?? null;
-    return $p ? $p["name"] . " is among your most profitable lines (" . pos_growth_inr($p["profit"]) . ")." : "Profit by product needs more billed sales with cost recorded.";
-  }
+  $full = (string) ($a["summary"] ?? "Open AI Growth after you have sales on this shop.");
+  if ($q === "") return $full;
+  $focus = "";
   if (preg_match("/oversell|oversold|sold past|without stock/", $q)) {
     $line = $a["oversell"]["lines"][0] ?? null;
-    return $line
+    $focus = $line
       ? ($a["oversell"]["items"] ?? 0) . " items were oversold (" . pos_growth_inr($a["oversell"]["amount"] ?? 0) . "). " . $line["name"] . " sold " . $line["oversold"] . " past the stock on hand."
       : "No item was sold beyond the stock on hand in this range.";
-  }
-  if (preg_match("/reorder|buy this week|out of stock|stock/", $q)) {
+  } elseif (preg_match("/why.*drop|sales drop|decreased|down/", $q)) {
+    $focus = $a["alerts"][0] ?? ($a["brief"]["happened"] ?? $full);
+  } elseif (preg_match("/profit|margin/", $q) && preg_match("/product|item/", $q)) {
+    $p = $a["products"]["profit"][0] ?? null;
+    $focus = $p ? $p["name"] . " is among your most profitable lines (" . pos_growth_inr($p["profit"]) . ")." : "Profit by product needs more billed sales with cost recorded.";
+  } elseif (preg_match("/increase.*profit|how.*profit/", $q)) {
+    foreach ($a["recommendations"] ?? [] as $r) if (($r["kind"] ?? "") === "profit") { $focus = $r["text"]; break; }
+    if ($focus === "") $focus = $a["opportunity"] ?? "";
+  } elseif (preg_match("/reorder|buy this week|out of stock|stock/", $q)) {
     $r = $a["inventory"]["reorders"][0] ?? null;
-    return $r ? $r["text"] : "Stock looks comfortable on tracked items.";
-  }
-  if (preg_match("/promote|offer|today/", $q)) return $a["promotions"][0]["text"] ?? ($a["recommendations"][0]["text"] ?? ($a["summary"] ?? ""));
-  if (preg_match("/increase.*profit|how.*profit/", $q)) {
-    foreach ($a["recommendations"] ?? [] as $r) if (($r["kind"] ?? "") === "profit") return $r["text"];
-    return $a["opportunity"] ?? "";
-  }
-  if (preg_match("/customer|target|repeat|inactive/", $q)) {
-    return ($a["customers"]["inactive"] ?? 0) . " inactive customers and " . ($a["customers"]["vip"] ?? 0) . " high-value customers.";
-  }
-  if (preg_match("/slow|stop selling|dead/", $q)) {
+    $focus = $r ? $r["text"] : "Stock looks comfortable on tracked items.";
+  } elseif (preg_match("/customer|target|repeat|inactive/", $q)) {
+    $focus = ($a["customers"]["inactive"] ?? 0) . " inactive customers and " . ($a["customers"]["vip"] ?? 0) . " high-value customers.";
+  } elseif (preg_match("/slow|stop selling|dead/", $q)) {
     $s = $a["products"]["slow"][0] ?? null;
-    return $s ? $s["name"] . " is slow or idle. Consider a clearance offer." : "No clear dead stock from this period.";
+    $focus = $s ? $s["name"] . " is slow or idle. Consider a clearance offer." : "No clear dead stock from this period.";
+  } elseif (preg_match("/forecast|tomorrow|next/", $q)) {
+    $focus = "If the recent trend holds, tomorrow is about " . pos_growth_inr($a["forecast"]["tomorrow"] ?? 0) . ", next 7 days " . pos_growth_inr($a["forecast"]["next7"] ?? 0) . ". This is a shop-data estimate, not an external market forecast.";
+  } elseif (preg_match("/promote|offer|today/", $q)) {
+    $focus = $a["promotions"][0]["text"] ?? ($a["recommendations"][0]["text"] ?? ($a["brief"]["happened"] ?? $full));
+  } elseif (preg_match("/sales|week|month|bill/", $q)) {
+    $focus = $a["brief"]["happened"] ?? $full;
   }
-  if (preg_match("/forecast|tomorrow|next/", $q)) {
-    return "If the recent trend holds, tomorrow is about " . pos_growth_inr($a["forecast"]["tomorrow"] ?? 0) . ". This is a shop-data estimate, not an external market forecast.";
-  }
-  return $a["summary"] ?? "Open AI Growth after you have sales on this shop.";
+  if ($focus === "") return $full;
+  $action = (string) ($a["brief"]["action"] ?? ($a["opportunity"] ?? ""));
+  return $action !== "" && strpos($focus, $action) === false ? $focus . " What you should do: " . $action : $focus;
 }
 
 function pos_growth_windows($bid, $windows) {

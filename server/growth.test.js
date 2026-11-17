@@ -97,6 +97,17 @@ test("oversold sales become an urgent growth action", () => {
   assert.match(readFileSync(path.join(root, "pos-growth.php"), "utf8"), /pos_ior_build_rows/);
 });
 
+test("advanced AI briefs the shop and still answers a direct question", () => {
+  const out = analyzeGrowth(snap);
+  assert.equal(out.engine, "advanced");
+  assert.match(out.summary, /What happened/);
+  assert.match(out.summary, /Overselling/);
+  assert.match(out.summary, /What you should do/);
+  assert.match(out.brief.happened, /14%/);
+  assert.match(answerGrowthQuestion("How is the shop doing overall?", out), /What happened/);
+  assert.match(answerGrowthQuestion("", out), /Overselling/);
+});
+
 test("Ask Business AI answers from the same shop snapshot", () => {
   const out = analyzeGrowth(snap);
   assert.match(answerGrowthQuestion("Which products should I reorder?", out), /Rice|Tea|Salt|stock/i);

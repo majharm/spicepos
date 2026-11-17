@@ -148,13 +148,13 @@ function renderGrowthKpis(data) {
 }
 
 function renderGrowthStory(data) {
+  const brief = data.brief || {};
   const f = data.forecast || {};
-  const why = (data.why || []).filter(Boolean).join(" ");
   const cards = [
-    ["01", "What happened", data.summary || "Open this page after you have sales on this shop."],
-    ["02", "Why it happened", why || (data.alerts || [])[0] || "The latest bills do not show a single cause yet."],
-    ["03", "What may happen next", `If recent bills hold, tomorrow is about ${money(f.tomorrow)}, the next 7 days ${money(f.next7)}, and the next 30 days ${money(f.next30)}.`],
-    ["04", "What you should do", data.opportunity || "Keep the best sellers in stock and review thin-margin items."],
+    ["01", "What happened", brief.happened || data.summary || "Open this page after you have sales on this shop."],
+    ["02", "Why it happened", brief.why || (data.why || []).filter(Boolean).join(" ") || (data.alerts || [])[0] || "The latest bills do not show a single cause yet."],
+    ["03", "What may happen next", brief.next || `If recent bills hold, tomorrow is about ${money(f.tomorrow)}, the next 7 days ${money(f.next7)}, and the next 30 days ${money(f.next30)}.`],
+    ["04", "What you should do", brief.action || data.opportunity || "Keep the best sellers in stock and review thin-margin items."],
   ];
   const host = $("growth-story");
   if (!host) return;
@@ -392,17 +392,35 @@ function renderGrowthCharts(data) {
     <figure class="growth-chart growth-chart-wide"><figcaption>Revenue by category</figcaption>${svgDonut(data.charts?.categories || [], "amount")}</figure>`;
 }
 
+function paintAdvancedAnswer(answer, brief) {
+  const host = $("growth-ask-answer");
+  if (!host) return;
+  const rows = brief
+    ? [
+        ["What happened", brief.happened],
+        ["Why it happened", brief.why],
+        ["Overselling and sales", brief.over],
+        ["What may happen next", brief.next],
+        ["What you should do", brief.action],
+      ].filter((row) => row[1])
+    : [];
+  host.innerHTML = `${answer ? `<p class="growth-ai-lead">${escapeHtml(answer)}</p>` : ""}${rows
+    .map((row) => `<article class="growth-ai-card"><h4>${escapeHtml(row[0])}</h4><p>${escapeHtml(row[1])}</p></article>`)
+    .join("")}`;
+}
+
 function renderGrowthAsk(data) {
-  // Ask Business AI — keyword answers from this shop's billed snapshot.
+  // Ask Business AI uses the advanced shop briefing.
   const chips = data.askExamples || [];
   $("growth-ask-chips").innerHTML = chips
     .map((q) => `<button class="btn" type="button" data-growth-ask="${escapeHtml(q)}">${escapeHtml(q)}</button>`)
     .join("");
+  paintAdvancedAnswer("", data.brief);
 }
 
 function renderGrowthAll(data) {
   growthData = data;
-  $("growth-summary").textContent = data.summary || "Open this page after you have sales on this shop.";
+  $("growth-summary").textContent = data.brief?.happened || data.summary || "Open this page after you have sales on this shop.";
   $("growth-opportunity").textContent = data.opportunity || "";
   $("growth-alerts").innerHTML = (data.alerts || [])
     .map((t) => `<p class="growth-alert">⚠ ${escapeHtml(t)}</p>`)
@@ -612,8 +630,8 @@ async function askGrowthQuestion(question) {
       const localized = window.POSI18n.t("ai.today_sales", { amount: money(data.todaySales) });
       if (localized && window.POSI18n.locale() !== "en") answer = localized;
     }
-    $("growth-ask-answer").textContent = answer;
-    $("growth-hint").textContent = "Answer uses this shop's billed sales, stock, and customers — not an external model.";
+    paintAdvancedAnswer(answer, data.brief || growthData?.brief);
+    $("growth-hint").textContent = "Advanced AI read this shop's sales, oversold items, stock, and customers.";
     $("growth-hint").className = "hint ok";
   } catch (err) {
     $("growth-ask-answer").textContent = err.message;

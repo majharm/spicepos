@@ -462,7 +462,7 @@ export function analyzeGrowth(snap = {}) {
     },
   ];
 
-  return {
+  const analysis = {
     summary,
     opportunity,
     score,
@@ -550,7 +550,11 @@ export function analyzeGrowth(snap = {}) {
       "What should I buy this week?",
       "How can I increase repeat customers?",
     ],
+    engine: "advanced",
   };
+  analysis.brief = growthBrief(analysis);
+  analysis.summary = formatGrowthBrief(analysis.brief);
+  return analysis;
 }
 
 export function growthToSheets(a = {}) {
@@ -621,45 +625,80 @@ export function growthToSheets(a = {}) {
   ];
 }
 
-export function answerGrowthQuestion(question, analysis) {
+export function growthBrief(analysis = {}) {
+  const stored = analysis.brief;
+  if (stored?.happened) return stored;
+  const over = analysis.oversell || {};
+  const forecast = analysis.forecast || {};
+  const overText = num(over.items)
+    ? `${over.items} item${num(over.items) === 1 ? "" : "s"} were oversold for ${inrText(over.amount)} (${over.qty} units).`
+    : "No item was sold beyond the stock on hand.";
+  return {
+    happened: analysis.summary || "Open AI Growth after you have sales on this shop.",
+    why: (analysis.why || []).filter(Boolean).join(" ") || "The latest bills do not show a single cause yet.",
+    over: overText,
+    next: `If the recent trend holds, tomorrow is about ${inrText(forecast.tomorrow)}, next 7 days ${inrText(forecast.next7)}, next 30 days ${inrText(forecast.next30)}. This is a shop-data estimate, not an external market forecast.`,
+    action: analysis.opportunity || "Keep the best sellers in stock and review thin-margin items.",
+  };
+}
+
+export function formatGrowthBrief(brief = {}) {
+  return [
+    `What happened: ${brief.happened || ""}`,
+    `Why: ${brief.why || ""}`,
+    `Overselling: ${brief.over || ""}`,
+    `What may happen next: ${brief.next || ""}`,
+    `What you should do: ${brief.action || ""}`,
+  ].join(" ");
+}
+
+function focusGrowthAnswer(question, analysis) {
   const q = String(question || "").toLowerCase();
-  const a = analysis || analyzeGrowth({});
-  if (/why.*drop|sales drop|decreased|down/.test(q)) {
-    return a.alerts[0] || a.summary;
-  }
-  if (/profit|margin/.test(q) && /product|item/.test(q)) {
-    const p = a.products.profit[0];
-    return p
-      ? `${p.name} is among your most profitable lines (${inrText(p.profit)}, ${round2(p.margin)}% margin).`
-      : "Profit by product needs more billed sales with cost recorded.";
-  }
-  if (/reorder|buy this week|out of stock|stock/.test(q)) {
-    const r = a.inventory.reorders[0];
-    return r ? r.text : a.inventory.low[0] ? `${a.inventory.low[0].name} is at reorder level.` : "Stock looks comfortable on tracked items.";
-  }
-  if (/promote|offer|today/.test(q)) {
-    return a.promotions[0]?.text || a.recommendations[0]?.text || a.summary;
-  }
-  if (/increase.*profit|how.*profit/.test(q)) {
-    return a.recommendations.find((r) => r.kind === "profit")?.text || a.opportunity;
-  }
-  if (/customer|target|repeat|inactive/.test(q)) {
-    return a.recommendations.find((r) => r.kind === "retention")?.text || `${a.customers.inactive} inactive customers and ${a.customers.vip} high-value customers.`;
-  }
+  const a = analysis || {};
   if (/oversell|oversold|sold past|without stock|negative stock/.test(q)) {
     const line = a.oversell?.lines?.[0];
     return line
       ? `${a.oversell.items} item${a.oversell.items === 1 ? "" : "s"} were oversold (${inrText(a.oversell.amount)}). ${line.name} sold ${line.oversold} past the stock on hand on ${line.invoice || line.date}.`
       : "No item was sold beyond the stock on hand in this range.";
   }
+  if (/why.*drop|sales drop|decreased|down/.test(q)) return a.alerts?.[0] || a.brief?.happened || a.summary;
+  if (/profit|margin/.test(q) && /product|item/.test(q)) {
+    const p = a.products?.profit?.[0];
+    return p
+      ? `${p.name} is among your most profitable lines (${inrText(p.profit)}, ${round2(p.margin)}% margin).`
+      : "Profit by product needs more billed sales with cost recorded.";
+  }
+  if (/increase.*profit|how.*profit/.test(q)) {
+    return a.recommendations?.find((r) => r.kind === "profit")?.text || a.opportunity;
+  }
+  if (/reorder|buy this week|out of stock|stock/.test(q)) {
+    const r = a.inventory?.reorders?.[0];
+    return r ? r.text : a.inventory?.low?.[0] ? `${a.inventory.low[0].name} is at reorder level.` : "Stock looks comfortable on tracked items.";
+  }
+  if (/customer|target|repeat|inactive/.test(q)) {
+    return a.recommendations?.find((r) => r.kind === "retention")?.text || `${a.customers?.inactive || 0} inactive customers and ${a.customers?.vip || 0} high-value customers.`;
+  }
   if (/slow|stop selling|dead/.test(q)) {
-    const s = a.products.slow[0] || a.products.dead[0];
+    const s = a.products?.slow?.[0] || a.products?.dead?.[0];
     return s ? `${s.name} is slow or idle. Consider a clearance offer.` : "No clear dead stock from this period.";
   }
   if (/forecast|tomorrow|next/.test(q)) {
-    return `If the recent trend holds, tomorrow is about ${inrText(a.forecast.tomorrow)}, next 7 days ${inrText(a.forecast.next7)}, next 30 days ${inrText(a.forecast.next30)}. This is a shop-data estimate, not an external market forecast.`;
+    return `If the recent trend holds, tomorrow is about ${inrText(a.forecast?.tomorrow)}, next 7 days ${inrText(a.forecast?.next7)}, next 30 days ${inrText(a.forecast?.next30)}. This is a shop-data estimate, not an external market forecast.`;
   }
-  return a.summary;
+  if (/promote|offer|today/.test(q)) return a.promotions?.[0]?.text || a.recommendations?.[0]?.text || a.brief?.happened || a.summary;
+  if (/sales|week|month|bill/.test(q)) return a.brief?.happened || a.summary;
+  return "";
+}
+
+export function answerGrowthQuestion(question, analysis) {
+  const a = analysis || analyzeGrowth({});
+  const brief = growthBrief(a);
+  const asked = String(question || "").trim();
+  if (!asked) return formatGrowthBrief(brief);
+  const focus = focusGrowthAnswer(asked, { ...a, brief });
+  if (!focus) return formatGrowthBrief(brief);
+  const action = brief.action || "";
+  return action && !focus.includes(action) ? `${focus} What you should do: ${action}` : focus;
 }
 
 function segmentCustomer(row) {

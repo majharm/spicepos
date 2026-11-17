@@ -658,6 +658,8 @@ app.post("/api/growth/ask", requireStaff, requirePerm("reports"), async (req, re
     res.json({
       ok: true,
       answer: answerGrowthQuestion(question, data),
+      engine: "advanced",
+      brief: data.brief || null,
       question,
       locale,
       todaySales: data.kpis?.todaySales,

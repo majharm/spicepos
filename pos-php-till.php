@@ -876,7 +876,7 @@ function pos_php_till_dispatch($path, $method, $body) {
     require_once __DIR__ . "/pos-growth.php";
     $data = pos_build_growth($bid);
     $q = (string) ($body["question"] ?? "");
-    pos_send(200, ["ok" => true, "answer" => pos_growth_ask($q, $data), "question" => $q]);
+    pos_send(200, ["ok" => true, "engine" => "advanced", "answer" => pos_growth_ask($q, $data), "brief" => $data["brief"] ?? null, "question" => $q]);
   }
   if ($path === "growth/excel" && $method === "GET") {
     require_once __DIR__ . "/pos-growth.php";
