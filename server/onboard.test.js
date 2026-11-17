@@ -69,7 +69,7 @@ test("QR module stays off unless Master Admin enables it", () => {
   assert.match(auth, /qr_module: Number\(business\?\.qr_module\) === 1 \? 1 : 0/);
   assert.match(auth, /qr_module: Number\(req\.auth\.business\?\.qr_module\) === 1 \? 1 : 0/);
   assert.match(read("js/app.js"), /function startQrModuleWatch/);
-  assert.match(read("master.html"), /master\.js\?v=20261117dash1/);
+  assert.match(read("master.html"), /master\.js\?v=20261117dash2/);
 });
 
 test("Sign Up Now and Master Admin collect DSA Code", () => {

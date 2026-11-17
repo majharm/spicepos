@@ -2397,29 +2397,8 @@ async function render() {
             <button class="btn" type="button" data-open-tab="live">View all</button>
           </div>
           ${livePreviewTable(live)}
-        </section>
-      <div class="master-shop-board">${
-        (d.businesses || []).length
-          ? d.businesses
-              .map(
-                (b) => `<article class="master-shop-card" data-shop-card data-shop-search="${attr(
-                  `${b.name} ${b.computed_status} ${b.plan_name || b.plan_id || ""} ${b.dsa_code || ""}`.toLowerCase(),
-                )}">
-            <div class="master-shop-mark" aria-hidden="true">${letterMark(b.name)}</div>
-            <div class="master-shop-copy">
-              <strong>${attr(b.name)}</strong>
-              <span class="master-shop-meta">${statusChip(b.computed_status)} ${attr(b.plan_name || b.plan_id || "—")} · ${money(b.fee_monthly)}/yr</span>
-              <span class="master-shop-meta">${money(b.today_sales)} today · ${Number(b.today_bills) || 0} bills · ${Number(b.users) || 0} users</span>
-              ${b.dsa_code ? `<span class="master-shop-meta"><span class="item-chip">DSA ${attr(b.dsa_code)}</span></span>` : ""}
-            </div>
-            <button class="btn primary" type="button" data-enter="${attr(b.id)}">Open POS</button>
-          </article>`,
-              )
-              .join("")
-          : `<div class="item-empty-card"><strong>No shops yet</strong><p>Add a business to open its POS from here.</p></div>`
-      }</div>`,
+        </section>`,
       );
-      bindEnterPosButtons(body);
       body.querySelectorAll("[data-dash-range]").forEach((btn) => {
         btn.onclick = () => {
           dashRange = btn.dataset.dashRange || "30";

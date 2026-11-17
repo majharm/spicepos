@@ -117,7 +117,7 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   const php = read("pos-php-core.php");
   assert.match(html, /data-tab="bizmap"/);
   assert.match(html, /biz-traffic-map\.js\?v=20261117bizmap1/);
-  assert.match(html, /master\.js\?v=20261117dash1/);
+  assert.match(html, /master\.js\?v=20261117dash2/);
   assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261117bizmap1/);
   assert.match(read("js/admin-heartbeat.js"), /\/api\/session\/heartbeat/);
   assert.match(read("js/admin-heartbeat.js"), /visibilityState === "hidden"/);
