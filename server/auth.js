@@ -17,6 +17,7 @@ import {
   SUBSCRIPTION_EXPIRED_MESSAGE,
 } from "./subscription.js";
 import { recordAdminHeartbeat, recordAdminLogin, recordAdminLogout } from "./biz-traffic.js";
+import { prepareLoginChallenge, registerAdminSecurity, rememberAdminDevice, revokeOtherStaffSessions } from "./admin-security.js";
 
 export { publicStatus };
 
@@ -86,7 +87,7 @@ function privateAddress(ip) {
   return !ip || ip === "localhost" || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("127.");
 }
 
-function clientIp(req) {
+export function clientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "")
     .split(",")
     .map(cleanIp)
@@ -322,12 +323,42 @@ async function findStaff(identifier) {
   return row || null;
 }
 
-export async function issueStaffSession(req, res, { user, business, branchId, impersonatorAdminId }) {
+export function staffLoginPayload(user, business) {
+  const status = publicStatus(business);
+  return {
+    ok: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: displayName(user),
+      role: user.role,
+      permissions: parsePerms(user),
+    },
+    business: {
+      id: business?.id,
+      name: business?.name,
+      status,
+      category: business?.category,
+      business_type: business?.business_type,
+      bar_enabled: Number(business?.bar_enabled) === 1 ? 1 : 0,
+      resort_enabled: Number(business?.resort_enabled) === 1 ? 1 : 0,
+      zomato_allowed: Number(business?.zomato_allowed) === 1 ? 1 : 0,
+      swiggy_allowed: Number(business?.swiggy_allowed) === 1 ? 1 : 0,
+      qr_module: Number(business?.qr_module) === 1 ? 1 : 0,
+      online_store: moduleBit(business?.online_store),
+      store_banner_allowed: moduleBit(business?.store_banner_allowed),
+      ecommerce_store: moduleBit(business?.ecommerce_store),
+      subscription_expires_at: business?.subscription_expires_at,
+    },
+  };
+}
+
+export async function issueStaffSession(req, res, { user, business, branchId, impersonatorAdminId, remember = false }) {
   const oldToken = cookies(req).pos_sid;
   if (oldToken) {
     await query("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", [sha256(oldToken)]);
   }
-  const ttl = sessionSecs(false);
+  const ttl = sessionSecs(Boolean(remember));
   const token = newToken();
   const sid = crypto.randomUUID();
   await query(
@@ -348,6 +379,29 @@ export async function issueStaffSession(req, res, { user, business, branchId, im
   await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE id = ?", [sid]);
   setCookie(res, "pos_sid", token, ttl, req);
   return { token, ttl, sessionId: sid };
+}
+
+export async function finishStaffLogin(req, res, { user, business, branchId, remember }) {
+  const issued = await issueStaffSession(req, res, {
+    user,
+    business,
+    branchId,
+    remember: Boolean(remember),
+  });
+  try {
+    await rememberAdminDevice({ user, req, sessionId: issued.sessionId, clientIp });
+  } catch {
+    /* The session is already issued. A device-list write must not undo it. */
+  }
+  await recordAdminLogin(user, clientIp(req), {
+    deviceId: req.body?.deviceId,
+    deviceLabel: req.body?.deviceLabel,
+  });
+  runTenant({ businessId: user.business_id, branchId: user.branch_id, user }, async () => {
+    await audit("User Login", { module: "auth" }, req);
+  });
+  res.json(staffLoginPayload(user, business));
+  return issued;
 }
 
 export function registerAuth(app) {
@@ -430,54 +484,28 @@ export function registerAuth(app) {
       await query("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", [
         user.id,
       ]);
-      const ttl = sessionSecs(wantsRemember(req.body));
-      const token = newToken();
-      const sid = crypto.randomUUID();
-      await query(
-        `INSERT INTO staff_sessions (id, staff_user_id, token_hash, expires_at, business_id, ip, user_agent, branch_id)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        [
-          sid,
-          user.id,
-          sha256(token),
-          new Date(Date.now() + ttl * 1000),
-          user.business_id,
-          clientIp(req),
-          String(req.headers["user-agent"] || "").slice(0, 250),
-          branchId || user.branch_id,
-        ],
-      );
-      await query("UPDATE staff_sessions SET last_seen_at = NOW() WHERE id = ?", [sid]);
-      await recordAdminLogin(user, clientIp(req), req.body || {});
-      setCookie(res, "pos_sid", token, ttl, req);
-      runTenant({ businessId: user.business_id, branchId: user.branch_id, user }, async () => {
-        await audit("User Login", { module: "auth" }, req);
-      });
-      res.json({
-        ok: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: displayName(user),
-          role: user.role,
-          permissions: parsePerms(user),
-        },
-        business: {
-          id: business?.id,
-          name: business?.name,
-          status,
-          category: business?.category,
-          business_type: business?.business_type,
-          bar_enabled: Number(business?.bar_enabled) === 1 ? 1 : 0,
-          resort_enabled: Number(business?.resort_enabled) === 1 ? 1 : 0,
-          zomato_allowed: Number(business?.zomato_allowed) === 1 ? 1 : 0,
-          swiggy_allowed: Number(business?.swiggy_allowed) === 1 ? 1 : 0,
-          qr_module: Number(business?.qr_module) === 1 ? 1 : 0,
-          online_store: moduleBit(business?.online_store),
-          store_banner_allowed: moduleBit(business?.store_banner_allowed),
-          ecommerce_store: moduleBit(business?.ecommerce_store),
-          subscription_expires_at: business?.subscription_expires_at,
-        },
+      let challenge = null;
+      try {
+        challenge = await prepareLoginChallenge({
+          user,
+          req,
+          branchId: branchId || user.branch_id,
+          remember: wantsRemember(req.body),
+          clientIp,
+        });
+      } catch {
+        res.status(503).json({ error: "Sign-in is temporarily unavailable." });
+        return;
+      }
+      if (challenge) {
+        res.json(challenge);
+        return;
+      }
+      await finishStaffLogin(req, res, {
+        user,
+        business,
+        branchId: branchId || user.branch_id,
+        remember: wantsRemember(req.body),
       });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
@@ -797,6 +825,8 @@ export function registerAuth(app) {
     });
   });
 
+  registerAdminSecurity(app, { finishStaffLogin, clientIp });
+
   app.post("/api/me/locale", requireStaff, async (req, res) => {
     const locale = normalizeLocale(req.body?.locale);
     try {
@@ -824,6 +854,11 @@ export function registerAuth(app) {
         await hashPassword(next),
         user.id,
       ]);
+      try {
+        await revokeOtherStaffSessions(user.id, req.auth.sessionId);
+      } catch {
+        /* The new password is already stored. */
+      }
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });

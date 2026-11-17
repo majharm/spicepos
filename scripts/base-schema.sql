@@ -411,3 +411,94 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   INDEX idx_sm_biz_created (business_id, created_at),
   INDEX (item_id)
 );
+
+CREATE TABLE IF NOT EXISTS business_admin_security (
+  staff_user_id VARCHAR(255) PRIMARY KEY,
+  business_id VARCHAR(255) NOT NULL,
+  otp_login_enabled TINYINT NOT NULL DEFAULT 0,
+  whatsapp_number VARCHAR(20) NULL,
+  whatsapp_verified_at TIMESTAMP(3) NULL,
+  pin_fails INT NOT NULL DEFAULT 0,
+  pin_locked_until TIMESTAMP(3) NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  INDEX (business_id),
+  CONSTRAINT fk_admin_sec_staff FOREIGN KEY (staff_user_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_admin_sec_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS business_admin_pin (
+  staff_user_id VARCHAR(255) PRIMARY KEY,
+  business_id VARCHAR(255) NOT NULL,
+  pin_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  INDEX (business_id),
+  CONSTRAINT fk_admin_pin_staff FOREIGN KEY (staff_user_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_admin_pin_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS business_admin_otp (
+  id VARCHAR(255) PRIMARY KEY,
+  staff_user_id VARCHAR(255) NOT NULL,
+  business_id VARCHAR(255) NOT NULL,
+  purpose VARCHAR(24) NOT NULL,
+  challenge_hash CHAR(64) NOT NULL,
+  code_hash CHAR(64) NULL,
+  expires_at TIMESTAMP(3) NOT NULL,
+  code_expires_at TIMESTAMP(3) NULL,
+  code_sent_at TIMESTAMP(3) NULL,
+  used_at TIMESTAMP(3) NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  ip VARCHAR(64) NULL,
+  device_id VARCHAR(64) NULL,
+  remember_me TINYINT NOT NULL DEFAULT 0,
+  branch_id VARCHAR(255) NULL,
+  pending_number VARCHAR(20) NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX (challenge_hash),
+  INDEX (staff_user_id, purpose, created_at),
+  INDEX (ip, created_at),
+  INDEX (device_id, created_at),
+  INDEX (business_id),
+  CONSTRAINT fk_admin_otp_staff FOREIGN KEY (staff_user_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_admin_otp_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS business_admin_login_logs (
+  id VARCHAR(255) PRIMARY KEY,
+  staff_user_id VARCHAR(255) NOT NULL,
+  business_id VARCHAR(255) NOT NULL,
+  event VARCHAR(40) NOT NULL,
+  method VARCHAR(16) NULL,
+  ip VARCHAR(64) NULL,
+  device_id VARCHAR(64) NULL,
+  detail VARCHAR(160) NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX (staff_user_id, created_at),
+  INDEX (created_at),
+  INDEX (business_id),
+  CONSTRAINT fk_admin_log_staff FOREIGN KEY (staff_user_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_admin_log_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS business_admin_devices (
+  id VARCHAR(255) PRIMARY KEY,
+  staff_user_id VARCHAR(255) NOT NULL,
+  business_id VARCHAR(255) NOT NULL,
+  device_id VARCHAR(64) NOT NULL,
+  device_label VARCHAR(80) NULL,
+  ip VARCHAR(64) NULL,
+  user_agent VARCHAR(255) NULL,
+  last_session_id VARCHAR(255) NULL,
+  pin_fails INT NOT NULL DEFAULT 0,
+  pin_locked_until TIMESTAMP(3) NULL,
+  last_seen_at TIMESTAMP(3) NULL,
+  revoked_at TIMESTAMP(3) NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uniq_admin_device (staff_user_id, device_id),
+  INDEX (business_id),
+  INDEX (last_session_id),
+  CONSTRAINT fk_admin_dev_staff FOREIGN KEY (staff_user_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_admin_dev_biz FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+);

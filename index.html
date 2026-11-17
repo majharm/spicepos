@@ -3258,6 +3258,7 @@
               <button class="btn" type="button" data-settings-tab="invoice" data-settings-section="invoice">Invoice &amp; Print Settings</button>
               <button class="btn" type="button" data-settings-tab="email" data-settings-section="email">Email Settings</button>
               <button class="btn" type="button" data-settings-tab="security" data-settings-section="security">User Permissions &amp; Security</button>
+              <button class="btn" type="button" data-settings-tab="security" data-settings-section="security">Security &amp; Login</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="backup" data-view="backup" data-i18n="settings.backup">Backup</button>
               <button class="btn" type="button" role="tab" aria-selected="false" data-settings-tab="automation">Automation</button>
             </nav>
@@ -3669,6 +3670,61 @@
                   </div>
                 </div>
                 <div class="settings-side" data-set-section="security">
+                  <style>#login-security[hidden]{display:none !important}</style>
+                  <section id="login-security" class="settings item-composer" hidden>
+                    <div class="item-composer-top">
+                      <p class="item-mode">Security &amp; Login</p>
+                      <p class="item-composer-note" id="login-security-note">WhatsApp OTP and a 6-digit PIN are alternative checks after your password. They are not combined into multi-factor authentication.</p>
+                    </div>
+                    <fieldset class="item-block">
+                      <legend>Registered WhatsApp</legend>
+                      <p id="login-security-wa">Not verified</p>
+                      <label class="full">WhatsApp number
+                        <input id="login-security-number" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" />
+                      </label>
+                      <label class="full">Verification code
+                        <input id="login-security-wa-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" />
+                      </label>
+                      <div class="item-composer-actions">
+                        <button class="btn" type="button" id="login-security-wa-send">Send WhatsApp code</button>
+                        <button class="btn primary" type="button" id="login-security-wa-verify">Verify number</button>
+                      </div>
+                    </fieldset>
+                    <fieldset class="item-block">
+                      <legend>WhatsApp OTP login</legend>
+                      <label class="full"><input id="login-security-otp" type="checkbox" /> Require a WhatsApp code after the password</label>
+                      <div class="item-composer-actions">
+                        <button class="btn primary" type="button" id="login-security-otp-save">Save OTP login</button>
+                      </div>
+                    </fieldset>
+                    <fieldset class="item-block">
+                      <legend>6-digit security PIN</legend>
+                      <p class="item-composer-note" id="login-security-pin-state">No PIN yet. A WhatsApp code is required before a PIN can be saved or reset.</p>
+                      <label class="full">WhatsApp code
+                        <input id="login-security-pin-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" />
+                      </label>
+                      <label class="full">New PIN
+                        <input id="login-security-pin" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="6 digits" />
+                      </label>
+                      <label class="full">Confirm PIN
+                        <input id="login-security-pin-confirm" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="Repeat 6 digits" />
+                      </label>
+                      <div class="item-composer-actions">
+                        <button class="btn" type="button" id="login-security-pin-send">Send PIN code</button>
+                        <button class="btn primary" type="button" id="login-security-pin-save">Save PIN</button>
+                        <button class="btn" type="button" id="login-security-pin-reset">Reset PIN</button>
+                      </div>
+                    </fieldset>
+                    <fieldset class="item-block">
+                      <legend>Login history</legend>
+                      <div id="login-security-history"></div>
+                    </fieldset>
+                    <fieldset class="item-block">
+                      <legend>Active device sessions</legend>
+                      <div id="login-security-devices"></div>
+                    </fieldset>
+                    <p class="hint" id="login-security-hint"></p>
+                  </section>
                   <form class="settings item-composer" id="password-form">
                     <div class="item-composer-top">
                       <p class="item-mode">Login password</p>
@@ -3976,6 +4032,7 @@
     <script src="./js/quotations.js?v=20261105mail1" defer></script>
     <script src="./js/stock-desk.js?v=20261117stock0" defer></script>
     <script src="./js/crm.js?v=20261117crm6" defer></script>
+    <script src="./js/security-login.js?v=20261118sec1" defer></script>
     <script src="./js/app.js?v=20261117stock0" defer></script>
     <script src="./js/online-store-desk.js?v=20261116store1" defer></script>
     <script src="./js/ecommerce-desk.js?v=20261117ecom1" defer></script>

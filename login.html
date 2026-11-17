@@ -18,6 +18,13 @@
     <link rel="stylesheet" href="./css/saas.css?v=20261030forgot1" />
     <link rel="stylesheet" href="./css/login-page.css?v=20261023sub1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261118pwa2" />
+    <style>
+      #login-verify { display: grid; gap: 12px; }
+      #login-verify[hidden], #verify-otp[hidden], #verify-pin[hidden], #verify-methods[hidden], #verify-title[hidden] { display: none !important; }
+      #verify-methods { display: grid; gap: 8px; }
+      #verify-otp-code, #verify-pin-code { font-size: 1.5rem; letter-spacing: 0.35rem; text-align: center; }
+      #verify-otp-wait { margin: 0; color: #4b5563; }
+    </style>
   </head>
   <body class="auth-body auth-zoho">
     <section id="m-welcome" class="m-welcome" aria-label="Welcome to ATAV POS">
@@ -153,6 +160,29 @@
             </label>
             <p class="hint" id="hint"></p>
           </form>
+
+          <section id="login-verify" hidden>
+            <h2 id="verify-title">Verify it's you</h2>
+            <p id="verify-lead">Your password was accepted. Choose one check to finish signing in. WhatsApp OTP and the security PIN are alternatives, not two factors used together.</p>
+            <div id="verify-methods" class="verify-methods"></div>
+            <form id="verify-otp" hidden>
+              <p id="verify-otp-lead">Enter the 6-digit code sent to your WhatsApp.</p>
+              <label>WhatsApp code
+                <input id="verify-otp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" />
+              </label>
+              <button class="btn primary" type="submit" id="verify-otp-submit">Verify code</button>
+              <button class="btn" type="button" id="verify-otp-resend">Resend code</button>
+              <p id="verify-otp-wait"></p>
+            </form>
+            <form id="verify-pin" hidden>
+              <label>6-digit security PIN
+                <input id="verify-pin-code" inputmode="numeric" autocomplete="off" maxlength="6" pattern="[0-9]{6}" placeholder="000000" />
+              </label>
+              <button class="btn primary" type="submit" id="verify-pin-submit">Verify PIN</button>
+            </form>
+            <p class="hint" id="verify-hint"></p>
+            <p class="auth-note"><button type="button" id="verify-back" class="linkish">Use a different method</button></p>
+          </section>
 
           <form id="forgot-panel" class="forgot-panel" hidden>
             <h2>Reset password</h2>
@@ -349,7 +379,8 @@
     <script src="./js/pos-api.js?v=20261031growth2"></script>
     <script src="./js/pos-device.js?v=20261118pwa2"></script>
     <script src="./js/login-page.js?v=20261023logo1"></script>
-    <script src="./js/x-pos-20260830e.js?v=20261118pwa1"></script>
+    <script src="./js/x-pos-20260830e.js?v=20261118sec1"></script>
+    <script src="./js/login-verify.js?v=20261118sec1"></script>
     <script src="./js/mobile-app.js?v=20261107profit1"></script>
     <script src="./js/ga4.js?v=20260927seo241" defer></script>
   </body>

@@ -141,6 +141,7 @@ function pos_shop_timezone() {
 
 require_once __DIR__ . "/pos-mail.php";
 if (is_file(__DIR__ . "/pos-alerts.php")) require_once __DIR__ . "/pos-alerts.php";
+if (is_file(__DIR__ . "/pos-admin-security.php")) require_once __DIR__ . "/pos-admin-security.php";
 if (is_file(__DIR__ . "/pos-invoice-whatsapp.php")) require_once __DIR__ . "/pos-invoice-whatsapp.php";
 
 function pos_shop_tz_offset() {
@@ -4096,6 +4097,10 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, ["ok" => true, "admin" => ["id" => $admin["id"], "email" => $admin["email"], "name" => $admin["name"]], "php" => true]);
     }
 
+    if (function_exists("pos_admin_security_dispatch") && pos_admin_security_dispatch($path, $method, $body)) {
+      return;
+    }
+
     if ($path === "auth/login" && $method === "POST") {
       pos_ensure_staff_lock_columns();
       $id = trim((string) ($body["identifier"] ?? $body["email"] ?? ""));
@@ -4140,6 +4145,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
         pos_send(403, pos_subscription_denial($business ?: [], $status));
       }
       pos_q("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", "s", [$user["id"]]);
+      if (function_exists("pos_admin_login_challenge")) {
+        $step = pos_admin_login_challenge($user, $body);
+        if (is_array($step)) pos_send(200, $step);
+      }
+      if (function_exists("pos_admin_finish_login")) pos_admin_finish_login($user, $business, $body);
       $ttl = pos_ttl(pos_remember($body));
       $token = pos_new_token();
       $branchId = $body["branchId"] ?? $user["branch_id"];
@@ -4339,6 +4349,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "ss",
         [pos_hash_password($next), $uid]
       );
+      if (function_exists("pos_admin_revoke_other_sessions")) {
+        try { pos_admin_revoke_other_sessions($uid); } catch (Exception $e) { /* password is already saved */ }
+      }
       pos_send(200, ["ok" => true, "php" => true]);
     }
 

@@ -64,6 +64,14 @@ loginForm.addEventListener("submit", async (e) => {
     }
     if (fd.get("remember")) localStorage.setItem("pos_remember_login", String(fd.get("identifier") || ""));
     else localStorage.removeItem("pos_remember_login");
+    if (data?.challenge) {
+      if (window.POSLoginVerify?.open) {
+        window.POSLoginVerify.open(data);
+        hint.textContent = "";
+        return;
+      }
+      throw new Error("Verification is required before the dashboard opens.");
+    }
     location.href = "/index.html";
   } catch (err) {
     hint.textContent = err.message;

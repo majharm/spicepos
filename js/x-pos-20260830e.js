@@ -380,6 +380,21 @@
         }
         if (fd.get("remember")) localStorage.setItem("pos_remember_login", String(fd.get("identifier") || ""));
         else localStorage.removeItem("pos_remember_login");
+        if (result.data?.challenge) {
+          if (window.POSLoginVerify?.open) {
+            window.POSLoginVerify.open(result.data);
+            if (hint) {
+              hint.textContent = "";
+              hint.className = "hint";
+            }
+            if (submit) {
+              submit.disabled = false;
+              submit.textContent = "Sign in";
+            }
+            return;
+          }
+          throw new Error("Verification is required before the dashboard opens.");
+        }
         location.href = "/index.html";
       } catch (err) {
         if (hint) {

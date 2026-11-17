@@ -57,7 +57,7 @@
     function wrapped(url, opts) {
       const path = String(url || "");
       const method = String(opts?.method || "GET").toUpperCase();
-      if (method === "POST" && /\/api\/(auth\/(login|logout)|session\/heartbeat)(?:\?|$)/.test(path)) {
+      if (method === "POST" && /\/api\/(auth\/(login|logout|otp\/send|otp\/verify|pin\/verify|pin\/setup|pin\/reset|session\/revoke|security\/settings)|session\/heartbeat)(?:\?|$)/.test(path)) {
         return orig(url, { ...opts, body: attachDevice(opts?.body) });
       }
       return orig(url, opts);
