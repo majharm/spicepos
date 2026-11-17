@@ -1618,10 +1618,30 @@ function pos_clear_cookie($name) {
   );
 }
 
+function pos_ip_clean($ip) {
+  $ip = trim((string) $ip);
+  if (str_starts_with(strtolower($ip), "::ffff:")) $ip = substr($ip, 7);
+  $zone = strpos($ip, "%");
+  if ($zone !== false) $ip = substr($ip, 0, $zone);
+  if (str_starts_with($ip, "[") && str_contains($ip, "]")) $ip = substr($ip, 1, strpos($ip, "]") - 1);
+  if (substr_count($ip, ".") === 3 && substr_count($ip, ":") === 1) $ip = explode(":", $ip)[0];
+  return $ip;
+}
+
 function pos_ip() {
-  $xff = explode(",", (string) ($_SERVER["HTTP_X_FORWARDED_FOR"] ?? ""));
-  $ip = trim($xff[0]);
-  return $ip !== "" ? $ip : (string) ($_SERVER["REMOTE_ADDR"] ?? "");
+  $candidates = array_map("trim", explode(",", (string) ($_SERVER["HTTP_X_FORWARDED_FOR"] ?? "")));
+  $candidates[] = (string) ($_SERVER["REMOTE_ADDR"] ?? "");
+  $fallback = "";
+  foreach ($candidates as $candidate) {
+    $ip = pos_ip_clean($candidate);
+    if ($ip === "") continue;
+    if ($fallback === "") $fallback = $ip;
+    $private = function_exists("pos_ip_is_private")
+      ? pos_ip_is_private($ip)
+      : ($ip === "localhost" || str_starts_with($ip, "10.") || str_starts_with($ip, "192.168.") || str_starts_with($ip, "127."));
+    if (!$private) return $ip;
+  }
+  return $fallback;
 }
 
 function pos_ua() {

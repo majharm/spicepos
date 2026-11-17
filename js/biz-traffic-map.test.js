@@ -110,14 +110,40 @@ test("filters and popups keep business details and escape text", () => {
   assert.deepEqual(choices.category, ["Grocery", "Pharmacy"]);
 });
 
+test("a shop city is plotted when the admin IP does not resolve", () => {
+  const rows = M.withShopPlaces(M.foldBusinessAdmins([
+    {
+      businessId: "b9",
+      businessName: "Local Mart",
+      ip: "10.1.1.8",
+      shopCity: "Bengaluru",
+      shopState: "Karnataka",
+    },
+    {
+      businessId: "b10",
+      businessName: "State Only",
+      ip: "",
+      shopState: "Kerala",
+    },
+  ], now));
+  assert.equal(rows[0].plotted, true);
+  assert.equal(rows[0].placeSource, "shop");
+  assert.ok(Math.abs(rows[0].lat - 12.9716) < 0.01);
+  assert.equal(rows[1].plotted, true);
+  assert.ok(Math.abs(rows[1].lat - 10.8505) < 0.01);
+  const html = M.popupHtml(rows[0]);
+  assert.match(html, /shop city/);
+});
+
 test("business map is polled from Master Admin and heartbeats are separate from login", () => {
   const html = read("master.html");
   const master = read("js/master.js");
   const auth = read("server/auth.js");
   const php = read("pos-php-core.php");
   assert.match(html, /data-tab="bizmap"/);
-  assert.match(html, /biz-traffic-map\.js\?v=20261117bizmap1/);
-  assert.match(html, /master\.js\?v=20261117dash2/);
+  assert.match(html, /biz-traffic-map\.js\?v=20261117map1/);
+  assert.match(html, /vendor\/leaflet\/leaflet\.js\?v=20261117map1/);
+  assert.match(html, /master\.js\?v=20261117map1/);
   assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261117bizmap1/);
   assert.match(read("js/admin-heartbeat.js"), /\/api\/session\/heartbeat/);
   assert.match(read("js/admin-heartbeat.js"), /visibilityState === "hidden"/);
@@ -137,6 +163,9 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   assert.match(php, /function pos_record_admin_login/);
   assert.match(php, /heartbeat_at = NULL/);
   assert.match(read("js/biz-traffic-map.js"), /not an exact address/);
+  assert.match(read("js/biz-traffic-map.js"), /basemaps\.cartocdn\.com\/dark_all/);
+  assert.match(read("server/biz-traffic.js"), /shop_city/);
+  assert.match(read("pos-master-live.php"), /shopCity/);
   const board = M.render({ businesses: [], summary: { total: 0, online: 0, offline: 0, activeToday: 0 } });
   assert.match(board, /Total businesses/);
   assert.match(board, /Online now/);

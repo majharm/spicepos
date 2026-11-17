@@ -2618,6 +2618,7 @@ async function render() {
       geo?.bind(body, data, () => render());
     } else if (tab === "bizmap") {
       const data = await api("/api/master/biz-traffic");
+      if (tab !== "bizmap") return;
       const map = globalThis.POSBizTraffic;
       body.innerHTML = masterDesk(
         "Businesses",

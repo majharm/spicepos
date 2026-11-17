@@ -101,6 +101,8 @@
         country: String(row?.country || ""),
         region: String(row?.region || ""),
         city: String(row?.city || ""),
+        shopCity: String(row?.shopCity || row?.shop_city || ""),
+        shopState: String(row?.shopState || row?.shop_state || ""),
         lat: row?.lat,
         lon: row?.lon,
         status,
@@ -179,6 +181,80 @@
     };
   }
 
+  function placeKey(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z]/g, "");
+  }
+
+  const CITIES = {
+    mumbai: [19.076, 72.8777], delhincr: [28.6139, 77.209], newdelhi: [28.6139, 77.209],
+    bengaluru: [12.9716, 77.5946], bangalore: [12.9716, 77.5946], hyderabad: [17.385, 78.4867],
+    chennai: [13.0827, 80.2707], kolkata: [22.5726, 88.3639], calcutta: [22.5726, 88.3639],
+    pune: [18.5204, 73.8567], ahmedabad: [23.0225, 72.5714], jaipur: [26.9124, 75.7873],
+    lucknow: [26.8467, 80.9462], kanpur: [26.4499, 80.3319], nagpur: [21.1458, 79.0882],
+    indore: [22.7196, 75.8577], bhopal: [23.2599, 77.4126], patna: [25.5941, 85.1376],
+    vadodara: [22.3072, 73.1812], baroda: [22.3072, 73.1812], ludhiana: [30.901, 75.8573],
+    agra: [27.1767, 78.0081], nashik: [19.9975, 73.7898], varanasi: [25.3176, 82.9739],
+    amritsar: [31.634, 74.8723], prayagraj: [25.4358, 81.8463], allahabad: [25.4358, 81.8463],
+    ranchi: [23.3441, 85.3096], coimbatore: [11.0168, 76.9558], madurai: [9.9252, 78.1198],
+    raipur: [21.2514, 81.6296], guwahati: [26.1445, 91.7362], chandigarh: [30.7333, 76.7794],
+    mysuru: [12.2958, 76.6394], mysore: [12.2958, 76.6394], bhubaneswar: [20.2961, 85.8245],
+    noida: [28.5355, 77.391], gurugram: [28.4595, 77.0266], gurgaon: [28.4595, 77.0266],
+    thiruvananthapuram: [8.5241, 76.9366], trivandrum: [8.5241, 76.9366],
+    kochi: [9.9312, 76.2673], cochin: [9.9312, 76.2673], kozhikode: [11.2588, 75.7804],
+    calicut: [11.2588, 75.7804], mangaluru: [12.9141, 74.856], mangalore: [12.9141, 74.856],
+    surat: [21.1702, 72.8311], visakhapatnam: [17.6868, 83.2185], vizag: [17.6868, 83.2185],
+    vijayawada: [16.5062, 80.648], hubballi: [15.3647, 75.124], hubli: [15.3647, 75.124],
+    belagavi: [15.8497, 74.4977], belgaum: [15.8497, 74.4977], jodhpur: [26.2389, 73.0243],
+    udaipur: [24.5854, 73.7125], dehradun: [30.3165, 78.0322], shimla: [31.1048, 77.1734],
+    srinagar: [34.0837, 74.7973], jammu: [32.7266, 74.857], panaji: [15.4909, 73.8278],
+    goa: [15.2993, 74.124], puducherry: [11.9416, 79.8083], pondicherry: [11.9416, 79.8083],
+  };
+
+  const STATES = {
+    andhrapradesh: [15.9129, 79.74], arunachalpradesh: [28.218, 94.7278], assam: [26.2006, 92.9376],
+    bihar: [25.0961, 85.3131], chhattisgarh: [21.2787, 81.8661], goa: [15.2993, 74.124],
+    gujarat: [22.2587, 71.1924], haryana: [29.0588, 76.0856], himachalpradesh: [31.1048, 77.1734],
+    jharkhand: [23.6102, 85.2799], karnataka: [15.3173, 75.7139], kerala: [10.8505, 76.2711],
+    madhyapradesh: [22.9734, 78.6569], maharashtra: [19.7515, 75.7139], manipur: [24.6637, 93.9063],
+    meghalaya: [25.467, 91.3662], mizoram: [23.1645, 92.9376], nagaland: [26.1584, 94.5624],
+    odisha: [20.9517, 85.0985], orissa: [20.9517, 85.0985], punjab: [31.1471, 75.3412],
+    rajasthan: [27.0238, 74.2179], sikkim: [27.533, 88.5122], tamilnadu: [11.1271, 78.6569],
+    telangana: [18.1124, 79.0193], tripura: [23.9408, 91.9882], uttarpradesh: [26.8467, 80.9462],
+    uttarakhand: [30.0668, 79.0193], westbengal: [22.9868, 87.855], delhi: [28.7041, 77.1025],
+    nctofdelhi: [28.7041, 77.1025], jammukashmir: [33.7782, 76.5762], ladakh: [34.1526, 77.5771],
+    puducherry: [11.9416, 79.8083], chandigarh: [30.7333, 76.7794],
+  };
+
+  function shopPoint(city, region) {
+    return CITIES[placeKey(city)] || STATES[placeKey(region)] || null;
+  }
+
+  function withShopPlaces(rows) {
+    const seen = new Map();
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+      const lat = Number(row?.lat);
+      const lon = Number(row?.lon);
+      if (row?.plotted && Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0)) return row;
+      const point = shopPoint(row?.shopCity, row?.shopState || row?.region);
+      if (!point) return row;
+      const key = `${point[0]},${point[1]}`;
+      const n = seen.get(key) || 0;
+      seen.set(key, n + 1);
+      const ring = n ? 0.12 + (n % 6) * 0.05 : 0;
+      const angle = n * 0.9;
+      return {
+        ...row,
+        lat: point[0] + Math.cos(angle) * ring,
+        lon: point[1] + Math.sin(angle) * ring,
+        city: row.city || row.shopCity || "",
+        region: row.region || row.shopState || "",
+        country: row.country || "India",
+        plotted: true,
+        placeSource: "shop",
+      };
+    });
+  }
+
   function statusLabel(status) {
     if (status === "online") return "Online";
     if (status === "recent") return "Recently active";
@@ -196,7 +272,7 @@
       Login ${esc(whenText(row.loginAt))}<br>
       Last active ${esc(whenText(row.lastActive))}<br>
       Status ${esc(statusLabel(row.status))}<br>
-      <span>Approximate IP location, not an exact address.</span>`;
+      <span>${row.placeSource === "shop" ? "Plotted from the shop city. The admin IP did not resolve." : "Approximate IP location, not an exact address."}</span>`;
   }
 
   function optionList(values, current, allLabel) {
@@ -208,8 +284,8 @@
   }
 
   function render(data) {
-    const rows = Array.isArray(data?.businesses) ? data.businesses : foldBusinessAdmins(data?.rows || []);
-    const summary = data?.summary || summarize(rows);
+    const rows = withShopPlaces(Array.isArray(data?.businesses) ? data.businesses : foldBusinessAdmins(data?.rows || []));
+    const summary = summarize(rows);
     return `<div class="ip-dash biz-dash" id="biz-map-board">
       <div class="ip-dash-stats">
         <div class="ip-dash-stat"><label>Total businesses</label><strong id="biz-total">${esc(summary.total || 0)}</strong><small>Registered admins</small></div>
@@ -260,30 +336,43 @@
     const board = rootEl?.querySelector?.("#biz-map-board") || rootEl;
     if (!board) return null;
     if (activeMap) {
-      activeMap.remove();
+      try { activeMap.remove(); } catch { /* the container may already be gone */ }
       activeMap = null;
     }
-    let rows = Array.isArray(data?.businesses) ? data.businesses : [];
-    let summary = data?.summary || summarize(rows);
+    let rows = withShopPlaces(Array.isArray(data?.businesses) ? data.businesses : []);
+    let summary = summarize(rows);
     const filters = { country: "", region: "", city: "", category: "", status: "" };
     const markers = new Map();
     let fitted = false;
+    let viewed = false;
     let openId = "";
-    const Leaflet = root.L;
-    const canvas = Leaflet?.canvas ? Leaflet.canvas({ padding: 0.5 }) : undefined;
-    const map = Leaflet ? Leaflet.map(board.querySelector("#biz-leaflet"), { preferCanvas: true, worldCopyJump: true }) : null;
+    const Leaflet = root.L || globalThis.L;
+    const mapEl = board.querySelector("#biz-leaflet");
+    const map = Leaflet && mapEl ? Leaflet.map(mapEl, { worldCopyJump: true }) : null;
+    const resize = () => map?.invalidateSize();
     if (map) {
       activeMap = map;
-      Leaflet.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
-        attribution: "Tiles &copy; Esri",
-        maxZoom: 16,
+      let replaced = false;
+      const base = Leaflet.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap &copy; CARTO",
+        subdomains: "abcd",
+        maxZoom: 19,
       }).addTo(map);
-      Leaflet.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 16,
-        pane: "overlayPane",
-      }).addTo(map);
-      map.setView([22, 12], 2);
-      setTimeout(() => map.invalidateSize(), 80);
+      base.on("tileerror", () => {
+        if (replaced) return;
+        replaced = true;
+        map.removeLayer(base);
+        Leaflet.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+          attribution: "Tiles &copy; Esri",
+          maxZoom: 18,
+        }).addTo(map);
+      });
+      map.setView([22.6, 79], 5);
+      requestAnimationFrame(resize);
+      setTimeout(resize, 250);
+      window.addEventListener("resize", resize);
+    } else if (mapEl) {
+      mapEl.textContent = "The world map did not load.";
     }
     const layer = map ? Leaflet.layerGroup().addTo(map) : null;
 
@@ -336,7 +425,6 @@
       for (const row of shown) {
         if (!row.plotted) continue;
         const marker = Leaflet.circleMarker([Number(row.lat), Number(row.lon)], {
-          renderer: canvas,
           radius: row.status === "online" ? 8 : 6,
           color: COLORS[row.status] || COLORS.offline,
           fillColor: COLORS[row.status] || COLORS.offline,
@@ -350,8 +438,11 @@
         bounds.push([Number(row.lat), Number(row.lon)]);
       }
       if (!fitted && bounds.length) {
-        map.fitBounds(bounds, { padding: [24, 24], maxZoom: 5 });
+        map.fitBounds(bounds, { padding: [28, 28], maxZoom: 6 });
         fitted = true;
+      } else if (!viewed) {
+        map.setView([22.6, 79], 5);
+        viewed = true;
       }
       if (openId && markers.get(openId)) markers.get(openId).openPopup();
     }
@@ -377,14 +468,15 @@
 
     return {
       update(next) {
-        rows = Array.isArray(next?.businesses) ? next.businesses : [];
-        summary = next?.summary || summarize(rows);
+        rows = withShopPlaces(Array.isArray(next?.businesses) ? next.businesses : []);
+        summary = summarize(rows);
         paintFilters();
         paint();
       },
       destroy() {
+        window.removeEventListener("resize", resize);
         if (activeMap === map && map) {
-          map.remove();
+          try { map.remove(); } catch { /* the container may already be gone */ }
           activeMap = null;
         }
       },
@@ -401,6 +493,8 @@
     filterBusinesses,
     choices,
     popupHtml,
+    shopPoint,
+    withShopPlaces,
     statusLabel,
     render,
     bind,

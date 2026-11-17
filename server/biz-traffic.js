@@ -109,6 +109,7 @@ export async function masterBizTraffic() {
     const rows = await query(
       `SELECT u.id AS admin_id, b.id AS business_id, b.name AS business_name, b.owner_name,
               COALESCE(NULLIF(TRIM(b.business_type), ''), NULLIF(TRIM(b.category), ''), 'Other') AS category,
+              COALESCE(b.city, '') AS shop_city, COALESCE(b.state, '') AS shop_state,
               COALESCE(NULLIF(p.ip, ''), s.ip, '') AS ip,
               COALESCE(p.login_at, s.created_at) AS login_at,
               p.heartbeat_at, p.logout_at,
@@ -147,6 +148,8 @@ export async function masterBizTraffic() {
       country: row.country || "",
       region: row.region || "",
       city: row.city || "",
+      shopCity: row.shop_city || "",
+      shopState: row.shop_state || "",
       lat: row.lat,
       lon: row.lon,
       status: row.status,

@@ -1007,7 +1007,18 @@ body.master-dark #master-app {
 #master-app .ip-dash-legend { display: flex; gap: 14px; align-items: center; color: #91a4bf; font-size: 11px; }
 #master-app .ip-dash-legend i { width: 8px; height: 8px; display: inline-block; border-radius: 50%; background: #35d39a; margin-right: 5px; }
 #master-app #ip-leaflet,
-#master-app #biz-leaflet { height: 590px; background: #101c2c; }
+#master-app #biz-leaflet { height: 590px; width: 100%; background: #101c2c; }
+#master-app #biz-leaflet.leaflet-container { min-height: 420px; z-index: 0; }
+#master-app .leaflet-container img.leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+  width: 256px !important;
+  height: 256px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  box-sizing: content-box !important;
+}
 #master-app .ip-dash-legend i.is-online { background: #22c55e; }
 #master-app .ip-dash-legend i.is-recent { background: #f59e0b; }
 #master-app .ip-dash-legend i.is-offline { background: #94a3b8; }

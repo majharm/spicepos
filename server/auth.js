@@ -70,8 +70,30 @@ function clearCookie(res, name, req) {
   res.append("Set-Cookie", `${name}=; Path=/; Max-Age=0; ${cookieFlags(req)}`);
 }
 
+function cleanIp(value) {
+  let ip = String(value || "").trim();
+  if (ip.toLowerCase().startsWith("::ffff:")) ip = ip.slice(7);
+  const zone = ip.indexOf("%");
+  if (zone >= 0) ip = ip.slice(0, zone);
+  if (ip.startsWith("[") && ip.includes("]")) ip = ip.slice(1, ip.indexOf("]"));
+  if (ip.includes(".") && ip.includes(":") && ip.indexOf(":") === ip.lastIndexOf(":")) ip = ip.slice(0, ip.indexOf(":"));
+  return ip;
+}
+
+function privateAddress(ip) {
+  const geo = globalThis.POSIpMap;
+  if (geo?.isPrivateIp) return geo.isPrivateIp(ip);
+  return !ip || ip === "localhost" || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("127.");
+}
+
 function clientIp(req) {
-  return String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim();
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",")
+    .map(cleanIp)
+    .filter(Boolean);
+  const remote = cleanIp(req.socket?.remoteAddress || "");
+  const list = forwarded.concat(remote ? [remote] : []);
+  return list.find((ip) => !privateAddress(ip)) || list[0] || "";
 }
 
 export function parsePerms(user) {
