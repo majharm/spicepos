@@ -1010,7 +1010,48 @@
   .reports-desk .daily-sales-block .table-wrap { margin: 0 -4px; }
 }
 [data-pwa-install][hidden],
-[data-pwa-ios][hidden] { display: none !important; }
+[data-pwa-ios][hidden],
+.pwa-notice[hidden] { display: none !important; }
+.pwa-notice {
+  position: fixed;
+  z-index: 80;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 520px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 16px;
+  background: #073b82;
+  color: #fff;
+  box-shadow: 0 16px 40px rgba(7, 59, 130, 0.35);
+}
+.pwa-notice strong { display: block; font-size: 15px; }
+.pwa-notice p { margin: 2px 0 0; color: #dbe7f7; font-size: 13px; line-height: 1.35; }
+.pwa-notice [data-pwa-install] {
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #073b82;
+  font: inherit;
+  font-weight: 800;
+  padding: 8px 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pwa-notice [data-pwa-dismiss] {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
 .pwa-ios {
   margin: 8px 0 0;
   color: var(--m-muted, #64748b);

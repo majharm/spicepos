@@ -74,25 +74,67 @@
     navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => {});
   }
 
+  function installed() {
+    return window.matchMedia?.("(display-mode: standalone)")?.matches || navigator.standalone === true;
+  }
+
+  function helpCopy(hasPrompt) {
+    const ua = navigator.userAgent || "";
+    if (hasPrompt) return "Tap Install. This device will ask to add ATAV POS.";
+    if (/iPhone|iPad/.test(ua)) return "Tap Share, then Add to Home Screen.";
+    if (/Android/.test(ua)) return "Open the Chrome menu and tap Install app.";
+    return "Open the browser menu and choose Install ATAV POS.";
+  }
+
+  function showNotice(hasPrompt) {
+    if (installed()) return;
+    let bar = document.getElementById("pwa-notice");
+    if (!bar) {
+      bar = document.createElement("aside");
+      bar.id = "pwa-notice";
+      bar.className = "pwa-notice";
+      bar.setAttribute("role", "status");
+      bar.innerHTML = `<div><strong>Install ATAV POS on this device</strong><p data-pwa-help></p></div><button type="button" data-pwa-install>Install</button><button type="button" data-pwa-dismiss aria-label="Dismiss install notice">×</button>`;
+      document.body.appendChild(bar);
+    }
+    const help = bar.querySelector("[data-pwa-help]");
+    if (help) help.textContent = helpCopy(hasPrompt);
+    bar.hidden = false;
+  }
+
   function install() {
+    if (installed()) return;
     let promptEvent = null;
-    const buttons = () => [...document.querySelectorAll("[data-pwa-install]")];
+    showNotice(false);
     window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault();
       promptEvent = event;
-      buttons().forEach((btn) => { btn.hidden = false; });
+      showNotice(true);
+    });
+    window.addEventListener("appinstalled", () => {
+      document.getElementById("pwa-notice")?.remove();
     });
     document.addEventListener("click", async (event) => {
+      if (event.target.closest?.("[data-pwa-dismiss]")) {
+        document.getElementById("pwa-notice")?.remove();
+        return;
+      }
       const btn = event.target.closest?.("[data-pwa-install]");
-      if (!btn || !promptEvent) return;
+      if (!btn) return;
       event.preventDefault();
-      promptEvent.prompt();
-      try { await promptEvent.userChoice; } catch { /* the prompt was dismissed */ }
+      if (!promptEvent) {
+        showNotice(false);
+        return;
+      }
+      let choice = null;
+      try {
+        promptEvent.prompt();
+        choice = await promptEvent.userChoice;
+      } catch { /* the install window was closed */ }
       promptEvent = null;
-      buttons().forEach((el) => { el.hidden = true; });
+      if (choice?.outcome === "accepted") document.getElementById("pwa-notice")?.remove();
+      else showNotice(Boolean(promptEvent));
     });
-    const ios = /iPhone|iPad/.test(navigator.userAgent || "") && navigator.standalone !== true;
-    if (ios) document.querySelectorAll("[data-pwa-ios]").forEach((el) => { el.hidden = false; });
   }
 
   window.POSDevice = { id, label, payload };

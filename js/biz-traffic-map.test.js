@@ -204,7 +204,9 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   assert.match(html, /master\.js\?v=20261117gmap2/);
   assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261118pwa1/);
   assert.match(read("index.html"), /manifest\.webmanifest/);
-  assert.match(read("index.html"), /pos-device\.js\?v=20261118pwa1/);
+  assert.match(read("index.html"), /pos-device\.js\?v=20261118pwa2/);
+  assert.match(read("js/pos-device.js"), /pwa-notice/);
+  assert.match(read("js/pos-device.js"), /beforeinstallprompt/);
   assert.match(read("login.html"), /manifest\.webmanifest/);
   assert.match(read("sw.js"), /pathname\.startsWith\("\/api\/"\)/);
   assert.match(read("js/pos-device.js"), /pos\.device\.id/);
