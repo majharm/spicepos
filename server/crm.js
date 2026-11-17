@@ -316,6 +316,25 @@ async function requireOn() {
   return shop;
 }
 
+function leadInput(body, category) {
+  const source = body || {};
+  return {
+    name: clip(source.name, 180),
+    mobile: clip(source.mobile, 32) || null,
+    email: clip(source.email, 160) || null,
+    company: clip(source.company_name, 180) || null,
+    gstin: clip(String(source.gstin || "").toUpperCase(), 32) || null,
+    sourceId: clip(source.source_id, 36) || null,
+    stage: CRM.stageOf(source.stage).key,
+    priority: CRM.priorityOf(source.priority),
+    assigned: clip(source.assigned_to, 36) || null,
+    expected: Number(source.expected_value) || 0,
+    notes: clip(source.notes, 1000) || null,
+    custom: JSON.stringify(CRM.customValues(source.custom || {}, category)),
+    follow: CRM.ymd(source.next_followup) || null,
+  };
+}
+
 function actorId() {
   return authUser()?.id || null;
 }
@@ -663,9 +682,8 @@ export function registerCrm(app) {
   app.post("/api/crm/leads", requireStaff, requirePerm("customers"), async (req, res) => {
     try {
       const shop = await requireOn();
-      const body = req.body || {};
-      const name = clip(body.name, 180);
-      if (!name) {
+      const input = leadInput(req.body, shop.category);
+      if (!input.name) {
         res.status(400).json({ error: "Enter the lead name" });
         return;
       }
@@ -674,15 +692,43 @@ export function registerCrm(app) {
         `INSERT INTO crm_leads (id, business_id, branch_id, name, mobile, email, company_name, gstin, source_id, stage, priority, assigned_to, expected_value, notes, custom_json, next_followup, created_by)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          leadId, bid(), branchId(), name, clip(body.mobile, 32) || null, clip(body.email, 160) || null, clip(body.company_name, 180) || null,
-          clip(body.gstin, 32) || null, clip(body.source_id, 36) || null, CRM.stageOf(body.stage).key, CRM.priorityOf(body.priority),
-          clip(body.assigned_to, 36) || null, Number(body.expected_value) || 0, clip(body.notes, 1000) || null,
-          JSON.stringify(CRM.customValues(body.custom || {}, shop.category)), CRM.ymd(body.next_followup) || null, actorId(),
+          leadId, bid(), branchId(), input.name, input.mobile, input.email, input.company, input.gstin, input.sourceId,
+          input.stage, input.priority, input.assigned, input.expected, input.notes, input.custom, input.follow, actorId(),
         ],
       );
-      await activity(bid(), { leadId, kind: "lead", summary: `Lead ${name} created` });
-      await audit("CRM Lead Created", { module: "crm", target_id: leadId, target_name: name }, req);
+      await activity(bid(), { leadId, kind: "lead", summary: `Lead ${input.name} created` });
+      await audit("CRM Lead Created", { module: "crm", target_id: leadId, target_name: input.name }, req);
       const [lead] = await query("SELECT * FROM crm_leads WHERE id = ? AND business_id = ?", [leadId, bid()]);
+      res.json({ ok: true, lead });
+    } catch (err) {
+      res.status(err.status || 500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/crm/leads/:id", requireStaff, requirePerm("customers"), async (req, res) => {
+    try {
+      const shop = await requireOn();
+      const input = leadInput(req.body, shop.category);
+      if (!input.name) {
+        res.status(400).json({ error: "Enter the lead name" });
+        return;
+      }
+      const result = await query(
+        `UPDATE crm_leads
+         SET name = ?, mobile = ?, email = ?, company_name = ?, gstin = ?, source_id = ?, stage = ?, priority = ?, assigned_to = ?, expected_value = ?, notes = ?, custom_json = ?, next_followup = ?
+         WHERE id = ? AND business_id = ?`,
+        [
+          input.name, input.mobile, input.email, input.company, input.gstin, input.sourceId, input.stage, input.priority,
+          input.assigned, input.expected, input.notes, input.custom, input.follow, req.params.id, bid(),
+        ],
+      );
+      if (!result.affectedRows) {
+        res.status(404).json({ error: "Lead not found" });
+        return;
+      }
+      await activity(bid(), { leadId: req.params.id, kind: "lead", summary: `Lead ${input.name} updated` });
+      await audit("CRM Lead Updated", { module: "crm", target_id: req.params.id, target_name: input.name }, req);
+      const [lead] = await query("SELECT * FROM crm_leads WHERE id = ? AND business_id = ?", [req.params.id, bid()]);
       res.json({ ok: true, lead });
     } catch (err) {
       res.status(err.status || 500).json({ error: String(err.message) });

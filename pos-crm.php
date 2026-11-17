@@ -235,6 +235,36 @@ function pos_crm_kpis($bid) {
   ];
 }
 
+function pos_crm_lead_input($body) {
+  $stage = pos_crm_clip($body["stage"] ?? "new", 24);
+  if (!in_array($stage, ["new", "contacted", "interested", "quotation", "negotiation", "converted", "lost"], true)) $stage = "new";
+  $priority = pos_crm_clip($body["priority"] ?? "normal", 16);
+  if (!in_array($priority, ["low", "normal", "high", "urgent"], true)) $priority = "normal";
+  $follow = substr((string) ($body["next_followup"] ?? ""), 0, 10);
+  if (!preg_match("/^\d{4}-\d{2}-\d{2}$/", $follow)) $follow = "";
+  $custom = [];
+  foreach ((array) ($body["custom"] ?? []) as $key => $value) {
+    $clean = preg_replace("/[^a-z0-9_]/", "", strtolower((string) $key));
+    if ($clean === "") continue;
+    $custom[$clean] = pos_crm_clip($value, 180);
+  }
+  return [
+    "name" => pos_crm_clip($body["name"] ?? "", 180),
+    "mobile" => pos_crm_clip($body["mobile"] ?? "", 32),
+    "email" => pos_crm_clip($body["email"] ?? "", 160),
+    "company" => pos_crm_clip($body["company_name"] ?? "", 180),
+    "gstin" => strtoupper(pos_crm_clip($body["gstin"] ?? "", 32)),
+    "source" => pos_crm_clip($body["source_id"] ?? "", 36),
+    "stage" => $stage,
+    "priority" => $priority,
+    "assigned" => pos_crm_clip($body["assigned_to"] ?? "", 36),
+    "expected" => (float) ($body["expected_value"] ?? 0),
+    "notes" => pos_crm_clip($body["notes"] ?? "", 1000),
+    "custom" => json_encode($custom),
+    "follow" => $follow,
+  ];
+}
+
 function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
   if (strpos($path, "crm") !== 0) return false;
   $uid = $auth["user"]["id"] ?? "";
@@ -262,15 +292,28 @@ function pos_crm_dispatch($path, $method, $body, $bid, $auth) {
     }
     if ($path === "crm/leads" && $method === "POST") {
       pos_crm_on($bid);
-      $name = pos_crm_clip($body["name"] ?? "", 180);
-      if ($name === "") throw new Exception("Enter the lead name");
+      $lead = pos_crm_lead_input($body);
+      if ($lead["name"] === "") throw new Exception("Enter the lead name");
       $id = pos_uuid();
       pos_q(
-        "INSERT INTO crm_leads (id, business_id, name, mobile, email, company_name, stage, priority, assigned_to, expected_value, notes, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        "sssssssssdss",
-        [$id, $bid, $name, pos_crm_clip($body["mobile"] ?? "", 32), pos_crm_clip($body["email"] ?? "", 160), pos_crm_clip($body["company_name"] ?? "", 180), "new", pos_crm_clip($body["priority"] ?? "normal", 16), pos_crm_clip($body["assigned_to"] ?? "", 36), (float) ($body["expected_value"] ?? 0), pos_crm_clip($body["notes"] ?? "", 1000), $uid]
+        "INSERT INTO crm_leads (id, business_id, name, mobile, email, company_name, gstin, source_id, stage, priority, assigned_to, expected_value, notes, custom_json, next_followup, created_by) VALUES (?,?,?,?,?,?,NULLIF(?,''),NULLIF(?,''),?,?,NULLIF(?,''),?,?,?,NULLIF(?,''),?)",
+        "sssssssssssdssss",
+        [$id, $bid, $lead["name"], $lead["mobile"], $lead["email"], $lead["company"], $lead["gstin"], $lead["source"], $lead["stage"], $lead["priority"], $lead["assigned"], $lead["expected"], $lead["notes"], $lead["custom"], $lead["follow"], $uid]
       );
       pos_send(200, ["ok" => true, "lead" => pos_q("SELECT * FROM crm_leads WHERE id = ? AND business_id = ?", "ss", [$id, $bid])[0] ?? ["id" => $id], "php" => true]);
+    }
+    if (preg_match("#^crm/leads/([^/]+)$#", $path, $m) && $method === "POST") {
+      pos_crm_on($bid);
+      $lead = pos_crm_lead_input($body);
+      if ($lead["name"] === "") throw new Exception("Enter the lead name");
+      pos_q(
+        "UPDATE crm_leads SET name = ?, mobile = ?, email = ?, company_name = ?, gstin = NULLIF(?, ''), source_id = NULLIF(?, ''), stage = ?, priority = ?, assigned_to = NULLIF(?, ''), expected_value = ?, notes = ?, custom_json = ?, next_followup = NULLIF(?, '') WHERE id = ? AND business_id = ?",
+        "sssssssssdsssss",
+        [$lead["name"], $lead["mobile"], $lead["email"], $lead["company"], $lead["gstin"], $lead["source"], $lead["stage"], $lead["priority"], $lead["assigned"], $lead["expected"], $lead["notes"], $lead["custom"], $lead["follow"], $m[1], $bid]
+      );
+      $saved = pos_q("SELECT * FROM crm_leads WHERE id = ? AND business_id = ?", "ss", [$m[1], $bid])[0] ?? null;
+      if (!$saved) pos_send(404, ["error" => "Lead not found", "php" => true]);
+      pos_send(200, ["ok" => true, "lead" => $saved, "php" => true]);
     }
     if (preg_match("#^crm/leads/([^/]+)/stage$#", $path, $m) && $method === "POST") {
       pos_crm_on($bid);

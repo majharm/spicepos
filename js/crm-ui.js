@@ -5,6 +5,8 @@
   let tab = "dashboard";
   let boot = null;
   let profileId = "";
+  let leadRows = [];
+  let editingLead = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -49,12 +51,38 @@
     return `<option value="">Unassigned</option>${rows.map((row) => `<option value="${esc(row.id)}"${row.id === selected ? " selected" : ""}>${esc(row.name || row.role || "Staff")}</option>`).join("")}`;
   }
 
-  function sourceOptions() {
-    return `<option value="">Source</option>${(boot?.sources || []).map((row) => `<option value="${esc(row.id)}">${esc(row.name)}</option>`).join("")}`;
+  function sourceOptions(selected) {
+    return `<option value="">Source</option>${(boot?.sources || []).map((row) => `<option value="${esc(row.id)}"${row.id === selected ? " selected" : ""}>${esc(row.name)}</option>`).join("")}`;
   }
 
-  function fieldInputs(prefix) {
-    return (boot?.fields || []).map((field) => `<label>${esc(field.label)}<input name="${prefix}${esc(field.key)}" maxlength="180" /></label>`).join("");
+  function leadFields() {
+    if (Array.isArray(boot?.fields) && boot.fields.length) return boot.fields;
+    return CRM().fieldsFor(boot?.category || "");
+  }
+
+  function fieldInputs(prefix, values = {}) {
+    return leadFields().map((field) => `<label>${esc(field.label)}<input name="${prefix}${esc(field.key)}" value="${esc(values[field.key] || "")}" maxlength="180" /></label>`).join("");
+  }
+
+  function stageOptions(selected) {
+    const key = CRM().stageOf(selected).key;
+    return CRM().STAGES.map((stage) => `<option value="${esc(stage.key)}"${stage.key === key ? " selected" : ""}>${esc(stage.label)}</option>`).join("");
+  }
+
+  function priorityOptions(selected) {
+    const key = CRM().priorityOf(selected);
+    return CRM().PRIORITIES.map((item) => `<option value="${esc(item)}"${item === key ? " selected" : ""}>${esc(item)}</option>`).join("");
+  }
+
+  function dateValue(value) {
+    const match = String(value || "").match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : "";
+  }
+
+  function leadCustom(lead) {
+    if (lead?.custom && typeof lead.custom === "object") return lead.custom;
+    if (!lead?.custom_json) return {};
+    try { return JSON.parse(lead.custom_json) || {}; } catch { return {}; }
   }
 
   function pill(text, kind) {
@@ -105,27 +133,48 @@
   async function paintPipeline() {
     const data = await root.api("/api/crm/leads");
     const columns = CRM().pipelineColumns(data.leads || []);
-    $("crm-body").innerHTML = `<div class="crm-board">${columns.map((column) => `<section class="crm-col"><header><h4>${esc(column.label)}</h4><span>${column.leads.length}</span></header>${column.leads.map((lead) => `<article class="crm-card"><strong>${esc(lead.name)}</strong><p>${esc(lead.mobile || lead.company_name || "No mobile")}</p><div class="crm-actions">${(() => { const next = CRM().STAGES.find((stage) => stage.sort === CRM().stageOf(lead.stage).sort + 1 && !stage.lost); return next ? `<button class="btn" type="button" data-crm-stage="${esc(lead.id)}" data-stage="${esc(next.key)}">${esc(next.label)}</button>` : ""; })()}${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : ""}</div></article>`).join("") || `<p class="crm-empty">No leads</p>`}</section>`).join("")}</div>`;
+    leadRows = data.leads || [];
+    $("crm-body").innerHTML = `<div class="crm-board">${columns.map((column) => `<section class="crm-col"><header><h4>${esc(column.label)}</h4><span>${column.leads.length}</span></header>${column.leads.map((lead) => `<article class="crm-card"><strong>${esc(lead.name)}</strong><p>${esc(lead.mobile || lead.company_name || "No mobile")}</p><div class="crm-actions"><button class="btn" type="button" data-crm-edit="${esc(lead.id)}">Edit</button>${(() => { const next = CRM().STAGES.find((stage) => stage.sort === CRM().stageOf(lead.stage).sort + 1 && !stage.lost); return next ? `<button class="btn" type="button" data-crm-stage="${esc(lead.id)}" data-stage="${esc(next.key)}">${esc(next.label)}</button>` : ""; })()}${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : ""}</div></article>`).join("") || `<p class="crm-empty">No leads</p>`}</section>`).join("")}</div>`;
+  }
+
+  function leadForm(lead) {
+    const custom = leadCustom(lead);
+    const editing = Boolean(lead?.id);
+    return `<form class="crm-form" id="crm-lead-form">
+      <div class="crm-form-head"><h4 class="crm-panel-title" id="crm-lead-title">${editing ? "Update lead" : "New lead"}</h4><button class="btn" type="button" id="crm-lead-cancel"${editing ? "" : " hidden"}>Clear</button></div>
+      <input type="hidden" name="lead_id" value="${esc(lead?.id || "")}" />
+      <label>Name<input name="name" required maxlength="180" value="${esc(lead?.name || "")}" /></label>
+      <label>Mobile<input name="mobile" inputmode="tel" maxlength="32" value="${esc(lead?.mobile || "")}" /></label>
+      <label>Email<input name="email" type="email" maxlength="160" value="${esc(lead?.email || "")}" /></label>
+      <label>Company<input name="company_name" maxlength="180" value="${esc(lead?.company_name || "")}" /></label>
+      <label>GSTIN<input name="gstin" maxlength="32" value="${esc(lead?.gstin || "")}" /></label>
+      <label>Source<select name="source_id">${sourceOptions(lead?.source_id || "")}</select></label>
+      <label>Stage<select name="stage">${stageOptions(lead?.stage || "new")}</select></label>
+      <label>Priority<select name="priority">${priorityOptions(lead?.priority || "normal")}</select></label>
+      <label>Assign<select name="assigned_to">${staffOptions(lead?.assigned_to || "")}</select></label>
+      <label>Expected value (₹)<input name="expected_value" type="number" min="0" step="0.01" value="${esc(lead?.expected_value || "")}" /></label>
+      <label>Next follow-up<input name="next_followup" type="date" value="${esc(dateValue(lead?.next_followup))}" /></label>
+      ${fieldInputs("custom_", custom)}
+      <label class="crm-wide">Notes<textarea name="notes" rows="2" maxlength="1000">${esc(lead?.notes || "")}</textarea></label>
+      <div class="crm-wide crm-actions"><button class="btn primary" type="submit" id="crm-lead-save">${editing ? "Update lead" : "Save lead"}</button></div>
+    </form>`;
+  }
+
+  function leadMeta(lead) {
+    const bits = [lead.mobile, lead.company_name].filter(Boolean);
+    if (Number(lead.expected_value)) bits.push(money(lead.expected_value));
+    const follow = dateValue(lead.next_followup);
+    if (follow) bits.push(`Follow-up ${follow}`);
+    return bits.join(" · ");
   }
 
   async function paintLeads() {
     const data = await root.api("/api/crm/leads");
-    const rows = data.leads || [];
-    $("crm-body").innerHTML = `<form class="crm-form" id="crm-lead-form">
-      <h4 class="crm-panel-title">New lead</h4>
-      <label>Name<input name="name" required maxlength="180" /></label>
-      <label>Mobile<input name="mobile" maxlength="32" /></label>
-      <label>Email<input name="email" type="email" maxlength="160" /></label>
-      <label>Company<input name="company_name" maxlength="180" /></label>
-      <label>Source<select name="source_id">${sourceOptions()}</select></label>
-      <label>Priority<select name="priority"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select></label>
-      <label>Assign<select name="assigned_to">${staffOptions("")}</select></label>
-      <label>Expected value<input name="expected_value" type="number" min="0" step="0.01" /></label>
-      ${fieldInputs("custom_")}
-      <label class="crm-wide">Notes<textarea name="notes" rows="2" maxlength="1000"></textarea></label>
-      <div class="crm-wide"><button class="btn primary" type="submit">Save lead</button></div>
-    </form>
-    <div class="crm-list">${rows.map((lead) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(lead.name)}</strong><p class="crm-meta">${esc([lead.mobile, lead.company_name].filter(Boolean).join(" · "))}</p></div><div class="crm-row-mid">${pill(CRM().stageOf(lead.stage).label, tone(lead.stage))} ${pill(lead.priority || "normal", tone(lead.priority))}</div><div class="crm-actions">${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : pill("Linked", "ok")}</div></article>`).join("") || empty("No leads yet.")}</div>`;
+    leadRows = data.leads || [];
+    const editing = editingLead;
+    editingLead = null;
+    $("crm-body").innerHTML = `${leadForm(editing)}<div class="crm-list">${leadRows.map((lead) => `<article class="crm-row"><div class="crm-row-main"><strong>${esc(lead.name)}</strong><p class="crm-meta">${esc(leadMeta(lead))}</p></div><div class="crm-row-mid">${pill(CRM().stageOf(lead.stage).label, tone(lead.stage))} ${pill(lead.priority || "normal", tone(lead.priority))}</div><div class="crm-actions"><button class="btn" type="button" data-crm-edit="${esc(lead.id)}">Edit</button>${lead.stage !== "converted" ? `<button class="btn primary" type="button" data-crm-convert="${esc(lead.id)}">Convert</button>` : pill("Linked", "ok")}</div></article>`).join("") || empty("No leads yet.")}</div>`;
+    if (editing?.id) $("crm-lead-form")?.scrollIntoView({ block: "nearest" });
   }
 
   async function paintCustomers() {
@@ -208,7 +257,7 @@
 
   function customFrom(form) {
     const custom = {};
-    (boot?.fields || []).forEach((field) => {
+    leadFields().forEach((field) => {
       custom[field.key] = form.elements[`custom_${field.key}`]?.value || "";
     });
     return custom;
@@ -222,6 +271,28 @@
       if (tabBtn && $("crm-desk")?.contains(tabBtn)) {
         hint("");
         await show(tabBtn.dataset.crmTab).catch((err) => hint(err.message, "bad"));
+        return;
+      }
+      const editBtn = event.target.closest("[data-crm-edit]");
+      if (editBtn && $("crm-desk")?.contains(editBtn)) {
+        const id = editBtn.dataset.crmEdit;
+        let lead = leadRows.find((row) => row.id === id);
+        if (!lead) {
+          const data = await root.api("/api/crm/leads");
+          lead = (data.leads || []).find((row) => row.id === id);
+        }
+        if (!lead) {
+          hint("Lead not found", "bad");
+          return;
+        }
+        editingLead = lead;
+        if (tab !== "leads") await show("leads");
+        else await paintLeads();
+        return;
+      }
+      if (event.target.id === "crm-lead-cancel") {
+        editingLead = null;
+        await paintLeads();
         return;
       }
       const stageBtn = event.target.closest("[data-crm-stage]");
@@ -262,8 +333,11 @@
       const read = (name) => form.elements[name]?.value || "";
       try {
         if (form.id === "crm-lead-form") {
-          await root.api("/api/crm/leads", { method: "POST", body: JSON.stringify({ name: read("name"), mobile: read("mobile"), email: read("email"), company_name: read("company_name"), source_id: read("source_id"), priority: read("priority"), assigned_to: read("assigned_to"), expected_value: read("expected_value"), notes: read("notes"), custom: customFrom(form) }) });
-          hint("Lead saved", "ok");
+          const leadId = read("lead_id");
+          const payload = { name: read("name"), mobile: read("mobile"), email: read("email"), company_name: read("company_name"), gstin: read("gstin"), source_id: read("source_id"), stage: read("stage"), priority: read("priority"), assigned_to: read("assigned_to"), expected_value: read("expected_value"), next_followup: read("next_followup"), notes: read("notes"), custom: customFrom(form) };
+          await root.api(leadId ? `/api/crm/leads/${encodeURIComponent(leadId)}` : "/api/crm/leads", { method: "POST", body: JSON.stringify(payload) });
+          editingLead = null;
+          hint(leadId ? "Lead updated" : "Lead saved", "ok");
           await show("leads");
         } else if (form.id === "crm-customer-search") {
           const data = await root.api(`/api/crm/customers?q=${encodeURIComponent(read("q"))}`);

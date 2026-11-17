@@ -291,6 +291,14 @@
   margin: 0;
   font-size: 15px;
 }
+.crm-form-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.crm-form-head .crm-panel-title { grid-column: auto; }
 .crm-wide { grid-column: 1 / -1; }
 .crm-summary {
   display: flex;
