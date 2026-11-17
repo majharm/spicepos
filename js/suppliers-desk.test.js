@@ -25,8 +25,8 @@ test("Suppliers desk is searchable on phone and updates the same vendor", () => 
   assert.match(view, /id="sup-use-match"/);
   assert.match(view, /data-view-jump="accounts"/);
   assert.match(view, /data-acc-jump="payables"/);
-  assert.match(index, /css\/supplier-master\.css\?v=20261030sup2/);
-  assert.match(index, /app\.js\?v=20261117ecom1/);
+  assert.match(index, /css\/supplier-master\.css\?v=20261117sup1/);
+  assert.match(index, /app\.js\?v=20261117sup1/);
   assert.match(view, /id="sup-contact"/);
   assert.match(view, /Contact person/);
   assert.match(view, /id="sup-city"/);
@@ -61,4 +61,6 @@ test("Suppliers desk is searchable on phone and updates the same vendor", () => 
   assert.match(read("scripts/base-schema.sql"), /supplier_type VARCHAR\(32\) NULL/);
   assert.match(php, /suppliers\/\(\[A-Za-z0-9-\]\+\)/);
   assert.match(php, /UPDATE suppliers SET name/);
+  assert.match(crud, /UPDATE purchases SET supplier_name/);
+  assert.match(php, /UPDATE purchases SET supplier_name = \?/);
 });

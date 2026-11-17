@@ -4207,7 +4207,11 @@ body.restaurant-mode.counter-mode .stage.is-counter .card-qty { display: none; }
 }
 .item-block:first-of-type { border-top: 0; padding-top: 0; }
 .item-block legend {
-  padding: 0;
+  float: left;
+  width: 100%;
+  grid-column: 1 / -1;
+  padding: 0 0 2px;
+  margin: 0;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -4978,6 +4982,7 @@ button.items-stat.is-active {
 .purchase-pane {
   position: sticky;
   top: 12px;
+  z-index: 1;
   max-height: min(calc(100dvh - 160px), 820px);
   height: auto;
   display: flex;
@@ -5168,6 +5173,9 @@ body.classic-bill-mode .bill-settle {
   background: #fff;
 }
 .purchase-new {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
   margin: 0 24px 12px;
   padding: 14px 16px;
   border: 1px solid var(--line-strong);

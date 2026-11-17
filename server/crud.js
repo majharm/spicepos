@@ -673,6 +673,58 @@ function customerEmailField(raw) {
 
 const SUPPLIER_TYPES = new Set(["Manufacturer", "Wholesaler", "Distributor", "Trader", "Farmer", "Other"]);
 
+function purchaseSupplierName(body, supplier) {
+  const typed = String(body?.supplier_name || "").trim().slice(0, 180);
+  return typed || String(supplier?.name || "").trim();
+}
+
+function purchaseLineSignature(row) {
+  const qty = Math.round((Number(row.qty ?? row.quantity_gm) || 0) * 1000);
+  const free = Math.round((Number(row.freeQty ?? row.free_qty) || 0) * 1000);
+  const rate = Math.round((Number(row.rate ?? row.rate_per_kg) || 0) * 10000);
+  const gst = Math.round((Number(row.gstRate ?? row.gst_rate) || 0) * 100);
+  const discount = Math.round((Number(row.discount) || 0) * 100);
+  const id = row.item?.id || row.item_id || "";
+  return `${id}|${qty}|${free}|${rate}|${gst}|${discount}`;
+}
+
+function samePurchaseLines(oldLines, built, existing, subtotal, gst, total) {
+  const close = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.02;
+  if (!close(existing?.subtotal, subtotal) || !close(existing?.gst, gst) || !close(existing?.total, total)) return false;
+  const previous = oldLines || [];
+  if (previous.length !== built.length) return false;
+  const left = previous.map(purchaseLineSignature).sort();
+  const right = built.map(purchaseLineSignature).sort();
+  return left.every((key, i) => key === right[i]);
+}
+
+async function renameSupplierOnPurchases(id, previous, next) {
+  const from = String(previous || "").trim();
+  const to = String(next || "").trim();
+  if (!id || !from || !to || from === to) return;
+  const ignore = (err) => {
+    const msg = String(err?.message || err);
+    if (/doesn't exist|Unknown column|Unknown table/i.test(msg)) return;
+    throw err;
+  };
+  try {
+    await query(
+      "UPDATE purchases SET supplier_name = ? WHERE business_id = ? AND supplier_id = ? AND supplier_name = ?",
+      [to, bid(), id, from],
+    );
+  } catch (err) {
+    ignore(err);
+  }
+  try {
+    await query(
+      "UPDATE account_ledger SET party_name = ? WHERE business_id = ? AND party_type = 'supplier' AND party_id = ? AND party_name = ?",
+      [to, bid(), id, from],
+    );
+  } catch (err) {
+    ignore(err);
+  }
+}
+
 function supplierWriteFields(body) {
   const name = String(body?.name || "").trim().slice(0, 180);
   if (!name) return { error: "Supplier name is required" };
@@ -1346,7 +1398,7 @@ export function registerCrud(app) {
       return;
     }
     try {
-      const [found] = await query("SELECT id FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
+      const [found] = await query("SELECT id, name FROM suppliers WHERE id = ? AND business_id = ? LIMIT 1", [id, bid()]);
       if (!found) {
         res.status(404).json({ error: "Supplier not found" });
         return;
@@ -1370,6 +1422,7 @@ export function registerCrud(app) {
           bid(),
         ],
       );
+      await renameSupplierOnPurchases(id, found.name, fields.name);
       const [supplier] = await query("SELECT * FROM suppliers WHERE id = ? AND business_id = ?", [id, bid()]);
       res.json({ ok: true, supplier });
     } catch (err) {
@@ -1402,6 +1455,8 @@ export function registerCrud(app) {
           throw new Error("Invalid payment method");
         }
         const payStatus = method === "credit" ? "unpaid" : "paid";
+        const supplierName = purchaseSupplierName(req.body, supplier);
+        const namedSupplier = { ...supplier, name: supplierName };
         await conn.query(
           `INSERT INTO purchases (
              id, purchase_number, supplier_id, supplier_name, supplier_invoice_number,
@@ -1411,7 +1466,7 @@ export function registerCrud(app) {
             id,
             purchaseNumber,
             supplier.id,
-            supplier.name,
+            supplierName,
             supplier_invoice_number || null,
             purchase_date || new Date().toISOString().slice(0, 10),
             notes || null,
@@ -1428,7 +1483,7 @@ export function registerCrud(app) {
         const purchase = rows[0];
         purchase.barcode_count = barcodeCount;
         await recordCreditPurchase(conn, {
-          supplier,
+          supplier: namedSupplier,
           total,
           purchaseId: id,
           purchaseNumber,
@@ -1475,8 +1530,15 @@ export function registerCrud(app) {
         }
         const prepared = await preparePurchaseLines(conn, lines);
         const { built, expanded, subtotal, gst, total } = prepared;
-        await unwindPurchase(conn, existing, oldLines || []);
         const payStatus = method === "credit" ? "unpaid" : "paid";
+        const supplierName = purchaseSupplierName(req.body, supplier);
+        const namedSupplier = { ...supplier, name: supplierName };
+        const headerOnly = samePurchaseLines(oldLines || [], built, existing, subtotal, gst, total);
+        if (!headerOnly) await unwindPurchase(conn, existing, oldLines || []);
+        else {
+          await reverseCreditPurchase(conn, existing);
+          await deleteJournalRef(conn, "purchase", existing.id);
+        }
         await conn.query(
           `UPDATE purchases SET
              supplier_id=?, supplier_name=?, supplier_invoice_number=?,
@@ -1485,7 +1547,7 @@ export function registerCrud(app) {
            WHERE id=? AND business_id=?`,
           [
             supplier.id,
-            supplier.name,
+            supplierName,
             supplier_invoice_number || null,
             purchase_date || existing.purchase_date,
             notes ?? existing.notes ?? null,
@@ -1498,18 +1560,21 @@ export function registerCrud(app) {
             bid(),
           ],
         );
-        const barcodeCount = await insertPurchaseStock(conn, {
-          id: existing.id,
-          purchaseNumber: existing.purchase_number,
-          supplier,
-          built,
-          expanded,
-        });
+        let barcodeCount = 0;
+        if (!headerOnly) {
+          barcodeCount = await insertPurchaseStock(conn, {
+            id: existing.id,
+            purchaseNumber: existing.purchase_number,
+            supplier: namedSupplier,
+            built,
+            expanded,
+          });
+        }
         const [rows] = await conn.query("SELECT * FROM purchases WHERE id = ? AND business_id = ?", [existing.id, bid()]);
         const saved = rows[0];
         saved.barcode_count = barcodeCount;
         await recordCreditPurchase(conn, {
-          supplier,
+          supplier: namedSupplier,
           total,
           purchaseId: existing.id,
           purchaseNumber: existing.purchase_number,

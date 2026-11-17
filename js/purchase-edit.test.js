@@ -20,17 +20,26 @@ test("Purchases page can edit a saved bill", () => {
 
   assert.match(index, /id="po-save"/);
   assert.match(index, /id="po-cancel-edit"/);
+  assert.match(index, /id="po-supplier-name"/);
   assert.match(app, /data-edit-purchase/);
   assert.match(app, /function beginPurchaseEdit/);
+  assert.match(app, /function fillPurchaseSupplierName/);
+  assert.match(app, /supplier_name: \$\("po-supplier-name"\)\?\.value/);
   assert.match(app, /\/api\/purchases\/\$\{encodeURIComponent\(editingId\)\}/);
   assert.match(app, /method: editingId \? "PUT" : "POST"/);
   assert.match(crud, /app\.put\("\/api\/purchases\/:id"/);
   assert.match(crud, /function unwindPurchase/);
+  assert.match(crud, /function purchaseSupplierName/);
+  assert.match(crud, /function samePurchaseLines/);
+  assert.match(crud, /function renameSupplierOnPurchases/);
   assert.match(crud, /remaining_gm\) \+ 0\.0001 < Number\(row\.qty_gm\)/);
   assert.match(crud, /stock_gm = stock_gm - \?/);
   assert.match(accounts, /function reverseCreditPurchase/);
   assert.match(accounts, /payable_balance = COALESCE\(payable_balance, 0\) - \?/);
   assert.match(php, /purchases\/\(\[A-Za-z0-9-\]\+\)/);
   assert.match(php, /function pos_unwind_purchase/);
+  assert.match(php, /function pos_purchase_supplier_name/);
+  assert.match(php, /function pos_purchase_same_lines/);
+  assert.match(php, /function pos_rename_supplier_on_purchases/);
   assert.match(core, /function pos_reverse_credit_purchase/);
 });

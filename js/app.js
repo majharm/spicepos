@@ -12307,6 +12307,19 @@ function purchaseLineDiscount(line, item) {
   return discount > 0.0000001 ? String(POSUnits.roundRate8?.(discount) ?? discount) : "0";
 }
 
+function selectedPurchaseSupplierName() {
+  const id = $("po-supplier")?.value || "";
+  const row = (state.suppliers || []).find((s) => s.id === id);
+  if (row?.name) return String(row.name);
+  const text = $("po-supplier")?.selectedOptions?.[0]?.textContent || "";
+  return text.split(" · ")[0].trim();
+}
+
+function fillPurchaseSupplierName() {
+  const input = $("po-supplier-name");
+  if (input) input.value = selectedPurchaseSupplierName();
+}
+
 function resetPurchaseComposer() {
   editingPurchaseId = "";
   poLineDraft.clear();
@@ -12317,6 +12330,7 @@ function resetPurchaseComposer() {
   const summary = document.querySelector("#purchase-new > summary");
   if (summary) summary.textContent = "New purchase";
   if ($("po-date")) $("po-date").value = shopYmd();
+  fillPurchaseSupplierName();
   const hint = $("po-hint");
   if (hint && !hint.classList.contains("error")) {
     hint.textContent = "";
@@ -12434,6 +12448,7 @@ async function beginPurchaseEdit(purchase) {
     }
     if (id) supplier.value = id;
   }
+  if ($("po-supplier-name")) $("po-supplier-name").value = purchase.supplier_name || selectedPurchaseSupplierName();
   if ($("po-invoice")) $("po-invoice").value = purchase.supplier_invoice_number || "";
   if ($("po-date")) $("po-date").value = purchaseDateValue(purchase.purchase_date);
   if ($("po-pay")) $("po-pay").value = purchase.payment_method || "cash";
@@ -12444,7 +12459,7 @@ async function beginPurchaseEdit(purchase) {
   const details = $("purchase-new");
   if (details) details.open = true;
   renderPoLines({ capture: false });
-  setPoHint(`Editing ${purchase.purchase_number || "this purchase"}. Saving replaces the bill and adjusts stock.`, "");
+  setPoHint(`Editing ${purchase.purchase_number || "this purchase"}. The supplier name can be changed here. Saving line changes replaces the bill and adjusts stock.`, "");
   details?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
@@ -12690,12 +12705,17 @@ async function loadSuppliers() {
   state.suppliers = rows;
   const po = $("po-supplier");
   if (po) {
+    const keep = po.value;
+    const keepName = String($("po-supplier-name")?.value || "");
     po.innerHTML = rows
       .map((s) => {
         const where = [s.city, s.state].filter(Boolean).join(", ");
         return `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || "Supplier")}${where ? ` · ${escapeHtml(where)}` : ""}</option>`;
       })
       .join("");
+    if (keep && [...po.options].some((opt) => opt.value === keep)) po.value = keep;
+    const name = $("po-supplier-name");
+    if (name && !keepName.trim()) name.value = selectedPurchaseSupplierName();
   }
   renderSuppliersList();
 }
@@ -15565,6 +15585,7 @@ $("purchase-form").addEventListener("input", (e) => {
   }
 });
 $("purchase-form").addEventListener("change", (e) => {
+  if (e.target.id === "po-supplier") fillPurchaseSupplierName();
   if (e.target.matches("[data-po-item],[data-po-product]")) paintPoTotals();
 });
 $("po-lines")?.addEventListener("click", (e) => {
@@ -15680,6 +15701,7 @@ $("purchase-form").addEventListener("submit", async (e) => {
       method: editingId ? "PUT" : "POST",
       body: JSON.stringify({
         supplier_id: $("po-supplier").value,
+        supplier_name: $("po-supplier-name")?.value || "",
         supplier_invoice_number: $("po-invoice").value,
         purchase_date: $("po-date").value,
         payment_method: $("po-pay").value,
