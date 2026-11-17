@@ -188,8 +188,11 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(php, /whatsapp_consent/);
   assert.doesNotMatch(php, /wamaster\.atavtelecom\.in/);
   assert.doesNotMatch(php, /api_key/);
-  assert.match(health, /pos_automation_tick/);
-  assert.match(health, /flock/);
+  assert.match(health, /pos_cron_run/);
+  assert.match(health, /pos_cron_claim/);
+  assert.match(read("pos-cron-lock.php"), /flock/);
+  assert.match(read("pos-api.php"), /pos_arm_background_cron/);
+  assert.match(alerts, /api\/cron\/index\.php/);
   assert.match(core, /pos_automation_master_dispatch/);
   assert.doesNotMatch(alerts, /void tickAllClosingAlerts\(\)/);
   assert.match(alerts, /PHP health and \/api\/cron drive scheduled reports/);

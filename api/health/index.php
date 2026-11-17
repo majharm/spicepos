@@ -152,26 +152,8 @@ if ($automationDue) {
 health_out(200, $out);
 
 function health_automation_due($root) {
-  $dir = $root . "/pos-data";
-  if (!is_dir($dir)) @mkdir($dir, 0775, true);
-  $file = $dir . "/automation-tick.lock";
-  $fh = @fopen($file, "c+");
-  if (!$fh) return false;
-  if (!flock($fh, LOCK_EX | LOCK_NB)) {
-    fclose($fh);
-    return false;
-  }
-  $last = (int) trim((string) stream_get_contents($fh));
-  $due = $last <= 0 || (time() - $last) >= 300;
-  if ($due) {
-    ftruncate($fh, 0);
-    rewind($fh);
-    fwrite($fh, (string) time());
-    fflush($fh);
-  }
-  flock($fh, LOCK_UN);
-  fclose($fh);
-  return $due;
+  require_once $root . "/pos-cron-lock.php";
+  return pos_cron_claim($root, 300);
 }
 
 function health_automation_tick($root) {
@@ -179,5 +161,5 @@ function health_automation_tick($root) {
   $file = $root . "/pos-automation.php";
   if (!is_file($file)) return;
   require_once $file;
-  if (function_exists("pos_automation_tick")) pos_automation_tick();
+  if (function_exists("pos_cron_run")) pos_cron_run();
 }

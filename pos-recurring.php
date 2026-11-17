@@ -419,7 +419,37 @@ function pos_recur_plan($schedule, $today, $run, $manual) {
   return ["action" => "create", "period" => $due, "nextDate" => $next, "afterStatus" => $after, "cyclesDone" => $cycles];
 }
 
-function pos_recur_generate($bid, $id, $auth) {
+function pos_recur_tick() {
+  pos_recur_ensure();
+  $shops = pos_q("SELECT business_id FROM company_settings WHERE recurring_invoices_enabled = 1 LIMIT 100");
+  $made = 0;
+  foreach ($shops as $shop) {
+    $bid = (string) ($shop["business_id"] ?? "");
+    if ($bid === "") continue;
+    try {
+      $info = pos_recur_shop($bid);
+      if (!$info["enabled"]) continue;
+      $today = pos_recur_today($info["timezone"] ?? "");
+      $rows = pos_q(
+        "SELECT id FROM recurring_schedules WHERE business_id = ? AND status = 'active' AND auto_generate = 1 AND next_invoice_date <= ? LIMIT 20",
+        "ss",
+        [$bid, $today]
+      );
+      $auth = ["user" => ["id" => "recurring", "role" => "business_admin"], "branchId" => null];
+      foreach ($rows as $row) {
+        $out = pos_recur_generate($bid, $row["id"], $auth, false);
+        foreach (($out["results"] ?? []) as $result) {
+          if (!empty($result["orderId"])) $made++;
+        }
+      }
+    } catch (Throwable $e) {
+      error_log("recurring tick " . $bid . ": " . $e->getMessage());
+    }
+  }
+  return $made;
+}
+
+function pos_recur_generate($bid, $id, $auth, $manual = true) {
   $shop = pos_recur_require_on($bid);
   $schedule = pos_recur_load($bid, $id);
   if (!$schedule) throw new Exception("Schedule not found");
@@ -431,7 +461,7 @@ function pos_recur_generate($bid, $id, $auth) {
     "sss",
     [$bid, $id, $period]
   );
-  $plan = pos_recur_plan($schedule, $today, $runs[0] ?? [], true);
+  $plan = pos_recur_plan($schedule, $today, $runs[0] ?? [], $manual);
   if ($plan["action"] === "complete") {
     pos_q("UPDATE recurring_schedules SET status = 'completed', last_error = NULL WHERE id = ? AND business_id = ?", "ss", [$id, $bid]);
     return ["ok" => true, "schedule" => pos_recur_public(pos_recur_load($bid, $id)), "results" => []];
@@ -471,6 +501,7 @@ function pos_recur_generate($bid, $id, $auth) {
       $auth,
       [
         "customerId" => $schedule["customer_id"],
+        "idempotencyKey" => "recur-" . $id . "-" . $plan["period"],
         "paymentMethod" => "credit",
         "discountType" => $schedule["discount_type"] ?: "amt",
         "discountValue" => $schedule["discount_value"] ?? 0,

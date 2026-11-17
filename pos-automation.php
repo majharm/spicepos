@@ -1138,6 +1138,29 @@ function pos_automation_tick($opts = []) {
   }
 }
 
+function pos_cron_run() {
+  $result = pos_automation_tick();
+  try {
+    $crm = __DIR__ . "/pos-crm.php";
+    if (is_file($crm)) {
+      require_once $crm;
+      if (function_exists("pos_crm_automation_tick")) pos_crm_automation_tick();
+    }
+  } catch (Throwable $e) {
+    error_log("crm cron: " . $e->getMessage());
+  }
+  try {
+    $recurring = __DIR__ . "/pos-recurring.php";
+    if (is_file($recurring)) {
+      require_once $recurring;
+      if (function_exists("pos_recur_tick")) pos_recur_tick();
+    }
+  } catch (Throwable $e) {
+    error_log("recurring cron: " . $e->getMessage());
+  }
+  return is_array($result) ? $result : [];
+}
+
 function pos_auto_summary() {
   pos_automation_ensure_schema();
   $jobs = pos_auto_jobs();

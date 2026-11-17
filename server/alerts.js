@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { query } from "./db.js";
 import { createdBetween } from "./sql-time.js";
 import {
@@ -2152,6 +2155,25 @@ async function runBackupEmailTick() {
   }
 }
 
+const cronRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function kickPhpCron(index = 0) {
+  const bins = [process.env.PHP_BIN, "php", "/usr/bin/php"].filter(Boolean);
+  if (index >= bins.length) {
+    console.error("cron: php was not found");
+    return;
+  }
+  const child = spawn(bins[index], [path.join(cronRoot, "api/cron/index.php")], {
+    cwd: cronRoot,
+    stdio: "ignore",
+  });
+  child.on("error", (err) => {
+    if (err && err.code === "ENOENT") kickPhpCron(index + 1);
+    else console.error("cron:", err.message);
+  });
+  child.unref?.();
+}
+
 export function startAlertScheduler() {
   if (schedulerStarted) return;
   schedulerStarted = true;
@@ -2159,7 +2181,8 @@ export function startAlertScheduler() {
     if (ticking) return;
     ticking = true;
     try {
-      // PHP health and /api/cron drive scheduled reports. This process only keeps backup email.
+      // PHP health and /api/cron drive scheduled reports. This process asks PHP to run them.
+      kickPhpCron();
       await runBackupEmailTick();
     } catch (err) {
       console.error("alert scheduler:", err.message);

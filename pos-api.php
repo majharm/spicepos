@@ -39,6 +39,28 @@ if ($path === "cron" || $path === "cron/automation") {
   exit;
 }
 
+pos_arm_background_cron();
+
+function pos_arm_background_cron() {
+  static $armed = false;
+  if ($armed) return;
+  $armed = true;
+  $root = __DIR__;
+  require_once $root . "/pos-cron-lock.php";
+  if (!pos_cron_claim($root, 300)) return;
+  register_shutdown_function(function () use ($root) {
+    if (function_exists("fastcgi_finish_request")) @fastcgi_finish_request();
+    @set_time_limit(40);
+    try {
+      if (!function_exists("pos_db")) require_once $root . "/pos-php-core.php";
+      require_once $root . "/pos-automation.php";
+      if (function_exists("pos_cron_run")) pos_cron_run();
+    } catch (Throwable $e) {
+      error_log("cron kick: " . $e->getMessage());
+    }
+  });
+}
+
 function pos_send_result($status, $contentType, $setCookies, $body) {
   http_response_code($status > 0 ? $status : 502);
   header("Content-Type: " . ($contentType ?: "application/json; charset=utf-8"));
