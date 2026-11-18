@@ -13,6 +13,8 @@ import {
   welcomeText,
   credentialsText,
   daysUntilExpiry,
+  closingHour,
+  closingAlertDay,
   normalizeInMobile,
   waIntlNumber,
   waApiNumber,
@@ -45,6 +47,24 @@ import {
 import { parseDataImage } from "./mail.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+test("closing hour 0 sends at 00:01 for the day that just ended", () => {
+  assert.equal(closingHour("0"), 0);
+  assert.equal(closingHour(0), 0);
+  assert.equal(closingHour(""), 22);
+  assert.equal(closingHour("24"), 22);
+  assert.equal(closingAlertDay(0, 0, "2026-11-18", 0), "");
+  assert.equal(closingAlertDay(0, 0, "2026-11-18", 1), "2026-11-17");
+  assert.equal(closingAlertDay(9, 0, "2026-11-18", 0), "2026-11-17");
+  assert.equal(closingAlertDay(21, 22, "2026-11-18", 5), "2026-11-17");
+  assert.equal(closingAlertDay(22, 22, "2026-11-18", 0), "2026-11-18");
+  const node = readFileSync(path.join(root, "server/alerts.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-alerts.php"), "utf8");
+  assert.match(node, /await tickAllClosingAlerts\(\)/);
+  assert.match(php, /function pos_tick_closing_alerts/);
+  assert.match(php, /\$min < 1/);
+  assert.doesNotMatch(node, /alert_closing_hour\)\) \|\| 22/);
+});
 
 test("update text names the shop and title", () => {
   const text = updateText({ shopName: "SWAMI MASALE", title: "Holiday hours", body: "Closed Sunday." });

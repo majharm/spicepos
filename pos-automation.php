@@ -68,6 +68,17 @@ function pos_auto_reached($zone, $hm) {
   return [$have >= $want, $now];
 }
 
+function pos_auto_report_day($zone, $hm) {
+  $now = pos_auto_now($zone);
+  $ymd = $now->format("Y-m-d");
+  if (preg_match('/^(\d{1,2}):(\d{2})$/', (string) $hm, $m) && (int) $m[1] === 0 && (int) $m[2] > 0) {
+    $prev = clone $now;
+    $prev->modify("-1 day");
+    return $prev->format("Y-m-d");
+  }
+  return $ymd;
+}
+
 function pos_auto_day_diff($today, $due) {
   if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $today) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $due)) return null;
   $a = strtotime($today . " UTC");
@@ -822,20 +833,22 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
   }
   $reportTime = $shop["report_time"] ?? "21:00";
   $closeTime = $shop["close_time"] ?? "21:00";
+  $salesDay = pos_auto_report_day($zone, $reportTime);
+  $eodDay = pos_auto_report_day($zone, $closeTime);
   [$salesDue] = pos_auto_reached($zone, $reportTime);
   [$payDue] = pos_auto_reached($zone, "21:15");
   [$dueDue] = pos_auto_reached($zone, "11:00");
   [$eodDue] = pos_auto_reached($zone, $closeTime);
   if ($want("daily_sales") && ($forceJob === "daily_sales" || $salesDue)) {
-    $orders = pos_auto_orders($biz["id"], $ymd);
-    $refunds = pos_auto_refunds($biz["id"], $ymd);
+    $orders = pos_auto_orders($biz["id"], $salesDay);
+    $refunds = pos_auto_refunds($biz["id"], $salesDay);
     $returns = 0;
     foreach ($refunds as $row) $returns += (float) $row["refund_amount"];
-    $sold = pos_auto_items_sold($biz["id"], $ymd);
+    $sold = pos_auto_items_sold($biz["id"], $salesDay);
     $sales = pos_auto_sales_summary($orders, $returns, $sold["qty"]);
-    $col = pos_auto_collections(pos_auto_receipts($biz["id"], $ymd), $orders, $refunds);
-    $body = pos_auto_sales_message($shopName, $ymd, $sales, $col["collected"]);
-    $enqueued += pos_auto_queue_report("daily_sales", $biz["id"], $ymd . $stamp, $shop, "Daily sales " . $ymd, $body, "", $forceShop);
+    $col = pos_auto_collections(pos_auto_receipts($biz["id"], $salesDay), $orders, $refunds);
+    $body = pos_auto_sales_message($shopName, $salesDay, $sales, $col["collected"]);
+    $enqueued += pos_auto_queue_report("daily_sales", $biz["id"], $salesDay . $stamp, $shop, "Daily sales " . $salesDay, $body, "", $forceShop);
   }
   if ($want("collections") && ($forceJob === "collections" || $payDue)) {
     $orders = pos_auto_orders($biz["id"], $ymd);
@@ -850,15 +863,15 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
     $enqueued += pos_auto_enqueue_overdue($biz, $shop, $ymd, $forceShop, $stamp);
   }
   if ($want("eod") && ($forceJob === "eod" || $eodDue)) {
-    $orders = pos_auto_orders($biz["id"], $ymd);
-    $refunds = pos_auto_refunds($biz["id"], $ymd);
+    $orders = pos_auto_orders($biz["id"], $eodDay);
+    $refunds = pos_auto_refunds($biz["id"], $eodDay);
     $returns = 0;
     foreach ($refunds as $row) $returns += (float) $row["refund_amount"];
-    $sold = pos_auto_items_sold($biz["id"], $ymd);
+    $sold = pos_auto_items_sold($biz["id"], $eodDay);
     $sales = pos_auto_sales_summary($orders, $returns, $sold["qty"]);
-    $col = pos_auto_collections(pos_auto_receipts($biz["id"], $ymd), $orders, $refunds);
-    $exp = pos_auto_expenses($biz["id"], $ymd);
-    $profit = pos_auto_profit($biz["id"], $ymd);
+    $col = pos_auto_collections(pos_auto_receipts($biz["id"], $eodDay), $orders, $refunds);
+    $exp = pos_auto_expenses($biz["id"], $eodDay);
+    $profit = pos_auto_profit($biz["id"], $eodDay);
     $cashRefunds = 0;
     foreach ($refunds as $row) {
       if (pos_auto_bucket($row["refund_mode"] ?? "") === "cash") $cashRefunds += (float) ($row["refund_amount"] ?? 0);
@@ -874,15 +887,15 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
       "products" => $sold["products"],
       "lowStock" => count(pos_auto_low_items($biz["id"])),
       "outOfStock" => pos_auto_out_count($biz["id"]),
-      "adjustments" => pos_auto_adjustments($biz["id"], $ymd),
-      "newCustomers" => pos_auto_new_customers($biz["id"], $ymd),
+      "adjustments" => pos_auto_adjustments($biz["id"], $eodDay),
+      "newCustomers" => pos_auto_new_customers($biz["id"], $eodDay),
       "outstanding" => pos_auto_outstanding($biz["id"]),
       "expectedCash" => $expected,
       "profit" => pos_auto_round($profit["profit"] - $exp["total"]),
       "profitSupported" => $profit["cost"] > 0.004,
     ];
-    $body = pos_auto_eod_message($shopName, $ymd, $report);
-    $enqueued += pos_auto_queue_report("eod", $biz["id"], $ymd . $stamp, $shop, "Day-end " . $ymd, $body, "", $forceShop);
+    $body = pos_auto_eod_message($shopName, $eodDay, $report);
+    $enqueued += pos_auto_queue_report("eod", $biz["id"], $eodDay . $stamp, $shop, "Day-end " . $eodDay, $body, "", $forceShop);
   }
   return $enqueued;
 }
@@ -1140,6 +1153,11 @@ function pos_automation_tick($opts = []) {
 
 function pos_cron_run() {
   $result = pos_automation_tick();
+  try {
+    if (function_exists("pos_tick_closing_alerts")) pos_tick_closing_alerts();
+  } catch (Throwable $e) {
+    error_log("closing alert cron: " . $e->getMessage());
+  }
   try {
     $crm = __DIR__ . "/pos-crm.php";
     if (is_file($crm)) {

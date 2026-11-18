@@ -14,9 +14,19 @@ import {
   salesSummary,
   shouldSendLowStock,
   shopClockReached,
+  reportDayForSchedule,
 } from "./automation-jobs.js";
 
 const read = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
+
+test("a 00:01 closing report covers the day that just ended", () => {
+  assert.equal(reportDayForSchedule("2026-11-18", "00:01"), "2026-11-17");
+  assert.equal(reportDayForSchedule("2026-11-18", "21:00"), "2026-11-18");
+  assert.equal(shopClockReached(new Date("2026-11-17T18:31:00Z"), "Asia/Kolkata", "00:01"), true);
+  assert.equal(shopClockReached(new Date("2026-11-17T18:30:00Z"), "Asia/Kolkata", "00:01"), false);
+  assert.match(read("pos-automation.php"), /function pos_auto_report_day/);
+  assert.match(read("pos-automation.php"), /modify\("-1 day"\)/);
+});
 
 test("credit sales and unpaid invoices are not collected cash", () => {
   const col = collectionSummary({
@@ -194,7 +204,8 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(read("pos-api.php"), /pos_arm_background_cron/);
   assert.match(alerts, /api\/cron\/index\.php/);
   assert.match(core, /pos_automation_master_dispatch/);
-  assert.doesNotMatch(alerts, /void tickAllClosingAlerts\(\)/);
+  assert.match(alerts, /await tickAllClosingAlerts\(\)/);
+  assert.match(read("pos-automation.php"), /pos_tick_closing_alerts/);
   assert.match(alerts, /PHP health and \/api\/cron drive scheduled reports/);
   assert.match(read("pos-alerts.php"), /new DateTimeZone\(\$tzName\)/);
   assert.match(php, /cashRefunds/);
@@ -218,7 +229,7 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(php, /test-number/);
   assert.match(php, /provider_note, ''\) <> 'forced'/);
   assert.match(read("js/master.js"), /Test WhatsApp sent to the saved test number/);
-  assert.match(read("master.html"), /master\.js\?v=20261118staff1/);
+  assert.match(read("master.html"), /master\.js\?v=20261118close1/);
   assert.doesNotMatch(read("api/cron/index.php"), /lastError/);
   assert.match(php, /if \(\$testMode\) \{\s*\$mobile = \$testNumber;/);
 });
