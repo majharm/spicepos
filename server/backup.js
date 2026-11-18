@@ -22,6 +22,7 @@ import {
   platformBackupFilename,
   prepareBackupEmailAttachment,
   SHOP_CLEAN_KEEP_TABLES,
+  keepsBusinessHistory,
   sortBackupTables,
 } from "./backup-util.js";
 
@@ -206,11 +207,30 @@ export async function deleteBusinessAccount(businessId) {
   const id = String(businessId || "").trim();
   if (!id) throw new Error("Select a shop");
   const known = await listBizTables();
-  const names = known.filter((t) => t !== "staff_users" && t !== "businesses");
+  const names = known.filter((t) => t !== "staff_users" && t !== "businesses" && !keepsBusinessHistory(t));
   const deleteOrder = sortBackupTables(names, false);
   let users = 0;
   await withTransaction(async (conn) => {
     await withFkOff(conn, async () => {
+      try {
+        await conn.query(
+          `UPDATE staff_sessions s
+           INNER JOIN staff_users u ON u.id = s.staff_user_id
+           SET s.revoked_at = NOW()
+           WHERE u.business_id = ? AND s.revoked_at IS NULL`,
+          [id],
+        );
+      } catch {
+        /* optional table */
+      }
+      try {
+        await conn.query(
+          "UPDATE staff_sessions SET revoked_at = NOW() WHERE business_id = ? AND revoked_at IS NULL",
+          [id],
+        );
+      } catch {
+        /* optional table */
+      }
       try {
         await conn.query("DELETE FROM staff_sessions WHERE business_id = ?", [id]);
       } catch {
@@ -226,16 +246,40 @@ export async function deleteBusinessAccount(businessId) {
       } catch {
         /* optional table */
       }
+      try {
+        await conn.query(
+          "UPDATE business_admin_otp SET used_at = NOW() WHERE business_id = ? AND used_at IS NULL",
+          [id],
+        );
+      } catch {
+        /* optional table */
+      }
+      try {
+        await conn.query(
+          "UPDATE business_admin_devices SET revoked_at = NOW() WHERE business_id = ? AND revoked_at IS NULL",
+          [id],
+        );
+      } catch {
+        /* optional table */
+      }
       for (const t of deleteOrder) {
         await conn.query(`DELETE FROM \`${t}\` WHERE business_id = ?`, [id]);
       }
       const [counted] = await conn.query("SELECT COUNT(*) AS n FROM staff_users WHERE business_id = ?", [id]);
       users = Number(counted[0]?.n) || 0;
-      await conn.query("UPDATE staff_users SET status = 'inactive' WHERE business_id = ?", [id]);
-      await conn.query("DELETE FROM businesses WHERE id = ?", [id]);
+      await conn.query("UPDATE staff_users SET status = 'deleted' WHERE business_id = ?", [id]);
+      try {
+        await conn.query(
+          "UPDATE staff_users SET password_reset_hash = NULL, password_reset_expires = NULL WHERE business_id = ?",
+          [id],
+        );
+      } catch {
+        /* older databases omit reset columns */
+      }
+      await conn.query("UPDATE businesses SET status = 'deleted' WHERE id = ?", [id]);
     });
   });
-  return { ok: true, tables: names.length + 1, users };
+  return { ok: true, tables: names.length, users, kept: known.filter((t) => keepsBusinessHistory(t)).sort() };
 }
 
 async function requireShop(businessId) {

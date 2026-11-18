@@ -755,7 +755,7 @@ function pos_php_till_dispatch($path, $method, $body) {
 
   if ($path === "staff" && $method === "GET") {
     pos_send(200, pos_q(
-      "SELECT id, email, first_name, last_name, role, status, username, mobile FROM staff_users WHERE business_id = ? ORDER BY email",
+      "SELECT id, email, first_name, last_name, role, status, username, mobile FROM staff_users WHERE business_id = ? AND status <> 'deleted' ORDER BY email",
       "s",
       [$bid]
     ));

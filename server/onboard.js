@@ -333,6 +333,7 @@ export async function updateBusiness(id, raw) {
   const b = validateSignup(raw, { requireAdmin: false });
   const [existing] = await query("SELECT * FROM businesses WHERE id = ?", [id]);
   if (!existing) throw new Error("Business not found");
+  if (existing.status === "deleted") throw new Error("This business is deleted.");
   const [emailTaken] = await query(
     "SELECT id FROM staff_users WHERE email = ? AND business_id <> ? LIMIT 1",
     [b.email, id],

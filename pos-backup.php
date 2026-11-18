@@ -248,11 +248,38 @@ function pos_clean_shop_data($bid) {
   return ["ok" => true, "tables" => count($names)];
 }
 
+function pos_keeps_business_history($name) {
+  $table = (string) $name;
+  if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) return false;
+  $exact = [
+    "sales_orders",
+    "sales_order_lines",
+    "sales_returns",
+    "sales_return_lines",
+    "account_ledger",
+    "bar_sales",
+    "bar_sale_lines",
+    "business_admin_login_logs",
+  ];
+  if (in_array($table, $exact, true)) return true;
+  $len = strlen($table);
+  if ($len >= 6 && substr($table, -6) === "_audit") return true;
+  if (strpos($table, "audit_log") !== false) return true;
+  if (strpos($table, "payment") !== false) return true;
+  if (strpos($table, "sales_") === 0 || strpos($table, "invoice_") === 0) return true;
+  return false;
+}
+
 function pos_delete_business_account($bid) {
   pos_backup_prepare();
   $names = [];
+  $kept = [];
   foreach (pos_backup_biz_tables() as $t) {
     if ($t === "staff_users" || $t === "businesses") continue;
+    if (pos_keeps_business_history($t)) {
+      $kept[] = $t;
+      continue;
+    }
     $names[] = $t;
   }
   $deleteOrder = pos_backup_sort_tables($names, false);
@@ -260,6 +287,20 @@ function pos_delete_business_account($bid) {
   pos_with_transaction(function () use ($bid, $deleteOrder, &$users) {
     pos_q("SET FOREIGN_KEY_CHECKS=0");
     try {
+      try {
+        pos_q(
+          "UPDATE staff_sessions s INNER JOIN staff_users u ON u.id = s.staff_user_id SET s.revoked_at = NOW() WHERE u.business_id = ? AND s.revoked_at IS NULL",
+          "s",
+          [$bid]
+        );
+      } catch (Exception $e) {
+        /* optional */
+      }
+      try {
+        pos_q("UPDATE staff_sessions SET revoked_at = NOW() WHERE business_id = ? AND revoked_at IS NULL", "s", [$bid]);
+      } catch (Exception $e) {
+        /* optional */
+      }
       try {
         pos_q("DELETE FROM staff_sessions WHERE business_id = ?", "s", [$bid]);
       } catch (Exception $e) {
@@ -274,18 +315,38 @@ function pos_delete_business_account($bid) {
       } catch (Exception $e) {
         /* optional */
       }
+      try {
+        pos_q("UPDATE business_admin_otp SET used_at = NOW() WHERE business_id = ? AND used_at IS NULL", "s", [$bid]);
+      } catch (Exception $e) {
+        /* optional */
+      }
+      try {
+        pos_q("UPDATE business_admin_devices SET revoked_at = NOW() WHERE business_id = ? AND revoked_at IS NULL", "s", [$bid]);
+      } catch (Exception $e) {
+        /* optional */
+      }
       foreach ($deleteOrder as $t) {
         pos_q("DELETE FROM `{$t}` WHERE business_id = ?", "s", [$bid]);
       }
       $counted = pos_q("SELECT COUNT(*) AS n FROM staff_users WHERE business_id = ?", "s", [$bid]);
       $users = (int) ($counted[0]["n"] ?? 0);
-      pos_q("UPDATE staff_users SET status = 'inactive' WHERE business_id = ?", "s", [$bid]);
-      pos_q("DELETE FROM businesses WHERE id = ?", "s", [$bid]);
+      pos_q("UPDATE staff_users SET status = 'deleted' WHERE business_id = ?", "s", [$bid]);
+      try {
+        pos_q(
+          "UPDATE staff_users SET password_reset_hash = NULL, password_reset_expires = NULL WHERE business_id = ?",
+          "s",
+          [$bid]
+        );
+      } catch (Exception $e) {
+        /* older databases omit reset columns */
+      }
+      pos_q("UPDATE businesses SET status = 'deleted' WHERE id = ?", "s", [$bid]);
     } finally {
       pos_q("SET FOREIGN_KEY_CHECKS=1");
     }
   });
-  return ["ok" => true, "tables" => count($names) + 1, "users" => $users];
+  sort($kept);
+  return ["ok" => true, "tables" => count($names), "users" => $users, "kept" => $kept];
 }
 
 function pos_backup_restore($bid, $payload, $auth, $masterAdmin = null) {

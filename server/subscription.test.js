@@ -34,6 +34,7 @@ test("the day before today is expired", () => {
 test("suspended and inactive win over the expiry date", () => {
   assert.equal(publicStatus({ status: "suspended", subscription_expires_at: "2027-01-01" }, today), "suspended");
   assert.equal(publicStatus({ status: "inactive", subscription_expires_at: "2027-01-01" }, today), "inactive");
+  assert.equal(publicStatus({ status: "deleted", subscription_expires_at: "2027-01-01" }, today), "inactive");
 });
 
 test("a shop with no expiry date stays on its stored status", () => {

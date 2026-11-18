@@ -23,6 +23,7 @@ import {
   platformBackupFilename,
   prepareBackupEmailAttachment,
   SHOP_CLEAN_KEEP_TABLES,
+  keepsBusinessHistory,
   sortBackupTables,
   stripBackupDataImages,
   toSqlValue,
@@ -107,8 +108,33 @@ test("shop clean keeps login and settings tables", () => {
   assert.match(masterJs, /\/api\/master\/businesses\/\$\{businessId\}\/clean/);
   assert.match(masterJs, /id="biz-clean-form"/);
   assert.match(backupJs, /export async function deleteBusinessAccount/);
-  assert.match(backupJs, /UPDATE staff_users SET status = 'inactive'/);
+  assert.match(backupJs, /UPDATE staff_users SET status = 'deleted' WHERE business_id = \?/);
+  assert.match(backupJs, /keepsBusinessHistory/);
+  assert.match(backupJs, /SET s\.revoked_at = NOW\(\)/);
+  assert.match(backupJs, /password_reset_hash = NULL/);
+  assert.match(backupJs, /UPDATE businesses SET status = 'deleted' WHERE id = \?/);
+  assert.doesNotMatch(backupJs, /DELETE FROM businesses WHERE id = \?/);
   assert.match(backupPhp, /function pos_delete_business_account/);
+  assert.match(backupPhp, /function pos_keeps_business_history/);
+  assert.match(backupPhp, /UPDATE staff_users SET status = 'deleted' WHERE business_id = \?/);
+  assert.match(backupPhp, /UPDATE businesses SET status = 'deleted' WHERE id = \?/);
+  assert.equal(keepsBusinessHistory("sales_orders"), true);
+  assert.equal(keepsBusinessHistory("sales_order_lines"), true);
+  assert.equal(keepsBusinessHistory("account_ledger"), true);
+  assert.equal(keepsBusinessHistory("staff_audit_logs"), true);
+  assert.equal(keepsBusinessHistory("print_payments"), true);
+  assert.equal(keepsBusinessHistory("invoice_emails"), true);
+  assert.equal(keepsBusinessHistory("items"), false);
+  assert.equal(keepsBusinessHistory("staff_users"), false);
+  assert.equal(keepsBusinessHistory("staff_sessions"), false);
+  assert.equal(keepsBusinessHistory("customers"), false);
+  const authJs = readFileSync(path.join(root, "server/auth.js"), "utf8");
+  assert.match(authJs, /business\.status === "deleted"/);
+  assert.match(masterApi, /u\.status <> 'deleted'/);
+  assert.match(masterApi, /This user belongs to a deleted business and cannot be activated/);
+  assert.match(masterJs, /Invoices, sales, payments, and audit records are kept/);
+  assert.match(core, /This user belongs to a deleted business and cannot be activated/);
+  assert.match(core, /COALESCE\(b\.status, ''\) <> 'deleted'/);
   assert.match(masterApi, /\/api\/master\/businesses\/:id\/delete/);
   assert.match(masterApi, /\/api\/master\/users\/:id\/status/);
   assert.match(core, /businesses\/\(\[\^\/\]\+\)\/delete/);

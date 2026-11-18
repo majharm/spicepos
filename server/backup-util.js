@@ -28,6 +28,28 @@ export const SHOP_CLEAN_KEEP_TABLES = new Set([
   "loyalty_settings",
 ]);
 
+/** Invoice, sale, payment, and audit tables kept when a shop profile is deleted. */
+export function keepsBusinessHistory(name) {
+  const table = String(name || "");
+  if (!isSafeTableName(table)) return false;
+  if (
+    table === "sales_orders" ||
+    table === "sales_order_lines" ||
+    table === "sales_returns" ||
+    table === "sales_return_lines" ||
+    table === "account_ledger" ||
+    table === "bar_sales" ||
+    table === "bar_sale_lines" ||
+    table === "business_admin_login_logs"
+  ) {
+    return true;
+  }
+  if (table.endsWith("_audit") || table.includes("audit_log")) return true;
+  if (table.includes("payment")) return true;
+  if (table.startsWith("sales_") || table.startsWith("invoice_")) return true;
+  return false;
+}
+
 export function isSafeTableName(name) {
   return typeof name === "string" && /^[A-Za-z0-9_]+$/.test(name);
 }

@@ -1410,13 +1410,18 @@ function pos_crud_dispatch($path, $method, $body, $bid, $auth, $branchId, $uid) 
 
   if (preg_match('#^staff/([^/]+)$#', $path, $m) && $method === "PUT") {
     $id = $m[1];
+    $have = pos_q("SELECT id, status FROM staff_users WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$id, $bid]);
+    if (!$have) throw new Exception("Staff not found");
+    if (($have[0]["status"] ?? "") === "deleted") {
+      throw new Exception("This user belongs to a deleted business and cannot be changed.");
+    }
     $b = $body ?: [];
     $role = $b["role"] ?? "staff";
     if (!in_array($role, pos_known_roles(), true)) $role = "staff";
     $perms = is_array($b["permissions"] ?? null) ? $b["permissions"] : pos_default_perms($role);
     pos_q(
       "UPDATE staff_users SET first_name=?, last_name=?, role=?, status=?, branch_id=?, permissions_json=?, mobile=?, username=?
-       WHERE id=? AND business_id=?",
+       WHERE id=? AND business_id=? AND status <> 'deleted'",
       "ssssssssss",
       [
         $b["first_name"] ?? $b["name"] ?? "",

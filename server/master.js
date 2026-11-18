@@ -99,8 +99,9 @@ function masterStaffFields(body, existingId = "") {
 
 async function saveMasterStaff(body, existingId = "") {
   const fields = masterStaffFields(body, existingId);
-  const [shop] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [fields.businessId]);
+  const [shop] = await query("SELECT id, name, status FROM businesses WHERE id = ? LIMIT 1", [fields.businessId]);
   if (!shop) throw new Error("Choose a shop");
+  if (shop.status === "deleted") throw new Error("This shop is deleted.");
   let branchId = fields.branchId;
   if (branchId) {
     const [own] = await query("SELECT id FROM branches WHERE id = ? AND business_id = ? LIMIT 1", [branchId, shop.id]);
@@ -122,8 +123,9 @@ async function saveMasterStaff(body, existingId = "") {
 }
 
 async function unlockStaffUser(id) {
-  const [user] = await query("SELECT id, email FROM staff_users WHERE id = ? LIMIT 1", [id]);
+  const [user] = await query("SELECT id, email, status FROM staff_users WHERE id = ? LIMIT 1", [id]);
   if (!user) throw new Error("User not found");
+  if (user.status === "deleted") throw new Error("This user belongs to a deleted business.");
   await query("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", [id]);
   return user;
 }
@@ -131,10 +133,11 @@ async function unlockStaffUser(id) {
 async function setStaffPassword(id, password) {
   if (!password || String(password).length < 8) throw new Error("Password must be 8+ characters");
   const [user] = await query(
-    "SELECT id, email, first_name, username, role, business_id, mobile FROM staff_users WHERE id = ? LIMIT 1",
+    "SELECT id, email, first_name, username, role, business_id, mobile, status FROM staff_users WHERE id = ? LIMIT 1",
     [id],
   );
   if (!user) throw new Error("User not found");
+  if (user.status === "deleted") throw new Error("This user belongs to a deleted business.");
   await query("UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", [
     await hashPassword(password),
     id,
@@ -354,6 +357,7 @@ export function registerMaster(app) {
              WHERE ${today} AND ${saleNotVoidSql()}
              GROUP BY business_id
            ) s ON s.business_id = b.id
+           WHERE COALESCE(b.status, '') <> 'deleted'
            ORDER BY b.name`,
         ),
         query("SELECT COUNT(*) AS n FROM pos_devices"),
@@ -494,6 +498,7 @@ export function registerMaster(app) {
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
          LEFT JOIN account_managers am ON am.id = b.account_manager_id
+         WHERE COALESCE(b.status, '') <> 'deleted'
          ORDER BY COALESCE(b.subscription_expires_at, '9999-12-31'), b.name`,
       );
       return rows.map((b) => ({ ...b, computed_status: publicStatus(b) }));
@@ -586,10 +591,11 @@ export function registerMaster(app) {
       const status = String(req.body?.status || "active");
       if (!["active", "inactive", "suspended"].includes(status)) throw new Error("Invalid status");
       const [biz] = await query(
-        "SELECT id, plan_id, subscription_expires_at FROM businesses WHERE id = ?",
+        "SELECT id, status, plan_id, subscription_expires_at FROM businesses WHERE id = ?",
         [req.params.id],
       );
       if (!biz) throw new Error("Business not found");
+      if (biz.status === "deleted") throw new Error("This business is deleted.");
       await query("UPDATE businesses SET status = ? WHERE id = ?", [status, req.params.id]);
       const action = status === "active" ? "activate" : status === "suspended" ? "suspend" : "inactive";
       await recordSubscriptionEvent(req.params.id, {
@@ -609,6 +615,7 @@ export function registerMaster(app) {
     send(res, async () => {
       const [biz] = await query("SELECT * FROM businesses WHERE id = ?", [req.params.id]);
       if (!biz) throw new Error("Business not found");
+      if (biz.status === "deleted") throw new Error("This business is deleted.");
       let years = Number(req.body?.years || 1);
       if (!Number.isFinite(years)) years = 1;
       years = Math.min(5, Math.max(1, Math.round(years)));
@@ -690,9 +697,13 @@ export function registerMaster(app) {
         res.status(401).json({ error: "Master Admin password is incorrect" });
         return;
       }
-      const [biz] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [req.params.id]);
+      const [biz] = await query("SELECT id, name, status FROM businesses WHERE id = ? LIMIT 1", [req.params.id]);
       if (!biz) {
         res.status(404).json({ error: "Business not found" });
+        return;
+      }
+      if (biz.status === "deleted") {
+        res.status(409).json({ error: "This business is deleted." });
         return;
       }
       const result = await cleanShopData(biz.id);
@@ -742,7 +753,7 @@ export function registerMaster(app) {
         business: biz.name,
         tables: result.tables,
         users: result.users,
-        note: "The shop and all of its data were deleted. Its users were inactivated and signed out.",
+        note: "The shop was deleted. Its staff were signed out and removed from active staff. Invoices, sales, payments, and audit records were kept.",
       });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
@@ -766,6 +777,7 @@ export function registerMaster(app) {
     send(res, async () => {
       const [business] = await query("SELECT * FROM businesses WHERE id = ?", [req.params.id]);
       if (!business) throw new Error("Business not found");
+      if (business.status === "deleted") throw new Error("This business is deleted.");
       const [user] = await query(
         `SELECT * FROM staff_users
          WHERE business_id = ? AND status = 'active'
@@ -801,7 +813,7 @@ export function registerMaster(app) {
       const [user] = await query("SELECT * FROM staff_users WHERE id = ?", [req.params.id]);
       if (!user || user.status !== "active") throw new Error("User not found or inactive");
       const [business] = await query("SELECT * FROM businesses WHERE id = ?", [user.business_id]);
-      if (!business) throw new Error("Business not found");
+      if (!business || business.status === "deleted") throw new Error("This business is deleted.");
       const [branch] = await query("SELECT id FROM branches WHERE business_id = ? LIMIT 1", [business.id]);
       await issueStaffSession(req, res, {
         user,
@@ -923,8 +935,14 @@ export function registerMaster(app) {
   app.post("/api/master/users/:id/status", (req, res) =>
     send(res, async () => {
       const status = String(req.body?.status || "").toLowerCase() === "inactive" ? "inactive" : "active";
-      const [user] = await query("SELECT id, email, business_id FROM staff_users WHERE id = ? LIMIT 1", [req.params.id]);
+      const [user] = await query(
+        "SELECT id, email, business_id, status FROM staff_users WHERE id = ? LIMIT 1",
+        [req.params.id],
+      );
       if (!user) throw new Error("User not found");
+      if (user.status === "deleted") throw new Error("This user belongs to a deleted business and cannot be activated.");
+      const [shop] = await query("SELECT status FROM businesses WHERE id = ? LIMIT 1", [user.business_id]);
+      if (shop?.status === "deleted") throw new Error("This user belongs to a deleted business and cannot be activated.");
       await query("UPDATE staff_users SET status = ? WHERE id = ?", [status, user.id]);
       if (status === "inactive") {
         try {
@@ -949,6 +967,7 @@ export function registerMaster(app) {
         `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status, u.business_id, u.mobile, u.username,
                 u.failed_logins, u.locked_until, b.name AS business_name
          FROM staff_users u LEFT JOIN businesses b ON b.id = u.business_id
+         WHERE u.status <> 'deleted' AND COALESCE(b.status, '') <> 'deleted'
          ORDER BY u.email`,
       ),
     ),
@@ -1016,8 +1035,9 @@ export function registerMaster(app) {
 
   app.put("/api/master/staff/:id", (req, res) =>
     send(res, async () => {
-      const [have] = await query("SELECT id FROM staff_users WHERE id = ? LIMIT 1", [req.params.id]);
+      const [have] = await query("SELECT id, status FROM staff_users WHERE id = ? LIMIT 1", [req.params.id]);
       if (!have) throw new Error("Staff not found");
+      if (have.status === "deleted") throw new Error("This user belongs to a deleted business.");
       const fields = await saveMasterStaff(req.body || {}, req.params.id);
       await query(
         `UPDATE staff_users SET email=?, first_name=?, last_name=?, role=?, status=?, business_id=?, branch_id=?, permissions_json=?, username=?, mobile=? WHERE id=?`,

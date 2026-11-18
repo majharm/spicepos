@@ -228,6 +228,9 @@ function pos_admin_login_challenge($user, $body) {
 }
 
 function pos_admin_finish_login($user, $business, $body) {
+  if (($user["status"] ?? "") !== "active" || !$business || (($business["status"] ?? "") === "deleted")) {
+    pos_send(403, ["error" => "User is inactive"]);
+  }
   $ttl = pos_ttl(pos_remember($body));
   $token = pos_new_token();
   $sid = pos_uuid();

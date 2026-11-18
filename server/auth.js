@@ -141,6 +141,7 @@ async function loadStaffSession(token) {
   if (!row) return null;
   if (row.user_status !== "active") return null;
   const [business] = await query("SELECT * FROM businesses WHERE id = ?", [row.business_id]);
+  if (!business || business.status === "deleted") return null;
   let impersonator = null;
   if (row.impersonator_admin_id) {
     const [admin] = await query("SELECT id, email, name FROM platform_admins WHERE id = ?", [
@@ -354,6 +355,11 @@ export function staffLoginPayload(user, business) {
 }
 
 export async function issueStaffSession(req, res, { user, business, branchId, impersonatorAdminId, remember = false }) {
+  if (!user || user.status !== "active" || !business || business.status === "deleted") {
+    const err = new Error("User is inactive");
+    err.statusCode = 403;
+    throw err;
+  }
   const oldToken = cookies(req).pos_sid;
   if (oldToken) {
     await query("UPDATE staff_sessions SET revoked_at = NOW() WHERE token_hash = ?", [sha256(oldToken)]);
@@ -382,6 +388,10 @@ export async function issueStaffSession(req, res, { user, business, branchId, im
 }
 
 export async function finishStaffLogin(req, res, { user, business, branchId, remember }) {
+  if (!user || user.status !== "active" || !business || business.status === "deleted") {
+    res.status(403).json({ error: "User is inactive" });
+    return null;
+  }
   const issued = await issueStaffSession(req, res, {
     user,
     business,
@@ -472,6 +482,10 @@ export function registerAuth(app) {
         return;
       }
       const [business] = await query("SELECT * FROM businesses WHERE id = ?", [user.business_id]);
+      if (!business || business.status === "deleted") {
+        res.status(403).json({ error: "User is inactive" });
+        return;
+      }
       const status = publicStatus(business);
       if (subscriptionBlock(status)) {
         await query("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", [

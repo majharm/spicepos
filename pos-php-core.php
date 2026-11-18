@@ -426,6 +426,9 @@ function pos_ensure_staff_session_columns() {
 }
 
 function pos_issue_staff_session($user, $branchId, $impersonatorAdminId = null) {
+  if (($user["status"] ?? "") !== "active") throw new Exception("User is inactive");
+  $open = pos_q("SELECT status FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"] ?? ""]);
+  if (!$open || (($open[0]["status"] ?? "") === "deleted")) throw new Exception("User is inactive");
   pos_ensure_staff_session_columns();
   $oldSid = pos_cookie("pos_sid");
   if ($oldSid !== "") {
@@ -1004,8 +1007,9 @@ function pos_forgot_password_confirm($identifier, $code, $password) {
 
 function pos_unlock_staff_user($id) {
   pos_ensure_staff_lock_columns();
-  $rows = pos_q("SELECT id, email FROM staff_users WHERE id = ? LIMIT 1", "s", [$id]);
+  $rows = pos_q("SELECT id, email, status FROM staff_users WHERE id = ? LIMIT 1", "s", [$id]);
   if (!$rows) throw new Exception("User not found");
+  if (($rows[0]["status"] ?? "") === "deleted") throw new Exception("This user belongs to a deleted business.");
   pos_q("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", "s", [$id]);
   return $rows[0];
 }
@@ -1014,11 +1018,12 @@ function pos_set_staff_password($id, $password) {
   pos_ensure_staff_lock_columns();
   if (strlen((string) $password) < 8) throw new Exception("Password must be 8+ characters");
   $rows = pos_q(
-    "SELECT id, email, first_name, username, role, business_id, mobile FROM staff_users WHERE id = ? LIMIT 1",
+    "SELECT id, email, first_name, username, role, business_id, mobile, status FROM staff_users WHERE id = ? LIMIT 1",
     "s",
     [$id]
   );
   if (!$rows) throw new Exception("User not found");
+  if (($rows[0]["status"] ?? "") === "deleted") throw new Exception("This user belongs to a deleted business.");
   pos_q(
     "UPDATE staff_users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?",
     "ss",
@@ -1763,6 +1768,7 @@ function pos_calendar_ymd($value) {
 function pos_public_status($b) {
   if (!$b) return "inactive";
   $st = (string) ($b["status"] ?? "");
+  if ($st === "deleted") return "inactive";
   if ($st === "suspended" || $st === "inactive") return $st;
   $exp = pos_calendar_ymd($b["subscription_expires_at"] ?? "");
   if ($exp !== "" && $exp < pos_shop_today_ymd()) return "expired";
@@ -3335,6 +3341,7 @@ function pos_staff_session() {
   $row = $rows[0] ?? null;
   if (!$row || ($row["user_status"] ?? "") !== "active") return null;
   $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$row["business_id"]]);
+  if (!$biz || (($biz[0]["status"] ?? "") === "deleted")) return null;
   $impersonator = null;
   if (!empty($row["impersonator_admin_id"])) {
     $adm = pos_q("SELECT id, email, name FROM platform_admins WHERE id = ? LIMIT 1", "s", [$row["impersonator_admin_id"]]);
@@ -3707,6 +3714,7 @@ function pos_update_business($id, $raw) {
   $b = pos_validate_signup($raw, false);
   $existing = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$id]);
   if (!$existing) throw new Exception("Business not found");
+  if (($existing[0]["status"] ?? "") === "deleted") throw new Exception("This business is deleted.");
   $emailTaken = pos_q("SELECT id FROM staff_users WHERE email = ? AND business_id <> ? LIMIT 1", "ss", [$b["email"], $id]);
   if ($emailTaken) throw new Exception("This email is already registered");
   if ($b["username"]) {
@@ -4139,6 +4147,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
       }
       $bizRows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
       $business = $bizRows[0] ?? null;
+      if (!$business || (($business["status"] ?? "") === "deleted")) {
+        pos_send(403, ["error" => "User is inactive"]);
+      }
       $status = pos_public_status($business);
       if (pos_subscription_block($status)) {
         pos_q("UPDATE staff_users SET failed_logins = 0, locked_until = NULL WHERE id = ?", "s", [$user["id"]]);
@@ -4459,6 +4470,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
            WHERE {$today} AND {$notVoid}
            GROUP BY business_id
          ) s ON s.business_id = b.id
+         WHERE COALESCE(b.status, '') <> 'deleted'
          ORDER BY b.name"
       );
       $devices = pos_q("SELECT COUNT(*) AS n FROM pos_devices");
@@ -4592,6 +4604,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
          FROM businesses b
          LEFT JOIN subscription_plans p ON p.id = b.plan_id
          LEFT JOIN account_managers am ON am.id = b.account_manager_id
+         WHERE COALESCE(b.status, '') <> 'deleted'
          ORDER BY COALESCE(b.subscription_expires_at, '9999-12-31'), b.name"
       );
       foreach ($rows as &$row) $row["computed_status"] = pos_public_status($row);
@@ -4628,8 +4641,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
     if (preg_match("#^master/businesses/([^/]+)/status$#", $path, $m) && $method === "POST") {
       $status = (string) ($body["status"] ?? "active");
       if (!in_array($status, ["active", "inactive", "suspended"], true)) throw new Exception("Invalid status");
-      $before = pos_q("SELECT id, plan_id, subscription_expires_at FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      $before = pos_q("SELECT id, status, plan_id, subscription_expires_at FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
       if (!$before) throw new Exception("Business not found");
+      if (($before[0]["status"] ?? "") === "deleted") throw new Exception("This business is deleted.");
       pos_q("UPDATE businesses SET status = ? WHERE id = ?", "ss", [$status, $m[1]]);
       $action = $status === "active" ? "activate" : ($status === "suspended" ? "suspend" : "inactive");
       pos_record_subscription_event(
@@ -4649,6 +4663,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $rows = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
       if (!$rows) throw new Exception("Business not found");
       $biz = $rows[0];
+      if (($biz["status"] ?? "") === "deleted") throw new Exception("This business is deleted.");
       $years = (int) ($body["years"] ?? 1);
       if ($years < 1) $years = 1;
       if ($years > 5) $years = 5;
@@ -4748,8 +4763,9 @@ function pos_php_dispatch($path, $method, $rawBody) {
         else $ok = pos_verify_password($password, $adminRow["password_hash"] ?? "");
       }
       if (!$ok) pos_send(401, ["error" => "Master Admin password is incorrect", "php" => true]);
-      $biz = pos_q("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      $biz = pos_q("SELECT id, name, status FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
       if (!$biz) throw new Exception("Business not found");
+      if (($biz[0]["status"] ?? "") === "deleted") throw new Exception("This business is deleted.");
       pos_require_backup();
       $out = pos_clean_shop_data($m[1]);
       pos_audit($auth["admin"], "Business data cleaned", [
@@ -4795,7 +4811,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "business" => $biz[0]["name"] ?? "",
         "tables" => $out["tables"] ?? 0,
         "users" => $out["users"] ?? 0,
-        "note" => "The shop and all of its data were deleted. Its users were inactivated and signed out.",
+        "note" => "The shop was deleted. Its staff were signed out and removed from active staff. Invoices, sales, payments, and audit records were kept.",
         "php" => true,
       ]);
     }
@@ -4812,6 +4828,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $bizId = $m[1];
       $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$bizId]);
       if (!$biz) throw new Exception("Business not found");
+      if (($biz[0]["status"] ?? "") === "deleted") throw new Exception("This business is deleted.");
       $users = pos_q(
         "SELECT * FROM staff_users WHERE business_id = ? AND status = 'active'
          ORDER BY CASE role WHEN 'business_admin' THEN 0 ELSE 1 END, email ASC LIMIT 1",
@@ -4878,7 +4895,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
       $user = $users[0] ?? null;
       if (!$user || ($user["status"] ?? "") !== "active") throw new Exception("User not found or inactive");
       $biz = pos_q("SELECT * FROM businesses WHERE id = ? LIMIT 1", "s", [$user["business_id"]]);
-      if (!$biz) throw new Exception("Business not found");
+      if (!$biz || (($biz[0]["status"] ?? "") === "deleted")) throw new Exception("This business is deleted.");
       $branch = pos_q("SELECT id FROM branches WHERE business_id = ? LIMIT 1", "s", [$user["business_id"]]);
       $branchId = $branch[0]["id"] ?? ($user["branch_id"] ?? null);
       pos_issue_staff_session($user, $branchId, $auth["admin"]["id"]);
@@ -4907,6 +4924,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
         "SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status, u.business_id, u.mobile, u.username,
                 u.failed_logins, u.locked_until, b.name AS business_name
          FROM staff_users u LEFT JOIN businesses b ON b.id = u.business_id
+         WHERE u.status <> 'deleted' AND COALESCE(b.status, '') <> 'deleted'
          ORDER BY u.email"
       ));
     }
@@ -4939,8 +4957,15 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     if (preg_match("#^master/users/([^/]+)/status$#", $path, $m) && $method === "POST") {
       $status = strtolower((string) ($body["status"] ?? "")) === "inactive" ? "inactive" : "active";
-      $rows = pos_q("SELECT id, email, business_id FROM staff_users WHERE id = ? LIMIT 1", "s", [$m[1]]);
+      $rows = pos_q("SELECT id, email, business_id, status FROM staff_users WHERE id = ? LIMIT 1", "s", [$m[1]]);
       if (!$rows) throw new Exception("User not found");
+      if (($rows[0]["status"] ?? "") === "deleted") {
+        throw new Exception("This user belongs to a deleted business and cannot be activated.");
+      }
+      $shop = pos_q("SELECT status FROM businesses WHERE id = ? LIMIT 1", "s", [$rows[0]["business_id"] ?? ""]);
+      if ($shop && (($shop[0]["status"] ?? "") === "deleted")) {
+        throw new Exception("This user belongs to a deleted business and cannot be activated.");
+      }
       pos_q("UPDATE staff_users SET status = ? WHERE id = ?", "ss", [$status, $m[1]]);
       if ($status === "inactive") {
         try {

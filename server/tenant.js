@@ -536,7 +536,7 @@ export function registerTenant(app) {
     send(res, () =>
       query(
         `SELECT id, email, first_name, last_name, role, status, mobile, username, branch_id, permissions_json
-         FROM staff_users WHERE business_id = ? ORDER BY email`,
+         FROM staff_users WHERE business_id = ? AND status <> 'deleted' ORDER BY email`,
         [bid()],
       ),
     ),
@@ -605,9 +605,15 @@ export function registerTenant(app) {
       const b = req.body || {};
       const role = ROLES.includes(b.role) ? b.role : "staff";
       const perms = b.permissions && typeof b.permissions === "object" ? b.permissions : defaultPerms(role);
+      const [have] = await query(
+        "SELECT id, status FROM staff_users WHERE id = ? AND business_id = ? LIMIT 1",
+        [req.params.id, bid()],
+      );
+      if (!have) throw new Error("Staff not found");
+      if (have.status === "deleted") throw new Error("This user belongs to a deleted business and cannot be changed.");
       await query(
         `UPDATE staff_users SET first_name=?, last_name=?, role=?, status=?, branch_id=?, permissions_json=?, mobile=?, username=?
-         WHERE id=? AND business_id=?`,
+         WHERE id=? AND business_id=? AND status <> 'deleted'`,
         [
           b.first_name || b.name || "",
           b.last_name || "",

@@ -46,6 +46,7 @@ export function shopTodayYmd(now = new Date()) {
 
 export function publicStatus(business, today = shopTodayYmd()) {
   if (!business) return "inactive";
+  if (business.status === "deleted") return "inactive";
   if (business.status === "suspended" || business.status === "inactive") return business.status;
   const exp = calendarYmd(business.subscription_expires_at);
   if (exp && exp < today) return "expired";

@@ -2855,7 +2855,7 @@ async function render() {
               <input type="hidden" name="business_id" />
               <fieldset class="item-block">
                 <legend>Master Admin password</legend>
-                <p class="item-composer-note">Any shop can be removed at any time. Bills, items, customers, stock, branches, devices, and settings are deleted. Every user on this shop is inactivated and signed out. This cannot be undone.</p>
+                <p class="item-composer-note">Any shop can be removed at any time. Items, customers, stock, branches, devices, and settings are deleted. Invoices, sales, payments, and audit records are kept. Every user on this shop is signed out and removed from active staff. This cannot be undone.</p>
                 <label>Password <input name="password" type="password" required autocomplete="current-password" /></label>
                 <label>Confirm password <input name="confirm" type="password" required autocomplete="current-password" /></label>
               </fieldset>
@@ -3537,7 +3537,7 @@ async function render() {
             method: "POST",
             body: JSON.stringify({ password }),
           });
-          panelFlash = out.note || `${shop?.name || "This shop"} was deleted. Its users are inactive.`;
+          panelFlash = out.note || `${shop?.name || "This shop"} was deleted. Its staff were signed out.`;
           render();
         } catch (err) {
           bizDeleteHint.textContent = err.message;
@@ -3680,6 +3680,7 @@ async function render() {
         const query = String($("staff-q")?.value || "").trim().toLowerCase();
         const editing = form.staff_id.value;
         const visible = rows.filter((u) => {
+          if (u.status === "deleted") return false;
           if (!query) return true;
           const name = `${u.first_name || ""} ${u.last_name || ""}`.trim();
           return `${name} ${u.email || ""} ${u.username || ""} ${u.mobile || ""} ${u.role || ""} ${u.business_name || ""}`.toLowerCase().includes(query);
@@ -3798,7 +3799,7 @@ async function render() {
         panelFlash = "";
       }
     } else if (tab === "users") {
-      const rows = await api("/api/master/users");
+      const rows = (await api("/api/master/users")).filter((u) => u.status !== "deleted");
       const lockedN = rows.filter((u) => /lock/i.test(accountStatusLabel(u))).length;
       body.innerHTML = masterDesk(
         "Platform",
