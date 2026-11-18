@@ -114,6 +114,21 @@ export function parseHm(value) {
   return h * 60 + min;
 }
 
+export function reportDayForSchedule(ymd, hm) {
+  const day = String(ymd || "");
+  const match = String(hm || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !match) return day;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour !== 0 || minute < 1) return day;
+  const ms = Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10))) - 86400000;
+  const prev = new Date(ms);
+  const y = prev.getUTCFullYear();
+  const m = String(prev.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(prev.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function shopClockReached(now, timeZone, hm) {
   const target = parseHm(hm);
   if (target == null) return false;

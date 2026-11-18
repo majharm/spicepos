@@ -201,7 +201,7 @@ test("business map is polled from Master Admin and heartbeats are separate from 
   assert.match(html, /data-tab="bizmap"/);
   assert.match(html, /biz-traffic-map\.js\?v=20261118pwa1/);
   assert.match(html, /vendor\/leaflet\/leaflet\.js\?v=20261117map1/);
-  assert.match(html, /master\.js\?v=20261118staff1/);
+  assert.match(html, /master\.js\?v=20261118close1/);
   assert.match(read("index.html"), /admin-heartbeat\.js\?v=20261118pwa1/);
   assert.match(read("index.html"), /manifest\.webmanifest/);
   assert.match(read("index.html"), /pos-device\.js\?v=20261118pwa2/);
