@@ -17,7 +17,7 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.match(html, /data-nav-family="analytics"/);
   assert.match(html, /data-nav-family="seo"/);
   assert.match(html, /nav-group-label"[^>]*>Advanced</);
-  assert.match(html, /master\.js\?v=20261118staff1/);
+  assert.match(html, /master\.js\?v=20261119sup1/);
   assert.match(html, /ip-geo-map\.js\?v=20261117leaflet1/);
   assert.match(html, /vendor\/leaflet\/leaflet\.js\?v=20261117map1/);
   assert.match(html, /master-theme\.css\?v=20261118del1/);
@@ -64,6 +64,9 @@ test("Master Admin desk collapses nested nav and uses a shop board", () => {
   assert.doesNotMatch(js, /Add a business to open its POS from here/);
   assert.match(js, /Today's sales/);
   assert.match(js, /NAV_FAMILIES[\s\S]*dsa-sales/);
+  assert.match(html, /data-tab="tickets"/);
+  assert.match(js, /tab === "tickets"/);
+  assert.match(js, /renderMasterTickets/);
   assert.match(js, /master-top-title/);
   assert.match(js, /class="master-data data"/);
   assert.doesNotMatch(js, /Yearly subscription fees/);

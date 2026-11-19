@@ -4404,6 +4404,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     $auth = pos_require_master($path);
 
+    if (strpos($path, "master/support-tickets") === 0 && is_file(__DIR__ . "/pos-support-tickets.php")) {
+      require_once __DIR__ . "/pos-support-tickets.php";
+      if (function_exists("pos_support_ticket_dispatch") && pos_support_ticket_dispatch($path, $method, $body, "", $auth)) return;
+    }
+
     if (strpos($path, "master/online-store") === 0) {
       require_once __DIR__ . "/pos-online-store.php";
       if (pos_online_store_master_dispatch($path, $method, $body)) return;
@@ -5610,6 +5615,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-crm.php")) {
             require_once __DIR__ . "/pos-crm.php";
             if (function_exists("pos_crm_dispatch") && pos_crm_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-support-tickets.php")) {
+            require_once __DIR__ . "/pos-support-tickets.php";
+            if (function_exists("pos_support_ticket_dispatch") && pos_support_ticket_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

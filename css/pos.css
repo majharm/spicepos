@@ -3524,6 +3524,79 @@ tr:last-child td { border-bottom: 0; }
   font-size: 12px;
   line-height: 1.45;
 }
+.support-tickets { display: grid; gap: 12px; }
+.support-ticket-form,
+.support-thread {
+  display: grid;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+}
+.support-ticket-form { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.support-ticket-form .wide { grid-column: 1 / -1; }
+.support-ticket-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.support-ticket-form input,
+.support-ticket-form select,
+.support-ticket-form textarea {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.support-ticket-tools { display: flex; justify-content: flex-end; }
+.support-ticket-list { display: grid; gap: 8px; }
+.support-ticket-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.support-ticket-row strong { flex: 1 1 180px; }
+.support-ticket-row em { margin-left: auto; color: var(--muted); font-style: normal; font-size: 12px; }
+.support-empty { margin: 0; color: var(--muted); }
+.support-pill {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  background: #e0f2fe;
+  color: #075985;
+}
+.support-pill.is-pending { background: #fef3c7; color: #92400e; }
+.support-pill.is-resolved { background: #dcfce7; color: #166534; }
+.support-thread-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.support-thread-head h3 { margin: 0; flex: 1 1 180px; font-size: 16px; }
+.support-replies { display: grid; gap: 8px; }
+.support-reply {
+  border-left: 3px solid #0f766e;
+  background: #f8fafc;
+  border-radius: 0 12px 12px 0;
+  padding: 8px 12px;
+}
+.support-reply.is-master { border-left-color: #0f172a; }
+.support-reply header { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.support-reply p { margin: 6px 0 0; white-space: pre-wrap; }
 .support-dl { margin: 0; }
 .support-row {
   display: grid;

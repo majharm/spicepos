@@ -1176,7 +1176,7 @@ const VIEW_META = {
   staff: { title: "Staff & roles", subtitle: "Users, roles, and access" },
   branches: { title: "Branches", subtitle: "Locations, active status, and branch login" },
   devices: { title: "Hardware & devices", subtitle: "Registers, terminals, and weighing scale" },
-  support: { title: "Support", subtitle: "Call, WhatsApp, or email your ATAV POS helpline" },
+  support: { title: "Support", subtitle: "Call, WhatsApp, email, or send a ticket to the ATAV support team" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
   reports: { title: "Reports", subtitle: "Pick a report, then Show, Excel, or Print" },
@@ -9048,11 +9048,78 @@ function bindSupportCopy(root) {
   });
 }
 
+let supportTicketId = "";
+let supportPaint = 0;
+
 function renderSupport() {
   const root = $("support-page");
   if (!root || !window.SupportPage?.pageHtml) return;
-  root.innerHTML = SupportPage.pageHtml(state.support, state.company);
+  paintSupport(root);
+}
+
+async function paintSupport(root) {
+  const stamp = ++supportPaint;
+  const page = window.SupportPage.pageHtml(state.support, state.company);
+  let tickets = [];
+  let detail = null;
+  let loadError = "";
+  if (window.SupportPage.ticketDeskHtml) {
+    try {
+      if (supportTicketId) {
+        detail = await api(`/api/support/tickets/${encodeURIComponent(supportTicketId)}`);
+      } else {
+        const data = await api("/api/support/tickets");
+        tickets = data.tickets || [];
+      }
+    } catch (err) {
+      if (err?.message && /sign in/i.test(err.message)) return;
+      loadError = err.message || "Could not load tickets";
+      if (/not found/i.test(loadError)) supportTicketId = "";
+      tickets = [];
+      detail = null;
+    }
+  }
+  if (stamp !== supportPaint) return;
+  const desk = window.SupportPage.ticketDeskHtml ? window.SupportPage.ticketDeskHtml(tickets, detail, loadError) : "";
+  root.innerHTML = `${page}${desk}`;
   bindSupportCopy(root);
+  bindSupportTickets(root);
+}
+
+function bindSupportTickets(root) {
+  root.querySelector("[data-ticket-back]")?.addEventListener("click", () => {
+    supportTicketId = "";
+    renderSupport();
+  });
+  root.querySelectorAll("[data-ticket-open]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      supportTicketId = btn.getAttribute("data-ticket-open") || "";
+      renderSupport();
+    });
+  });
+  root.querySelector("#support-ticket-form")?.addEventListener("submit", (event) => submitSupportTicket(event, "create"));
+  root.querySelector("#support-ticket-reply")?.addEventListener("submit", (event) => submitSupportTicket(event, "reply"));
+}
+
+async function submitSupportTicket(event, mode) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const hint = form.querySelector(".hint");
+  const body = Object.fromEntries(new FormData(form).entries());
+  try {
+    if (mode === "reply") {
+      await api(`/api/support/tickets/${encodeURIComponent(supportTicketId)}/reply`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } else {
+      const saved = await api("/api/support/tickets", { method: "POST", body: JSON.stringify(body) });
+      supportTicketId = saved.ticket?.id || "";
+    }
+    renderSupport();
+  } catch (err) {
+    if (hint) hint.textContent = err.message || "Could not send";
+  }
 }
 
 function paintHeader() {

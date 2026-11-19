@@ -41,6 +41,7 @@ import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertT
 import { registerRecurring, startRecurringScheduler, ensureRecurringSchema } from "./recurring.js";
 import { registerQuotations, ensureQuotationSchema } from "./quotations.js";
 import { registerCrm, ensureCrmSchema } from "./crm.js";
+import { registerSupportTickets } from "./support-tickets.js";
 import { registerMailbox, ensureMailboxSchema, deliverInvoiceCopy } from "./mail-box.js";
 import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
@@ -995,6 +996,7 @@ registerDueReminders(app);
 registerRecurring(app);
 registerQuotations(app);
 registerCrm(app);
+registerSupportTickets(app);
 registerMailbox(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
