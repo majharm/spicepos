@@ -59,6 +59,27 @@ test("support page empty state and compact preview", () => {
   assert.doesNotMatch(compact, /This shop/);
 });
 
+test("support ticket desk html", () => {
+  const list = S.ticketListHtml(
+    [{ id: "t1", subject: "Billing issue", category: "billing", status: "open", created_at: "2026-11-19 10:00:00" }],
+    { audience: "shop" },
+  );
+  assert.match(list, /data-ticket-open="t1"/);
+  assert.match(list, /Billing issue/);
+  const desk = S.ticketDeskHtml([], null);
+  assert.match(desk, /Tickets to ATAV support/);
+  assert.match(desk, /support-ticket-form/);
+  const thread = S.ticketThreadHtml(
+    { id: "t1", subject: "Login", status: "pending" },
+    [{ author_role: "shop", author_name: "Asha", body: "Need help", created_at: "2026-11-19 10:00:00" }],
+    { audience: "master" },
+  );
+  assert.match(thread, /master-ticket-reply/);
+  assert.match(thread, /Need help/);
+  assert.equal(S.ticketCategory("BILLING"), "billing");
+  assert.equal(S.ticketStatus("bad"), "");
+});
+
 test("login support chips", () => {
   assert.equal(S.loginHtml({}), "");
   const html = S.loginHtml({ support_phone: "9876543210", support_email: "help@atavtelecom.in" });

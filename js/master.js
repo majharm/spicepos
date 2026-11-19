@@ -1,5 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let tab = "dash";
+let supportTicketId = "";
+let supportTicketStatus = "";
 let backupPane = "backup";
 let analyticsPane = "overview";
 let seoPane = "overview";
@@ -215,7 +217,7 @@ function showLogin(on) {
 const NAV_FAMILIES = {
   main: ["dash", "live", "ipmap", "bizmap", "sync", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
   alerts: ["expiry", "alert-log"],
-  people: ["managers", "staff", "support"],
+  people: ["managers", "staff", "support", "tickets"],
   advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
   analytics: ["analytics"],
   seo: ["seo"],
@@ -241,6 +243,7 @@ const PAGE_HINTS = {
   managers: "Assign shops to support staff",
   staff: "Shop logins, roles, and passwords",
   support: "Fallback helpline",
+  tickets: "Tickets from shop business admins",
   advance: "Settings, backup, and logs",
   backup: "Download or restore data",
   languages: "India language pack",
@@ -315,6 +318,7 @@ const MASTER_PAGES = [
   { tab: "managers", title: "Account managers", keywords: "support assign" },
   { tab: "staff", title: "Staff master", keywords: "staff user password role cashier login" },
   { tab: "support", title: "Support helpline", keywords: "phone email" },
+  { tab: "tickets", title: "Support tickets", keywords: "ticket shop reply support team" },
   { tab: "advance", title: "Advanced", keywords: "tools hub" },
   { tab: "backup", pane: "settings", title: "Settings", keywords: "whatsapp smtp messages" },
   { tab: "backup", pane: "backup", title: "Backup", keywords: "download restore email" },
@@ -2250,6 +2254,99 @@ function bindAlertsForm(alerts) {
   });
 }
 
+async function renderMasterTickets(body) {
+  const S = window.SupportPage;
+  if (!S?.ticketListHtml) {
+    body.innerHTML = `<p class="hint error">Support ticket UI is not loaded.</p>`;
+    return;
+  }
+  let tickets = [];
+  let detail = null;
+  const statusQ = supportTicketStatus ? `?status=${encodeURIComponent(supportTicketStatus)}` : "";
+  try {
+    if (supportTicketId) {
+      detail = await api(`/api/master/support-tickets/${encodeURIComponent(supportTicketId)}`);
+    } else {
+      const data = await api(`/api/master/support-tickets${statusQ}`);
+      tickets = data.tickets || [];
+    }
+  } catch (err) {
+    body.innerHTML = `<p class="hint error">${attr(err.message)}</p>`;
+    return;
+  }
+  const filters = [
+    ["", "All"],
+    ["open", "Open"],
+    ["pending", "Waiting on shop"],
+    ["resolved", "Resolved"],
+  ];
+  const filterHtml = detail
+    ? ""
+    : `<div class="support-ticket-tools">${filters
+        .map(
+          ([key, label]) =>
+            `<button type="button" class="btn${supportTicketStatus === key ? " primary" : ""}" data-ticket-filter="${attr(key)}">${label}</button>`,
+        )
+        .join("")}</div>`;
+  const inner = detail
+    ? S.ticketThreadHtml(detail.ticket, detail.replies, { audience: "master" })
+    : `${filterHtml}${S.ticketListHtml(tickets, { audience: "master" })}`;
+  const openCount = detail ? 0 : tickets.filter((row) => (row.status || "open") === "open").length;
+  const stats = detail
+    ? []
+    : [
+        { label: "Listed", value: String(tickets.length) },
+        { label: "Open", value: String(openCount), warn: openCount > 0 },
+      ];
+  body.innerHTML = masterDesk(
+    "People",
+    "Support tickets",
+    "Shops send these from Support in the business admin console. Reply here to reach the shop thread.",
+    stats,
+    `<div class="support-desk">${inner}</div>`,
+  );
+  body.querySelector("[data-ticket-back]")?.addEventListener("click", () => {
+    supportTicketId = "";
+    render();
+  });
+  body.querySelectorAll("[data-ticket-open]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      supportTicketId = btn.getAttribute("data-ticket-open") || "";
+      render();
+    });
+  });
+  body.querySelectorAll("[data-ticket-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      supportTicketStatus = btn.getAttribute("data-ticket-filter") || "";
+      supportTicketId = "";
+      render();
+    });
+  });
+  body.querySelector("#master-ticket-reply")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const hint = document.getElementById("master-ticket-hint");
+    const payload = Object.fromEntries(new FormData(form).entries());
+    try {
+      await api(`/api/master/support-tickets/${encodeURIComponent(supportTicketId)}/reply`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      form.reset();
+      if (hint) {
+        hint.textContent = "Reply sent.";
+        hint.className = "hint ok";
+      }
+      render();
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    }
+  });
+}
+
 async function render() {
   stopLivePoll();
   stopBizPoll();
@@ -2285,6 +2382,7 @@ async function render() {
     languages: "Languages",
     alerts: "Settings",
     support: "Support helpline",
+    tickets: "Support tickets",
     advance: "Advanced",
   };
   syncMasterNav();
@@ -4938,6 +5036,8 @@ async function render() {
           }
         }
       };
+    } else if (tab === "tickets") {
+      await renderMasterTickets(body);
     } else if (tab === "support") {
       const s = await api("/api/master/support");
       body.innerHTML = masterDesk(
