@@ -230,5 +230,7 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(php, /function pos_auto_owner_mobile/);
   assert.doesNotMatch(php, /\$mobile = \$testNumber;/);
   assert.doesNotMatch(read("api/cron/index.php"), /lastError/);
-  assert.match(read("pos-alerts.php"), /function pos_owner_report_phones/);
+  assert.match(read("pos-alerts.php"), /function pos_business_admin_phones/);
+  assert.match(php, /function pos_auto_admin_mobile/);
+  assert.match(php, /job_key"\] \?\? ""\) === "low_stock"/);
 });

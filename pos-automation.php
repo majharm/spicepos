@@ -301,6 +301,29 @@ function pos_auto_owner_mobile($bid, $biz = []) {
   return $mobile;
 }
 
+function pos_auto_admin_mobile($bid) {
+  if ($bid === "") return "";
+  $rows = [];
+  try {
+    $rows = pos_auto_q(
+      "SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin' AND COALESCE(status,'active') <> 'deleted' ORDER BY created_at",
+      "s",
+      [$bid]
+    );
+  } catch (Throwable $e) {
+    try {
+      $rows = pos_auto_q("SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin'", "s", [$bid]);
+    } catch (Throwable $e2) {
+      $rows = [];
+    }
+  }
+  foreach ($rows as $row) {
+    $mobile = pos_auto_mobile($row["mobile"] ?? "");
+    if ($mobile !== "") return $mobile;
+  }
+  return pos_auto_owner_mobile($bid, []);
+}
+
 function pos_auto_wa_held() {
   return false;
 }
@@ -837,10 +860,10 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
         $body = pos_auto_low_message($owner, $items, pos_auto_out_count($biz["id"]));
         $chunks = function_exists("pos_split_alert_messages") ? pos_split_alert_messages($body, 3500) : [$body];
         if (!$chunks) $chunks = [$body];
-        $ownerMobile = pos_auto_owner_mobile($biz["id"], $biz);
+        $adminMobile = pos_auto_admin_mobile($biz["id"]);
         foreach ($chunks as $i => $chunk) {
           $partScope = $sig . $stamp . (count($chunks) > 1 ? "|p" . ($i + 1) : "");
-          $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $partScope, $shop, "Low stock alert", $chunk, $ownerMobile, $forceShop);
+          $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $partScope, $shop, "Low stock alert", $chunk, $adminMobile, $forceShop);
         }
         $waOn = (int) ($shop["channel_whatsapp"] ?? 0) === 1;
         if (!$probe && (!$waOn || !pos_auto_wa_held())) {
@@ -1016,7 +1039,9 @@ function pos_automation_drain($deadline) {
         if ($optOut) {
           $error = "opt-out";
         } elseif ($ownerReport) {
-          $mobile = pos_auto_owner_mobile($row["business_id"], $biz);
+          $mobile = ($row["job_key"] ?? "") === "low_stock"
+            ? pos_auto_admin_mobile($row["business_id"])
+            : pos_auto_owner_mobile($row["business_id"], $biz);
           if ($mobile === "") $error = "invalid-mobile";
         } else {
           $mobile = pos_auto_mobile($row["recipient"]);
