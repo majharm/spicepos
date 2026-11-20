@@ -37,6 +37,16 @@ function pos_support_actor_name($auth, $fallback) {
   return $clipped === "" ? $fallback : $clipped;
 }
 
+function pos_support_align_collation($table) {
+  if ($table !== "support_tickets" && $table !== "support_ticket_replies") return;
+  $rows = pos_q("SHOW TABLE STATUS LIKE '" . $table . "'");
+  $row = $rows[0] ?? [];
+  $collation = (string) ($row["Collation"] ?? ($row["collation"] ?? ""));
+  if ($collation !== "" && $collation !== "utf8mb4_unicode_ci") {
+    pos_q("ALTER TABLE `" . $table . "` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+  }
+}
+
 function pos_support_ticket_schema() {
   static $done = false;
   if ($done) return;
@@ -53,7 +63,7 @@ function pos_support_ticket_schema() {
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_support_tickets_shop (business_id, updated_at),
     INDEX idx_support_tickets_status (status, updated_at)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
   pos_q("CREATE TABLE IF NOT EXISTS support_ticket_replies (
     id VARCHAR(36) PRIMARY KEY,
     ticket_id VARCHAR(36) NOT NULL,
@@ -63,14 +73,16 @@ function pos_support_ticket_schema() {
     body TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_support_replies_ticket (ticket_id, created_at)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  pos_support_align_collation("support_tickets");
+  pos_support_align_collation("support_ticket_replies");
   $done = true;
 }
 
 function pos_support_load($id, $bid) {
   $sql = "SELECT t.id, t.business_id, t.subject, t.category, t.priority, t.status, t.created_by_name, t.created_at, t.updated_at, b.name AS shop_name
           FROM support_tickets t
-          LEFT JOIN businesses b ON b.id = t.business_id
+          LEFT JOIN businesses b ON b.id COLLATE utf8mb4_unicode_ci = t.business_id COLLATE utf8mb4_unicode_ci
           WHERE t.id = ?";
   if ($bid !== "") {
     $rows = pos_q($sql . " AND t.business_id = ? LIMIT 1", "ss", [$id, $bid]);
@@ -110,9 +122,9 @@ function pos_support_ticket_dispatch($path, $method, $body, $bid, $auth) {
     if ($bid === "") pos_send(401, ["error" => "Sign in required"]);
     $rows = pos_q(
       "SELECT t.id, t.business_id, t.subject, t.category, t.priority, t.status, t.created_by_name, t.created_at, t.updated_at, b.name AS shop_name,
-              (SELECT COUNT(*) FROM support_ticket_replies r WHERE r.ticket_id = t.id) AS reply_count
+              (SELECT COUNT(*) FROM support_ticket_replies r WHERE r.ticket_id COLLATE utf8mb4_unicode_ci = t.id COLLATE utf8mb4_unicode_ci) AS reply_count
        FROM support_tickets t
-       LEFT JOIN businesses b ON b.id = t.business_id
+       LEFT JOIN businesses b ON b.id COLLATE utf8mb4_unicode_ci = t.business_id COLLATE utf8mb4_unicode_ci
        WHERE t.business_id = ?
        ORDER BY t.updated_at DESC
        LIMIT 100",
@@ -172,9 +184,9 @@ function pos_support_ticket_dispatch($path, $method, $body, $bid, $auth) {
   if ($path === "master/support-tickets" && $method === "GET") {
     $status = pos_support_status($_GET["status"] ?? "");
     $sql = "SELECT t.id, t.business_id, t.subject, t.category, t.priority, t.status, t.created_by_name, t.created_at, t.updated_at, b.name AS shop_name,
-                   (SELECT COUNT(*) FROM support_ticket_replies r WHERE r.ticket_id = t.id) AS reply_count
+                   (SELECT COUNT(*) FROM support_ticket_replies r WHERE r.ticket_id COLLATE utf8mb4_unicode_ci = t.id COLLATE utf8mb4_unicode_ci) AS reply_count
             FROM support_tickets t
-            LEFT JOIN businesses b ON b.id = t.business_id";
+            LEFT JOIN businesses b ON b.id COLLATE utf8mb4_unicode_ci = t.business_id COLLATE utf8mb4_unicode_ci";
     if ($status !== "") {
       $rows = pos_q($sql . " WHERE t.status = ? ORDER BY t.updated_at DESC LIMIT 200", "s", [$status]);
     } else {

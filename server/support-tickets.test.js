@@ -18,6 +18,10 @@ test("support ticket routes stay wired in Node and PHP", () => {
   assert.match(php, /pos_support_ticket_dispatch/);
   assert.match(php, /strpos\(\$path, "master\/support-tickets"\) === 0 && is_file/);
   assert.match(twin, /if \(\$shop && \$bid === ""\) return false/);
+  assert.match(module, /COLLATE utf8mb4_unicode_ci/);
+  assert.match(module, /CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci/);
+  assert.match(twin, /COLLATE utf8mb4_unicode_ci/);
+  assert.match(twin, /CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci/);
 });
 
 test("support ticket UI pins on shop and master pages", () => {
