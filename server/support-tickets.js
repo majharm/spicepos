@@ -17,6 +17,17 @@ function fail(res, status, error) {
   res.status(status).json({ error });
 }
 
+const TICKET_TABLES = ["support_tickets", "support_ticket_replies"];
+
+async function alignTicketCollation(table) {
+  if (!TICKET_TABLES.includes(table)) return;
+  const [row] = await query(`SHOW TABLE STATUS LIKE '${table}'`);
+  const collation = String(row?.Collation || row?.collation || "");
+  if (collation && collation !== "utf8mb4_unicode_ci") {
+    await query(`ALTER TABLE \`${table}\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  }
+}
+
 export async function ensureSupportTicketSchema() {
   if (!ready) {
     ready = (async () => {
@@ -33,7 +44,7 @@ export async function ensureSupportTicketSchema() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_support_tickets_shop (business_id, updated_at),
         INDEX idx_support_tickets_status (status, updated_at)
-      )`);
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
       await query(`CREATE TABLE IF NOT EXISTS support_ticket_replies (
         id VARCHAR(36) PRIMARY KEY,
         ticket_id VARCHAR(36) NOT NULL,
@@ -43,7 +54,8 @@ export async function ensureSupportTicketSchema() {
         body TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_support_replies_ticket (ticket_id, created_at)
-      )`);
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+      for (const table of TICKET_TABLES) await alignTicketCollation(table);
     })().catch((err) => {
       ready = null;
       throw err;
@@ -52,9 +64,10 @@ export async function ensureSupportTicketSchema() {
   return ready;
 }
 
+const TICKET_EQ = "COLLATE utf8mb4_unicode_ci";
 const TICKET_COLUMNS = `t.id, t.business_id, t.subject, t.category, t.priority, t.status,
   t.created_by_name, t.created_at, t.updated_at, b.name AS shop_name,
-  (SELECT COUNT(*) FROM support_ticket_replies r WHERE r.ticket_id = t.id) AS reply_count`;
+  (SELECT COUNT(*) FROM support_ticket_replies r WHERE r.ticket_id ${TICKET_EQ} = t.id ${TICKET_EQ}) AS reply_count`;
 
 async function loadTicket(id, businessId) {
   const params = [id];
@@ -66,7 +79,7 @@ async function loadTicket(id, businessId) {
   const [ticket] = await query(
     `SELECT ${TICKET_COLUMNS}
      FROM support_tickets t
-     LEFT JOIN businesses b ON b.id = t.business_id
+     LEFT JOIN businesses b ON b.id COLLATE utf8mb4_unicode_ci = t.business_id COLLATE utf8mb4_unicode_ci
      WHERE ${where}
      LIMIT 1`,
     params,
@@ -97,7 +110,7 @@ export function registerSupportTickets(app) {
       const tickets = await query(
         `SELECT ${TICKET_COLUMNS}
          FROM support_tickets t
-         LEFT JOIN businesses b ON b.id = t.business_id
+         LEFT JOIN businesses b ON b.id COLLATE utf8mb4_unicode_ci = t.business_id COLLATE utf8mb4_unicode_ci
          WHERE t.business_id = ?
          ORDER BY t.updated_at DESC
          LIMIT 100`,
@@ -185,7 +198,7 @@ export function registerSupportTickets(app) {
       const tickets = await query(
         `SELECT ${TICKET_COLUMNS}
          FROM support_tickets t
-         LEFT JOIN businesses b ON b.id = t.business_id
+         LEFT JOIN businesses b ON b.id COLLATE utf8mb4_unicode_ci = t.business_id COLLATE utf8mb4_unicode_ci
          ${where}
          ORDER BY t.updated_at DESC
          LIMIT 200`,

@@ -9062,6 +9062,7 @@ async function paintSupport(root) {
   const page = window.SupportPage.pageHtml(state.support, state.company);
   let tickets = [];
   let detail = null;
+  let loadError = "";
   if (window.SupportPage.ticketDeskHtml) {
     try {
       if (supportTicketId) {
@@ -9072,12 +9073,14 @@ async function paintSupport(root) {
       }
     } catch (err) {
       if (err?.message && /sign in/i.test(err.message)) return;
+      loadError = err.message || "Could not load tickets";
+      if (/not found/i.test(loadError)) supportTicketId = "";
       tickets = [];
       detail = null;
     }
   }
   if (stamp !== supportPaint) return;
-  const desk = window.SupportPage.ticketDeskHtml ? window.SupportPage.ticketDeskHtml(tickets, detail) : "";
+  const desk = window.SupportPage.ticketDeskHtml ? window.SupportPage.ticketDeskHtml(tickets, detail, loadError) : "";
   root.innerHTML = `${page}${desk}`;
   bindSupportCopy(root);
   bindSupportTickets(root);

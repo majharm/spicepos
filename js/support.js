@@ -222,7 +222,7 @@
       <label>Category<select name="category">${ticketOptions(TICKET_CATEGORIES, "other")}</select></label>
       <label>Priority<select name="priority">${ticketOptions(TICKET_PRIORITIES, "normal")}</select></label>
       <label class="wide">Message<textarea name="body" rows="4" maxlength="2000" required placeholder="What happened, and what should support do?"></textarea></label>
-      <div class="wide"><button class="btn btn-primary" type="submit">Send to support</button> <span class="hint" id="support-ticket-hint"></span></div>
+      <div class="wide"><button class="btn primary" type="submit">Send to support</button> <span class="hint" id="support-ticket-hint"></span></div>
     </form>`;
   }
 
@@ -270,16 +270,16 @@
               ],
               status === "resolved" ? "resolved" : "pending",
             )}</select></label>
-            <div class="wide"><button class="btn btn-primary" type="submit">Send reply</button> <span class="hint" id="master-ticket-hint"></span></div>
+            <div class="wide"><button class="btn primary" type="submit">Send reply</button> <span class="hint" id="master-ticket-hint"></span></div>
           </form>`
         : `<form class="support-ticket-form" id="support-ticket-reply">
             <label class="wide">Reply<textarea name="body" rows="3" maxlength="2000" required placeholder="Add what the support team should know"></textarea></label>
-            <div class="wide"><button class="btn btn-primary" type="submit">Send reply</button> <span class="hint" id="support-ticket-hint"></span></div>
+            <div class="wide"><button class="btn primary" type="submit">Send reply</button> <span class="hint" id="support-ticket-hint"></span></div>
           </form>`;
     const shop = audience === "master" && ticket?.shop_name ? `<p class="support-panel-note">${escapeHtml(ticket.shop_name)}</p>` : "";
     return `<div class="support-thread">
       <div class="support-thread-head">
-        <button type="button" class="btn btn-ghost" data-ticket-back>All tickets</button>
+        <button type="button" class="btn ghost" data-ticket-back>All tickets</button>
         <h3>${escapeHtml(ticket?.subject || "Ticket")}</h3>
         <span class="support-pill is-${escapeHtml(status)}">${escapeHtml(ticketStatusLabel(status, audience))}</span>
       </div>
@@ -289,13 +289,15 @@
     </div>`;
   }
 
-  function ticketDeskHtml(tickets, detail) {
+  function ticketDeskHtml(tickets, detail, error) {
     const thread = detail?.ticket
       ? ticketThreadHtml(detail.ticket, detail.replies, { audience: "shop" })
       : `${ticketFormHtml()}${ticketListHtml(tickets, { audience: "shop" })}`;
+    const problem = error ? `<p class="hint error">${escapeHtml(error)}</p>` : "";
     return `<section class="support-tickets">
       <h3>Tickets to ATAV support</h3>
       <p class="support-panel-note">This ticket goes to the master admin support team. Use the helpline above if the counter is down.</p>
+      ${problem}
       ${thread}
     </section>`;
   }

@@ -69,6 +69,11 @@ test("support ticket desk html", () => {
   const desk = S.ticketDeskHtml([], null);
   assert.match(desk, /Tickets to ATAV support/);
   assert.match(desk, /support-ticket-form/);
+  assert.match(desk, /class="btn primary"/);
+  assert.doesNotMatch(desk, /btn-primary/);
+  const failed = S.ticketDeskHtml([], null, "Could not load tickets");
+  assert.match(failed, /Could not load tickets/);
+  assert.match(failed, /hint error/);
   const thread = S.ticketThreadHtml(
     { id: "t1", subject: "Login", status: "pending" },
     [{ author_role: "shop", author_name: "Asha", body: "Need help", created_at: "2026-11-19 10:00:00" }],
