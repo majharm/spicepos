@@ -3617,6 +3617,7 @@ function showView(name) {
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
+  else stopSupportChat();
   if (name === "dashboard") {
     if (!viewStillFresh("dashboard")) loadDashboard();
     if (isGymShop()) globalThis.POSGymUi?.loadGymBoard?.();
@@ -9051,6 +9052,23 @@ function bindSupportCopy(root) {
 
 let supportTicketId = "";
 let supportPaint = 0;
+let supportChatTimer = 0;
+
+function stopSupportChat() {
+  if (supportChatTimer) clearInterval(supportChatTimer);
+  supportChatTimer = 0;
+}
+
+function startSupportChat() {
+  stopSupportChat();
+  supportChatTimer = setInterval(() => {
+    if (state.currentView !== "support") {
+      stopSupportChat();
+      return;
+    }
+    refreshSupportChat();
+  }, 4000);
+}
 
 function renderSupport() {
   const root = $("support-page");
@@ -9080,11 +9098,76 @@ async function paintSupport(root) {
       detail = null;
     }
   }
+  let chatMessages = [];
+  if (window.SupportPage.chatPanelHtml) {
+    try {
+      const chat = await api("/api/support/chat");
+      chatMessages = chat.messages || [];
+    } catch (err) {
+      if (err?.message && /sign in/i.test(err.message)) return;
+      if (!loadError) loadError = err.message || "Could not load the chat";
+    }
+  }
   if (stamp !== supportPaint) return;
   const desk = window.SupportPage.ticketDeskHtml ? window.SupportPage.ticketDeskHtml(tickets, detail, loadError) : "";
-  root.innerHTML = `${page}${desk}`;
+  const chat = window.SupportPage.chatPanelHtml ? window.SupportPage.chatPanelHtml(chatMessages, { audience: "shop" }) : "";
+  root.innerHTML = `${page}${chat}${desk}`;
   bindSupportCopy(root);
   bindSupportTickets(root);
+  bindSupportChat(root);
+  startSupportChat();
+  const log = root.querySelector("#support-chat-log");
+  if (log) log.scrollTop = log.scrollHeight;
+}
+
+async function refreshSupportChat() {
+  const log = document.getElementById("support-chat-log");
+  if (!log || !window.SupportPage?.chatLogHtml) return;
+  try {
+    const data = await api("/api/support/chat");
+    const messages = data.messages || [];
+    const last = messages.length ? messages[messages.length - 1].id || "" : "";
+    if (log.dataset.last === last) return;
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 64;
+    log.innerHTML = window.SupportPage.chatLogHtml(messages);
+    log.dataset.last = last;
+    if (nearBottom) log.scrollTop = log.scrollHeight;
+  } catch {
+    /* keep the thread on screen */
+  }
+}
+
+function bindSupportChat(root) {
+  root.querySelector("#support-chat-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const hint = form.querySelector(".hint");
+    const button = form.querySelector("button[type=submit]");
+    const body = Object.fromEntries(new FormData(form).entries());
+    if (button) button.disabled = true;
+    try {
+      const saved = await api("/api/support/chat", { method: "POST", body: JSON.stringify(body) });
+      form.reset();
+      const log = root.querySelector("#support-chat-log");
+      if (log && window.SupportPage?.chatLogHtml) {
+        const messages = saved.messages || [];
+        log.innerHTML = window.SupportPage.chatLogHtml(messages);
+        log.dataset.last = messages.length ? messages[messages.length - 1].id || "" : "";
+        log.scrollTop = log.scrollHeight;
+      }
+      if (hint) {
+        hint.textContent = "Sent.";
+        hint.className = "hint ok";
+      }
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message || "Could not send";
+        hint.className = "hint error";
+      }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
 }
 
 function bindSupportTickets(root) {

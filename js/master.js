@@ -2,6 +2,8 @@ const $ = (id) => document.getElementById(id);
 let tab = "dash";
 let supportTicketId = "";
 let supportTicketStatus = "";
+let supportChatId = "";
+let supportChatTimer = 0;
 let backupPane = "backup";
 let analyticsPane = "overview";
 let seoPane = "overview";
@@ -217,7 +219,7 @@ function showLogin(on) {
 const NAV_FAMILIES = {
   main: ["dash", "live", "ipmap", "bizmap", "sync", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
   alerts: ["expiry", "alert-log"],
-  people: ["managers", "staff", "support", "tickets"],
+  people: ["managers", "staff", "support", "tickets", "chat"],
   advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
   analytics: ["analytics"],
   seo: ["seo"],
@@ -244,6 +246,7 @@ const PAGE_HINTS = {
   staff: "Shop logins, roles, and passwords",
   support: "Fallback helpline",
   tickets: "Tickets from shop business admins",
+  chat: "Live chat with shop business admins",
   advance: "Settings, backup, and logs",
   backup: "Download or restore data",
   languages: "India language pack",
@@ -319,6 +322,7 @@ const MASTER_PAGES = [
   { tab: "staff", title: "Staff master", keywords: "staff user password role cashier login" },
   { tab: "support", title: "Support helpline", keywords: "phone email" },
   { tab: "tickets", title: "Support tickets", keywords: "ticket shop reply support team" },
+  { tab: "chat", title: "Live chat", keywords: "live chat support team shop message" },
   { tab: "advance", title: "Advanced", keywords: "tools hub" },
   { tab: "backup", pane: "settings", title: "Settings", keywords: "whatsapp smtp messages" },
   { tab: "backup", pane: "backup", title: "Backup", keywords: "download restore email" },
@@ -2350,8 +2354,142 @@ async function renderMasterTickets(body) {
   });
 }
 
+function stopSupportChatPoll() {
+  if (supportChatTimer) clearInterval(supportChatTimer);
+  supportChatTimer = 0;
+}
+
+function startSupportChatPoll() {
+  stopSupportChatPoll();
+  supportChatTimer = setInterval(() => {
+    if (tab !== "chat") {
+      stopSupportChatPoll();
+      return;
+    }
+    refreshMasterChat();
+  }, 4000);
+}
+
+async function refreshMasterChat() {
+  const S = window.SupportPage;
+  if (!S?.chatLogHtml) return;
+  try {
+    if (supportChatId) {
+      const log = document.getElementById("master-chat-log");
+      if (!log) return;
+      const data = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`);
+      const messages = data.messages || [];
+      const last = messages.length ? messages[messages.length - 1].id || "" : "";
+      if (log.dataset.last === last) return;
+      const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 64;
+      log.innerHTML = S.chatLogHtml(messages);
+      log.dataset.last = last;
+      if (nearBottom) log.scrollTop = log.scrollHeight;
+      return;
+    }
+    const list = document.getElementById("master-chat-inbox");
+    if (!list) return;
+    const data = await api("/api/master/support-chat");
+    const chats = data.chats || [];
+    const stamp = chats.map((row) => `${row.business_id}:${row.created_at}`).join("|");
+    if (list.dataset.stamp === stamp) return;
+    list.innerHTML = S.chatInboxHtml(chats);
+    list.dataset.stamp = stamp;
+    list.querySelectorAll("[data-chat-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        supportChatId = btn.getAttribute("data-chat-open") || "";
+        render();
+      });
+    });
+  } catch {
+    /* keep the open thread */
+  }
+}
+
+async function renderMasterChat(body) {
+  const S = window.SupportPage;
+  if (!S?.chatPanelHtml || !S?.chatInboxHtml) {
+    body.innerHTML = `<p class="hint error">Live chat UI is not loaded.</p>`;
+    return;
+  }
+  let chats = [];
+  let detail = null;
+  try {
+    if (supportChatId) {
+      detail = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`);
+    } else {
+      const data = await api("/api/master/support-chat");
+      chats = data.chats || [];
+    }
+  } catch (err) {
+    body.innerHTML = `<p class="hint error">${attr(err.message)}</p>`;
+    return;
+  }
+  const waiting = chats.filter((row) => row.author_role !== "master").length;
+  const inner = detail
+    ? `<div class="support-thread-head"><button type="button" class="btn ghost" data-chat-back>All chats</button></div>${S.chatPanelHtml(detail.messages || [], { audience: "master", shopName: detail.shop?.name || "Shop" })}`
+    : `<article class="support-panel"><h3>Shops</h3><p class="support-panel-note">Newest message first. Open a shop to reply in the live chat.</p><div id="master-chat-inbox">${S.chatInboxHtml(chats)}</div></article>`;
+  body.innerHTML = masterDesk(
+    "People",
+    "Live chat",
+    "Shops write from Support in the business admin console. Replies show up there within a few seconds.",
+    detail ? [] : [
+      { label: "Chats", value: String(chats.length) },
+      { label: "Waiting", value: String(waiting), warn: waiting > 0 },
+    ],
+    `<div class="support-desk">${inner}</div>`,
+  );
+  body.querySelector("[data-chat-back]")?.addEventListener("click", () => {
+    supportChatId = "";
+    render();
+  });
+  body.querySelectorAll("[data-chat-open]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      supportChatId = btn.getAttribute("data-chat-open") || "";
+      render();
+    });
+  });
+  body.querySelector("#master-chat-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const hint = document.getElementById("master-chat-hint");
+    const button = form.querySelector("button[type=submit]");
+    const payload = Object.fromEntries(new FormData(form).entries());
+    if (button) button.disabled = true;
+    try {
+      const saved = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      form.reset();
+      const log = document.getElementById("master-chat-log");
+      const messages = saved.messages || [];
+      if (log) {
+        log.innerHTML = S.chatLogHtml(messages);
+        log.dataset.last = messages.length ? messages[messages.length - 1].id || "" : "";
+        log.scrollTop = log.scrollHeight;
+      }
+      if (hint) {
+        hint.textContent = "Sent.";
+        hint.className = "hint ok";
+      }
+    } catch (err) {
+      if (hint) {
+        hint.textContent = err.message;
+        hint.className = "hint error";
+      }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
+  const log = document.getElementById("master-chat-log");
+  if (log) log.scrollTop = log.scrollHeight;
+  startSupportChatPoll();
+}
+
 async function render() {
   stopLivePoll();
+  stopSupportChatPoll();
   stopBizPoll();
   stopSyncPoll();
   const titles = {
@@ -2386,6 +2524,7 @@ async function render() {
     alerts: "Settings",
     support: "Support helpline",
     tickets: "Support tickets",
+    chat: "Live chat",
     advance: "Advanced",
   };
   syncMasterNav();
@@ -5041,6 +5180,8 @@ async function render() {
       };
     } else if (tab === "tickets") {
       await renderMasterTickets(body);
+    } else if (tab === "chat") {
+      await renderMasterChat(body);
     } else if (tab === "support") {
       const s = await api("/api/master/support");
       body.innerHTML = masterDesk(

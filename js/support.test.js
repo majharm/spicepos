@@ -90,6 +90,26 @@ test("support ticket desk html", () => {
   assert.equal(S.ticketStatus("bad"), "");
 });
 
+test("live chat panel and inbox", () => {
+  const panel = S.chatPanelHtml(
+    [{ id: "m1", author_role: "shop", author_name: "Asha", body: "Counter is stuck", created_at: "2026-11-20 12:00:00" }],
+    { audience: "shop" },
+  );
+  assert.match(panel, /id="support-chat-form"/);
+  assert.match(panel, /id="support-chat-log"/);
+  assert.match(panel, /Counter is stuck/);
+  assert.match(panel, /Live chat/);
+  const master = S.chatPanelHtml([], { audience: "master", shopName: "SWAMI MASALE" });
+  assert.match(master, /id="master-chat-form"/);
+  assert.match(master, /SWAMI MASALE/);
+  const inbox = S.chatInboxHtml([
+    { business_id: "biz-1", shop_name: "SWAMI MASALE", author_role: "shop", body: "Need help", created_at: "2026-11-20 12:01:00" },
+  ]);
+  assert.match(inbox, /data-chat-open="biz-1"/);
+  assert.match(inbox, /Need help/);
+  assert.match(inbox, />New</);
+});
+
 test("login support chips", () => {
   assert.equal(S.loginHtml({}), "");
   const html = S.loginHtml({ support_phone: "9876543210", support_email: "help@atavtelecom.in" });

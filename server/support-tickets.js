@@ -17,7 +17,7 @@ function fail(res, status, error) {
   res.status(status).json({ error });
 }
 
-const TICKET_TABLES = ["support_tickets", "support_ticket_replies"];
+const TICKET_TABLES = ["support_tickets", "support_ticket_replies", "support_chat_messages"];
 
 async function alignTicketCollation(table) {
   if (!TICKET_TABLES.includes(table)) return;
@@ -54,6 +54,15 @@ export async function ensureSupportTicketSchema() {
         body TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_support_replies_ticket (ticket_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+      await query(`CREATE TABLE IF NOT EXISTS support_chat_messages (
+        id VARCHAR(36) PRIMARY KEY,
+        business_id VARCHAR(36) NOT NULL,
+        author_role VARCHAR(16) NOT NULL,
+        author_name VARCHAR(120) NOT NULL DEFAULT '',
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_support_chat_shop (business_id, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
       for (const table of TICKET_TABLES) await alignTicketCollation(table);
     })().catch((err) => {
@@ -101,6 +110,29 @@ async function addReply(ticket, role, name, body) {
      VALUES (?,?,?,?,?,?)`,
     [crypto.randomUUID(), ticket.id, ticket.business_id, role, name, body],
   );
+}
+
+async function loadChat(businessId) {
+  const messages = await query(
+    `SELECT id, business_id, author_role, author_name, body, created_at
+     FROM support_chat_messages
+     WHERE business_id = ?
+     ORDER BY created_at DESC, id DESC
+     LIMIT 80`,
+    [businessId],
+  );
+  messages.reverse();
+  return messages;
+}
+
+async function addChat(businessId, role, name, body) {
+  const id = crypto.randomUUID();
+  await query(
+    `INSERT INTO support_chat_messages (id, business_id, author_role, author_name, body)
+     VALUES (?,?,?,?,?)`,
+    [id, businessId, role, name, body],
+  );
+  return loadChat(businessId);
 }
 
 export function registerSupportTickets(app) {
@@ -182,6 +214,76 @@ export function registerSupportTickets(app) {
       res.json(await loadTicket(found.ticket.id, found.ticket.business_id));
     } catch (err) {
       fail(res, 500, err.message || "Could not send the reply");
+    }
+  });
+
+  app.get("/api/support/chat", requireStaff, async (req, res) => {
+    try {
+      await ensureSupportTicketSchema();
+      res.json({ messages: await loadChat(bid()) });
+    } catch (err) {
+      fail(res, 500, err.message || "Could not load the chat");
+    }
+  });
+
+  app.post("/api/support/chat", requireStaff, async (req, res) => {
+    try {
+      await ensureSupportTicketSchema();
+      const message = Support.ticketBody(req.body?.body);
+      if (!message) return fail(res, 400, "Write a message");
+      const messages = await addChat(bid(), "shop", personName(authUser(), "Shop"), message);
+      res.json({ messages });
+    } catch (err) {
+      fail(res, 500, err.message || "Could not send the message");
+    }
+  });
+
+  app.get("/api/master/support-chat", requireMaster, async (req, res) => {
+    try {
+      await ensureSupportTicketSchema();
+      const chats = await query(
+        `SELECT c.business_id, b.name AS shop_name, c.body, c.author_role, c.author_name, c.created_at
+         FROM support_chat_messages c
+         JOIN (
+           SELECT business_id, MAX(created_at) AS created_at
+           FROM support_chat_messages
+           GROUP BY business_id
+         ) latest ON latest.business_id COLLATE utf8mb4_unicode_ci = c.business_id COLLATE utf8mb4_unicode_ci
+           AND latest.created_at = c.created_at
+         LEFT JOIN businesses b ON b.id COLLATE utf8mb4_unicode_ci = c.business_id COLLATE utf8mb4_unicode_ci
+         ORDER BY c.created_at DESC
+         LIMIT 100`,
+      );
+      res.json({ chats });
+    } catch (err) {
+      fail(res, 500, err.message || "Could not load live chats");
+    }
+  });
+
+  app.get("/api/master/support-chat/:businessId", requireMaster, async (req, res) => {
+    try {
+      await ensureSupportTicketSchema();
+      const businessId = String(req.params.businessId || "");
+      const [shop] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [businessId]);
+      if (!shop) return fail(res, 404, "Shop not found");
+      res.json({ shop, messages: await loadChat(businessId) });
+    } catch (err) {
+      fail(res, 500, err.message || "Could not load the chat");
+    }
+  });
+
+  app.post("/api/master/support-chat/:businessId", requireMaster, async (req, res) => {
+    try {
+      await ensureSupportTicketSchema();
+      const message = Support.ticketBody(req.body?.body);
+      if (!message) return fail(res, 400, "Write a message");
+      const businessId = String(req.params.businessId || "");
+      const [shop] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [businessId]);
+      if (!shop) return fail(res, 404, "Shop not found");
+      const messages = await addChat(businessId, "master", personName(req.auth?.admin, "Support"), message);
+      res.json({ shop, messages });
+    } catch (err) {
+      fail(res, 500, err.message || "Could not send the message");
     }
   });
 

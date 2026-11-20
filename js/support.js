@@ -332,6 +332,63 @@
     </section>`;
   }
 
+  function chatLogHtml(messages) {
+    const rows = Array.isArray(messages) ? messages : [];
+    if (!rows.length) return `<p class="support-empty">No messages yet. Send one and the support team will see it here.</p>`;
+    return rows
+      .map((row) => {
+        const supportSide = row.author_role === "master";
+        const who = supportSide ? "Support" : "Shop";
+        return `<article class="support-chat-bubble${supportSide ? " is-master" : ""}" data-chat-id="${escapeHtml(row.id || "")}">
+          <header><strong>${escapeHtml(who)}${row.author_name ? ` · ${escapeHtml(row.author_name)}` : ""}</strong><time>${escapeHtml(ticketWhen(row.created_at))}</time></header>
+          <p>${escapeHtml(row.body || "")}</p>
+        </article>`;
+      })
+      .join("");
+  }
+
+  function chatPanelHtml(messages, opts) {
+    const audience = opts?.audience === "master" ? "master" : "shop";
+    const rows = Array.isArray(messages) ? messages : [];
+    const last = rows.length ? rows[rows.length - 1].id || "" : "";
+    const shop = opts?.shopName ? `<p class="support-panel-note">${escapeHtml(opts.shopName)}</p>` : "";
+    const formId = audience === "master" ? "master-chat-form" : "support-chat-form";
+    const logId = audience === "master" ? "master-chat-log" : "support-chat-log";
+    const hintId = audience === "master" ? "master-chat-hint" : "support-chat-hint";
+    const placeholder = audience === "master" ? "Reply to this shop" : "Message the support team";
+    return `<section class="support-chat" data-chat-last="${escapeHtml(last)}">
+      <div class="support-chat-head">
+        <h3>Live chat</h3>
+        <span class="support-pill">Live</span>
+      </div>
+      <p class="support-panel-note">${audience === "master" ? "This shop sees your reply on Support in the business admin console." : "The ATAV support team sees this as you type and send. Tickets stay below for longer issues."}</p>
+      ${shop}
+      <div class="support-chat-log" id="${logId}" data-last="${escapeHtml(last)}">${chatLogHtml(rows)}</div>
+      <form class="support-chat-form" id="${formId}">
+        <label class="wide">Message<textarea name="body" rows="2" maxlength="2000" required placeholder="${escapeHtml(placeholder)}"></textarea></label>
+        <div class="support-ticket-actions wide"><button class="btn primary" type="submit">Send</button><span class="hint" id="${hintId}"></span></div>
+      </form>
+    </section>`;
+  }
+
+  function chatInboxHtml(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) return `<p class="support-empty">No live chats yet. A shop message shows up here.</p>`;
+    return `<div class="support-ticket-list">${list
+      .map((row) => {
+        const waiting = row.author_role !== "master";
+        return `<button type="button" class="support-ticket-row" data-chat-open="${escapeHtml(row.business_id || "")}">
+          <span class="support-ticket-copy">
+            <strong>${escapeHtml(row.shop_name || "Shop")}</strong>
+            <span class="support-ticket-meta"><span>${escapeHtml(waiting ? "Shop" : "Support")}</span><span>${escapeHtml(ticketWhen(row.created_at))}</span></span>
+            <span class="support-chat-preview">${escapeHtml(row.body || "")}</span>
+          </span>
+          <span class="support-pill${waiting ? "" : " is-resolved"}">${waiting ? "New" : "Replied"}</span>
+        </button>`;
+      })
+      .join("")}</div>`;
+  }
+
   function loginHtml(support) {
     const { phone, email, tel, wa, mail } = contactBits(support, { waMessage: false });
     if (!phone && !email) return "";
@@ -365,5 +422,8 @@
     ticketDeskHtml,
     ticketListHtml,
     ticketThreadHtml,
+    chatLogHtml,
+    chatPanelHtml,
+    chatInboxHtml,
   };
 });

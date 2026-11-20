@@ -4431,7 +4431,7 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     $auth = pos_require_master($path);
 
-    if (strpos($path, "master/support-tickets") === 0 && is_file(__DIR__ . "/pos-support-tickets.php")) {
+    if ((strpos($path, "master/support-tickets") === 0 || strpos($path, "master/support-chat") === 0) && is_file(__DIR__ . "/pos-support-tickets.php")) {
       require_once __DIR__ . "/pos-support-tickets.php";
       if (function_exists("pos_support_ticket_dispatch") && pos_support_ticket_dispatch($path, $method, $body, "", $auth)) return;
     }
