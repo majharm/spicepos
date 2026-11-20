@@ -648,7 +648,7 @@ test("low stock list includes empty shelves and piece-threshold items", () => {
   assert.match(master, /full low-stock list on WhatsApp to the business admin/);
   const auto = readFileSync(path.join(root, "pos-automation.php"), "utf8");
   assert.match(auto, /pos_query_low_stock_items/);
-  assert.match(auto, /pos_business_admin_alert_contacts/);
+  assert.match(auto, /pos_auto_owner_mobile/);
   assert.doesNotMatch(auto, /\$n >= 20/);
   assert.doesNotMatch(auto, /more";/);
 });

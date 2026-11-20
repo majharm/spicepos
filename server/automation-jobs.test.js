@@ -156,7 +156,15 @@ test("retries back off and stop after four attempts", () => {
   assert.equal(nextRetryAt(4, now), null);
 });
 
-test("test mode sends only to the approved number and consent is required for customers", () => {
+test("owner reports go to the business owner, not the platform number", () => {
+  assert.equal(
+    deliverMobile({ mobile: "9876543210", audience: "owner", testMode: true, testNumber: "9112090347" }).mobile,
+    "9876543210",
+  );
+  assert.equal(
+    deliverMobile({ mobile: "", audience: "owner", testMode: true, testNumber: "9112090347" }).reason,
+    "invalid-mobile",
+  );
   assert.deepEqual(deliverMobile({ mobile: "9876543210", testMode: true, testNumber: "9123456780" }), {
     mobile: "9123456780",
     test: true,
@@ -217,8 +225,10 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(php, /function pos_auto_probe/);
   assert.match(php, /test-number/);
   assert.match(php, /provider_note, ''\) <> 'forced'/);
-  assert.match(read("js/master.js"), /Test WhatsApp sent to the saved test number/);
-  assert.match(read("master.html"), /master\.js\?v=20261120tix1/);
+  assert.match(read("js/master.js"), /WhatsApp sent to the business owner/);
+  assert.match(read("master.html"), /master\.js\?v=20261120own1/);
+  assert.match(php, /function pos_auto_owner_mobile/);
+  assert.doesNotMatch(php, /\$mobile = \$testNumber;/);
   assert.doesNotMatch(read("api/cron/index.php"), /lastError/);
-  assert.match(php, /if \(\$testMode\) \{\s*\$mobile = \$testNumber;/);
+  assert.match(read("pos-alerts.php"), /function pos_owner_report_phones/);
 });

@@ -568,6 +568,27 @@ function pos_shop_alert_contacts($bid) {
   ];
 }
 
+function pos_owner_report_phones($bid) {
+  $biz = $bid ? pos_q("SELECT mobile FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]) : [];
+  $n = pos_normalize_in_mobile($biz[0]["mobile"] ?? "");
+  if ($n !== "") return [$n];
+  try {
+    $co = $bid ? pos_q("SELECT phone FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]) : [];
+    $n = pos_normalize_in_mobile($co[0]["phone"] ?? "");
+    if ($n !== "") return [$n];
+  } catch (Throwable $e) {
+    /* company phone is optional */
+  }
+  try {
+    $admins = $bid ? pos_q("SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin' LIMIT 1", "s", [$bid]) : [];
+    $n = pos_normalize_in_mobile($admins[0]["mobile"] ?? "");
+    if ($n !== "") return [$n];
+  } catch (Throwable $e) {
+    /* owner login is optional */
+  }
+  return [];
+}
+
 function pos_notice_image($raw) {
   $img = trim((string) $raw);
   if ($img === "") return "";
@@ -1274,11 +1295,9 @@ function pos_business_admin_alert_contacts($bid) {
     $n = pos_normalize_in_mobile($raw);
     if ($n !== "" && !in_array($n, $phones, true)) $phones[] = $n;
   };
-  foreach ($admins as $row) $pushPhone($row["mobile"] ?? "");
-  if (!$phones) {
-    $pushPhone($biz["mobile"] ?? "");
-    $pushPhone($co["phone"] ?? "");
-  }
+  $pushPhone($biz["mobile"] ?? "");
+  if (!$phones) $pushPhone($co["phone"] ?? "");
+  if (!$phones && $admins) $pushPhone($admins[0]["mobile"] ?? "");
   $emails = [];
   $pushEmail = function ($raw) use (&$emails) {
     $email = strtolower(trim((string) $raw));
@@ -1370,6 +1389,7 @@ function pos_send_closing_alert($bid, $force = false) {
   $cfg = pos_alert_settings();
   if (!$force && !pos_alert_flag($cfg["alert_closing"])) return ["skipped" => true];
   $shop = pos_shop_alert_contacts($bid);
+  $shop["phones"] = pos_owner_report_phones($bid);
   if (!$shop["businessId"]) return ["skipped" => true];
   if (!$shop["phones"] && !$shop["emails"]) return ["skipped" => true, "reason" => "no-number"];
   $tzName = "Asia/Kolkata";

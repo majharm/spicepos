@@ -31,7 +31,7 @@ test("support ticket UI pins on shop and master pages", () => {
   assert.match(index, /app\.js\?v=20261120pl1/);
   assert.match(index, /pos\.css\?v=20261120tix1/);
   assert.match(master, /support\.js\?v=20261120tix1/);
-  assert.match(master, /master\.js\?v=20261120tix1/);
+  assert.match(master, /master\.js\?v=20261120own1/);
   assert.match(master, /pos\.css\?v=20261120tix1/);
   assert.match(master, /data-tab="tickets"/);
 });

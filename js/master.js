@@ -5195,14 +5195,14 @@ function automationDeskHtml(data, businesses) {
     )
     .join("");
   return `<div class="items-desk master-desk" id="automation-desk">
-    ${masterHero("Platform", "Automation", "Scheduled reports run from PHP. WhatsApp uses the connection already saved in Settings. Test mode sends WhatsApp only to the approved number.", [
+    ${masterHero("Platform", "Automation", "Scheduled reports run from PHP. WhatsApp uses the connection already saved in Settings. Each shop report goes only to that business owner's WhatsApp.", [
       { label: "Scheduled", value: counts.scheduled || jobs.length },
       { label: "Enabled", value: counts.enabled || 0 },
       { label: "Pending", value: counts.pending || 0 },
       { label: "Sent", value: counts.sent || 0 },
       { label: "Failed", value: counts.failed || 0 },
     ])}
-    <p class="section-note">Low stock every 30 minutes. Overdue reminders at 11:00 IST. Daily sales at 21:00 or the shop report time. Collections at 21:15 IST. Day-end at each shop's closing time. A report is queued only for shops that turned it on. Run now with a shop selected sends that one shop. ${data?.waHeld ? "WhatsApp is waiting: add a test number, or turn test mode off to message the shop owner." : "Test mode sends WhatsApp only to the test number."} Shops with a report on: ${Number(data?.shopsOn) || 0}.</p>
+    <p class="section-note">Low stock every 30 minutes. Overdue reminders at 11:00 IST. Daily sales at 21:00 or the shop report time. Collections at 21:15 IST. Day-end at each shop's closing time. A report is queued only for shops that turned it on. Run now with a shop selected sends that one shop. Shop reports go to the business owner's WhatsApp, not the platform number. Shops with a report on: ${Number(data?.shopsOn) || 0}.</p>
     <form id="auto-test-form" class="item-composer">
       <label><input type="checkbox" name="test_mode" ${data?.testMode !== false ? "checked" : ""} /> Test mode</label>
       <label>Test WhatsApp number <input name="test_number" value="${attr(data?.testNumber || "")}" placeholder="10-digit mobile" /></label>
@@ -5273,11 +5273,11 @@ function bindAutomationDesk() {
           method: "POST",
           body: JSON.stringify({ job: run.dataset.autoRun, business_id: biz }),
         });
-        if (out.scope === "test-number") {
+        if (out.scope === "owner") {
           say(
             out.sent
-              ? `Test WhatsApp sent to the saved test number. Sent ${out.sent}.`
-              : `Test WhatsApp was not delivered. ${out.lastError || "Sent 0."}`,
+              ? `WhatsApp sent to the business owner. Sent ${out.sent}.`
+              : `WhatsApp was not delivered to the business owner. ${out.lastError || "Sent 0."}`,
             out.sent ? "ok" : "error",
           );
         } else {

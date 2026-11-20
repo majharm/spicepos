@@ -1634,11 +1634,9 @@ async function businessAdminAlertContacts(businessId) {
     const n = normalizeInMobile(raw);
     if (n && !phones.includes(n)) phones.push(n);
   };
-  for (const row of admins) pushPhone(row.mobile);
-  if (!phones.length) {
-    pushPhone(biz?.mobile);
-    pushPhone(co?.phone);
-  }
+  pushPhone(biz?.mobile);
+  if (!phones.length) pushPhone(co?.phone);
+  if (!phones.length && admins[0]) pushPhone(admins[0].mobile);
   const emails = [];
   const pushEmail = (raw) => {
     const email = String(raw || "").trim().toLowerCase();
@@ -1756,10 +1754,34 @@ function hourInZone(timeZone) {
   return Number(hour);
 }
 
+function ownerReportPhones(biz, company) {
+  const phones = [];
+  const push = (raw) => {
+    const n = normalizeInMobile(raw);
+    if (n && !phones.includes(n)) phones.push(n);
+  };
+  push(biz?.mobile);
+  if (!phones.length) push(company?.phone);
+  return phones;
+}
+
 export async function sendClosingAlerts(businessId, { force = false } = {}) {
   const settings = await loadAlertSettings();
   if (!force && !flagOn(settings.alert_closing, true)) return { skipped: true };
   const shop = await shopContacts(businessId);
+  const [bizRow] = businessId
+    ? await query("SELECT mobile FROM businesses WHERE id = ? LIMIT 1", [businessId])
+    : [];
+  let companyPhone = {};
+  try {
+    const [coRow] = businessId
+      ? await query("SELECT phone FROM company_settings WHERE business_id = ? LIMIT 1", [businessId])
+      : [];
+    companyPhone = coRow || {};
+  } catch {
+    companyPhone = {};
+  }
+  shop.phones = ownerReportPhones(bizRow, companyPhone);
   if (!shop.businessId) return { skipped: true };
   if (!shop.phones.length && !shop.emails.length) return { skipped: true, reason: "no-number" };
   const hour = hourInZone(shop.timezone);

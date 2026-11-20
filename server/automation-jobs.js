@@ -264,8 +264,13 @@ export function withPending(summary, pending, supplierDue) {
   return { ...summary, pending: round2(pending), supplierDue: round2(supplierDue) };
 }
 
-export function deliverMobile({ mobile, optOut, testMode, testNumber, consent }) {
+export function deliverMobile({ mobile, optOut, testMode, testNumber, consent, audience = "customer" }) {
   if (optOut) return { skip: true, reason: "opt-out" };
+  if (audience === "owner") {
+    const owner = normalizeMobile(mobile);
+    if (!owner) return { skip: true, reason: "invalid-mobile" };
+    return { mobile: owner, test: false };
+  }
   if (consent === 0 || consent === false) return { skip: true, reason: "no-consent" };
   if (testMode) {
     const test = normalizeMobile(testNumber);
