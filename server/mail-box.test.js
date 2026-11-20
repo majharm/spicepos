@@ -126,7 +126,7 @@ test("each business configures its own mailbox and invoice email does not mark t
   assert.match(index, /id="set-mail-auto"/);
   assert.match(index, /id="business-email-test"/);
   assert.match(index, /id="cust-email"/);
-  assert.match(index, /app\.js\?v=20261119sup1/);
+  assert.match(index, /app\.js\?v=20261120tix1/);
   assert.match(app, /data-send-invoice-email/);
   assert.match(app, /Send Email/);
   assert.match(server, /business_id = \?/);

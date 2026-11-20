@@ -204,6 +204,21 @@
     return TICKET_CATEGORIES.find(([id]) => id === ticketCategory(key))?.[1] || "Other";
   }
 
+  function ticketPriorityLabel(key) {
+    return TICKET_PRIORITIES.find(([id]) => id === ticketPriority(key))?.[1] || "Normal";
+  }
+
+  function ticketMetaHtml(row, audience) {
+    const bits = [
+      `<span>${escapeHtml(ticketCategoryLabel(row.category))}</span>`,
+      `<span class="is-pri is-${escapeHtml(ticketPriority(row.priority))}">${escapeHtml(ticketPriorityLabel(row.priority))}</span>`,
+    ];
+    if (audience === "master" && row.shop_name) bits.push(`<span>${escapeHtml(row.shop_name)}</span>`);
+    const when = ticketWhen(row.updated_at || row.created_at);
+    if (when) bits.push(`<span>${escapeHtml(when)}</span>`);
+    return bits.join("");
+  }
+
   function ticketWhen(value) {
     const text = String(value || "");
     const match = text.match(/\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/);
@@ -218,11 +233,11 @@
 
   function ticketFormHtml() {
     return `<form class="support-ticket-form" id="support-ticket-form">
-      <label class="wide">Subject<input name="subject" maxlength="180" required placeholder="What do you need help with?" /></label>
+      <label class="wide">Subject<input name="subject" maxlength="180" required placeholder="Short summary" /></label>
       <label>Category<select name="category">${ticketOptions(TICKET_CATEGORIES, "other")}</select></label>
       <label>Priority<select name="priority">${ticketOptions(TICKET_PRIORITIES, "normal")}</select></label>
-      <label class="wide">Message<textarea name="body" rows="4" maxlength="2000" required placeholder="What happened, and what should support do?"></textarea></label>
-      <div class="wide"><button class="btn primary" type="submit">Send to support</button> <span class="hint" id="support-ticket-hint"></span></div>
+      <label class="wide">What happened<textarea name="body" rows="4" maxlength="2000" required placeholder="What you were doing, and the message on screen"></textarea></label>
+      <div class="support-ticket-actions wide"><button class="btn primary" type="submit">Send to support</button><span class="hint" id="support-ticket-hint"></span></div>
     </form>`;
   }
 
@@ -230,17 +245,17 @@
     const audience = opts?.audience === "master" ? "master" : "shop";
     const rows = Array.isArray(tickets) ? tickets : [];
     if (!rows.length) {
-      return `<p class="support-empty">${audience === "master" ? "No tickets yet." : "No tickets yet. Send one and the support team will see it here."}</p>`;
+      return `<p class="support-empty">${audience === "master" ? "No tickets in this list." : "No tickets yet. Send one and the support team will see it here."}</p>`;
     }
     return `<div class="support-ticket-list">${rows
       .map((row) => {
-        const shop = audience === "master" && row.shop_name ? `<span>${escapeHtml(row.shop_name)}</span>` : "";
-        return `<button type="button" class="support-ticket-row" data-ticket-open="${escapeHtml(row.id)}">
-          <strong>${escapeHtml(row.subject || "Ticket")}</strong>
-          <span>${escapeHtml(ticketCategoryLabel(row.category))}</span>
-          <span class="support-pill is-${escapeHtml(ticketStatus(row.status) || "open")}">${escapeHtml(ticketStatusLabel(row.status, audience))}</span>
-          ${shop}
-          <em>${escapeHtml(ticketWhen(row.updated_at || row.created_at))}</em>
+        const status = ticketStatus(row.status) || "open";
+        return `<button type="button" class="support-ticket-row is-${escapeHtml(ticketPriority(row.priority))}" data-ticket-open="${escapeHtml(row.id)}">
+          <span class="support-ticket-copy">
+            <strong>${escapeHtml(row.subject || "Ticket")}</strong>
+            <span class="support-ticket-meta">${ticketMetaHtml(row, audience)}</span>
+          </span>
+          <span class="support-pill is-${escapeHtml(status)}">${escapeHtml(ticketStatusLabel(row.status, audience))}</span>
         </button>`;
       })
       .join("")}</div>`;
@@ -262,43 +277,58 @@
       audience === "master"
         ? `<form class="support-ticket-form" id="master-ticket-reply">
             <label class="wide">Reply<textarea name="body" rows="3" maxlength="2000" required></textarea></label>
-            <label>Status<select name="status">${ticketOptions(
-              [
-                ["pending", "Waiting on shop"],
-                ["resolved", "Resolved"],
-                ["open", "Open"],
-              ],
-              status === "resolved" ? "resolved" : "pending",
-            )}</select></label>
-            <div class="wide"><button class="btn primary" type="submit">Send reply</button> <span class="hint" id="master-ticket-hint"></span></div>
+            <div class="support-ticket-actions wide">
+              <label>Status<select name="status">${ticketOptions(
+                [
+                  ["pending", "Waiting on shop"],
+                  ["resolved", "Resolved"],
+                  ["open", "Open"],
+                ],
+                status === "resolved" ? "resolved" : "pending",
+              )}</select></label>
+              <button class="btn primary" type="submit">Send reply</button>
+              <span class="hint" id="master-ticket-hint"></span>
+            </div>
           </form>`
         : `<form class="support-ticket-form" id="support-ticket-reply">
             <label class="wide">Reply<textarea name="body" rows="3" maxlength="2000" required placeholder="Add what the support team should know"></textarea></label>
-            <div class="wide"><button class="btn primary" type="submit">Send reply</button> <span class="hint" id="support-ticket-hint"></span></div>
+            <div class="support-ticket-actions wide"><button class="btn primary" type="submit">Send reply</button><span class="hint" id="support-ticket-hint"></span></div>
           </form>`;
-    const shop = audience === "master" && ticket?.shop_name ? `<p class="support-panel-note">${escapeHtml(ticket.shop_name)}</p>` : "";
     return `<div class="support-thread">
       <div class="support-thread-head">
         <button type="button" class="btn ghost" data-ticket-back>All tickets</button>
-        <h3>${escapeHtml(ticket?.subject || "Ticket")}</h3>
+        <div class="support-thread-title">
+          <h3>${escapeHtml(ticket?.subject || "Ticket")}</h3>
+          <p class="support-ticket-meta">${ticketMetaHtml(ticket || {}, audience)}</p>
+        </div>
         <span class="support-pill is-${escapeHtml(status)}">${escapeHtml(ticketStatusLabel(status, audience))}</span>
       </div>
-      ${shop}
-      <div class="support-replies">${messages}</div>
+      <div class="support-replies">${messages || `<p class="support-empty">No messages yet.</p>`}</div>
       ${reply}
     </div>`;
   }
 
   function ticketDeskHtml(tickets, detail, error) {
-    const thread = detail?.ticket
-      ? ticketThreadHtml(detail.ticket, detail.replies, { audience: "shop" })
-      : `${ticketFormHtml()}${ticketListHtml(tickets, { audience: "shop" })}`;
     const problem = error ? `<p class="hint error">${escapeHtml(error)}</p>` : "";
+    const body = detail?.ticket
+      ? ticketThreadHtml(detail.ticket, detail.replies, { audience: "shop" })
+      : `<div class="support-ticket-split">
+          <article class="support-panel">
+            <h3>New ticket</h3>
+            <p class="support-panel-note">This goes to the ATAV support team. Use the helpline above if the counter is down.</p>
+            ${ticketFormHtml()}
+          </article>
+          <article class="support-panel">
+            <h3>Your tickets</h3>
+            <p class="support-panel-note">Open a ticket to read the reply and add more.</p>
+            ${problem}
+            ${ticketListHtml(tickets, { audience: "shop" })}
+          </article>
+        </div>`;
     return `<section class="support-tickets">
       <h3>Tickets to ATAV support</h3>
-      <p class="support-panel-note">This ticket goes to the master admin support team. Use the helpline above if the counter is down.</p>
-      ${problem}
-      ${thread}
+      ${detail?.ticket ? problem : ""}
+      ${body}
     </section>`;
   }
 

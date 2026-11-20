@@ -2282,7 +2282,7 @@ async function renderMasterTickets(body) {
   ];
   const filterHtml = detail
     ? ""
-    : `<div class="support-ticket-tools">${filters
+    : `<div class="support-ticket-filters">${filters
         .map(
           ([key, label]) =>
             `<button type="button" class="btn${supportTicketStatus === key ? " primary" : ""}" data-ticket-filter="${attr(key)}">${label}</button>`,
@@ -2290,7 +2290,7 @@ async function renderMasterTickets(body) {
         .join("")}</div>`;
   const inner = detail
     ? S.ticketThreadHtml(detail.ticket, detail.replies, { audience: "master" })
-    : `${filterHtml}${S.ticketListHtml(tickets, { audience: "master" })}`;
+    : `${filterHtml}<article class="support-panel"><h3>Inbox</h3><p class="support-panel-note">Newest first. Open a ticket to reply to the shop.</p>${S.ticketListHtml(tickets, { audience: "master" })}</article>`;
   const openCount = detail ? 0 : tickets.filter((row) => (row.status || "open") === "open").length;
   const stats = detail
     ? []
@@ -2326,7 +2326,9 @@ async function renderMasterTickets(body) {
     event.preventDefault();
     const form = event.currentTarget;
     const hint = document.getElementById("master-ticket-hint");
+    const button = form.querySelector("button[type=submit]");
     const payload = Object.fromEntries(new FormData(form).entries());
+    if (button) button.disabled = true;
     try {
       await api(`/api/master/support-tickets/${encodeURIComponent(supportTicketId)}/reply`, {
         method: "POST",
@@ -2339,6 +2341,7 @@ async function renderMasterTickets(body) {
       }
       render();
     } catch (err) {
+      if (button) button.disabled = false;
       if (hint) {
         hint.textContent = err.message;
         hint.className = "hint error";

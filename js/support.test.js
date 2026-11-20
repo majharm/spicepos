@@ -68,8 +68,13 @@ test("support ticket desk html", () => {
   assert.match(list, /Billing issue/);
   const desk = S.ticketDeskHtml([], null);
   assert.match(desk, /Tickets to ATAV support/);
+  assert.match(desk, /support-ticket-split/);
+  assert.match(desk, /New ticket/);
+  assert.match(desk, /Your tickets/);
   assert.match(desk, /support-ticket-form/);
   assert.match(desk, /class="btn primary"/);
+  assert.match(list, /support-ticket-meta/);
+  assert.match(list, /With support/);
   assert.doesNotMatch(desk, /btn-primary/);
   const failed = S.ticketDeskHtml([], null, "Could not load tickets");
   assert.match(failed, /Could not load tickets/);

@@ -9105,7 +9105,9 @@ async function submitSupportTicket(event, mode) {
   event.preventDefault();
   const form = event.currentTarget;
   const hint = form.querySelector(".hint");
+  const button = form.querySelector("button[type=submit]");
   const body = Object.fromEntries(new FormData(form).entries());
+  if (button) button.disabled = true;
   try {
     if (mode === "reply") {
       await api(`/api/support/tickets/${encodeURIComponent(supportTicketId)}/reply`, {
@@ -9118,6 +9120,7 @@ async function submitSupportTicket(event, mode) {
     }
     renderSupport();
   } catch (err) {
+    if (button) button.disabled = false;
     if (hint) hint.textContent = err.message || "Could not send";
   }
 }
