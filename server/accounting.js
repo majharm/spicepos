@@ -135,7 +135,7 @@ export async function postJournal(conn, opts) {
       journalId,
       businessId,
       voucherNo,
-      opts.voucherDate ? isoDate(opts.voucherDate) : new Date().toISOString().slice(0, 10),
+      isoDate(opts.voucherDate),
       opts.voucherType || "journal",
       opts.narration || null,
       opts.referenceType || null,
@@ -337,17 +337,43 @@ export async function replaceLedgerJournal(conn, { kind, amount, payment_method,
   return postReceiptJournal(conn, { amount, payment_method, entryNo, ledgerId });
 }
 
+function journalEventJoins() {
+  return `
+    LEFT JOIN sales_orders so ON j.reference_type = 'sales_order' AND so.id = j.reference_id AND so.business_id = j.business_id
+    LEFT JOIN purchases pu ON j.reference_type = 'purchase' AND pu.id = j.reference_id AND pu.business_id = j.business_id
+    LEFT JOIN expenses ex ON j.reference_type = 'expense' AND ex.id = j.reference_id AND ex.business_id = j.business_id`;
+}
+
+/** Bill, purchase, or expense date. Falls back to the voucher date for manual journals. */
+export function journalEventDateSql() {
+  return `CASE
+    WHEN j.reference_type = 'sales_order' AND so.created_at IS NOT NULL THEN DATE(so.created_at)
+    WHEN j.reference_type = 'purchase' AND pu.purchase_date IS NOT NULL THEN DATE(pu.purchase_date)
+    WHEN j.reference_type = 'expense' AND ex.expense_date IS NOT NULL THEN DATE(ex.expense_date)
+    ELSE j.voucher_date
+  END`;
+}
+
+function journalInForceSql() {
+  return `(j.reference_type <> 'sales_order' OR so.id IS NULL OR LOWER(COALESCE(so.status,'')) NOT IN ('cancelled','void'))`;
+}
+
 async function linesForPeriod(from, to, businessId = bid()) {
   const span = normalizeRange(from, to);
+  const eventDate = journalEventDateSql();
   return query(
     `SELECT a.code, a.name, a.account_group,
-            COALESCE(SUM(CASE WHEN j.id IS NULL THEN 0 ELSE l.debit END),0) AS debit,
-            COALESCE(SUM(CASE WHEN j.id IS NULL THEN 0 ELSE l.credit END),0) AS credit
+            COALESCE(SUM(x.debit),0) AS debit,
+            COALESCE(SUM(x.credit),0) AS credit
      FROM chart_of_accounts a
-     LEFT JOIN journal_lines l ON l.account_id = a.id AND l.business_id = a.business_id
-     LEFT JOIN journal_entries j ON j.id = l.journal_id
-       AND j.business_id = a.business_id
-       AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
+     LEFT JOIN (
+       SELECT l.account_id, l.business_id, l.debit, l.credit
+       FROM journal_lines l
+       JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+       ${journalEventJoins()}
+       WHERE ${eventDate} >= ? AND ${eventDate} < DATE_ADD(?, INTERVAL 1 DAY)
+         AND ${journalInForceSql()}
+     ) x ON x.account_id = a.id AND x.business_id = a.business_id
      WHERE a.business_id = ? AND a.active = 1
      GROUP BY a.id, a.code, a.name, a.account_group
      ORDER BY a.code`,
@@ -451,24 +477,28 @@ export async function cashBook(from, to, businessId = bid(), book = "all") {
   const codes = cashBookCodes(book);
   const bookKey = CASH_BOOKS[String(book || "all").trim().toLowerCase()] ? String(book || "all").trim().toLowerCase() : "all";
   const ph = codes.map(() => "?").join(",");
+  const eventDate = journalEventDateSql();
   const openingRows = await query(
     `SELECT COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0) AS opening
      FROM journal_lines l
      JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+     ${journalEventJoins()}
      JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
-     WHERE l.business_id = ? AND j.voucher_date < ? AND a.code IN (${ph})`,
+     WHERE l.business_id = ? AND ${eventDate} < ? AND ${journalInForceSql()} AND a.code IN (${ph})`,
     [businessId, span.from, ...codes],
   );
   const opening = round2(openingRows[0]?.opening);
   const rows = await query(
-    `SELECT j.voucher_no, j.voucher_date, j.voucher_type, j.narration,
+    `SELECT j.voucher_no, ${eventDate} AS voucher_date, j.voucher_type, j.narration,
             a.code, a.name, l.debit, l.credit
      FROM journal_lines l
      JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+     ${journalEventJoins()}
      JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
-     WHERE l.business_id = ? AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
+     WHERE l.business_id = ? AND ${eventDate} >= ? AND ${eventDate} < DATE_ADD(?, INTERVAL 1 DAY)
+       AND ${journalInForceSql()}
        AND a.code IN (${ph})
-     ORDER BY j.voucher_date, j.voucher_no, a.code`,
+     ORDER BY ${eventDate}, j.voucher_no, a.code`,
     [businessId, span.from, span.to, ...codes],
   );
   let balance = opening;

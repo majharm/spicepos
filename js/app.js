@@ -12827,6 +12827,14 @@ async function loadSuppliers() {
 
 let accTab = "receivables";
 
+function accountPeriodCaption(from, to) {
+  const start = formatShopDate(from) || String(from || "");
+  const end = formatShopDate(to) || String(to || "");
+  if (!start) return end;
+  if (!end || start === end) return start;
+  return `${start} – ${end}`;
+}
+
 function accPeriod() {
   if (!$("acc-from")?.value || !$("acc-to")?.value) applyFyRange("acc-from", "acc-to", "acc-asof", "acc-fy-year");
   else fillFyYearSelect("acc-fy-year", indianFinancialYear($("acc-from").value || ymd()).startYear);
@@ -13010,15 +13018,21 @@ async function loadAccountsTab(name) {
   }
   if (name === "profit-loss") {
     const data = await api(`/api/accounts/profit-loss?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-    $("acc-pl-table").innerHTML = `<div class="report-grid">
+    const when = accountPeriodCaption(data.from || from, data.to || to);
+    const incomeRows = data.incomeRows || [];
+    const expenseRows = data.expenseRows || [];
+    const empty = !incomeRows.length && !expenseRows.length
+      ? `<p class="hint">No income or expense on ${escapeHtml(when)}.</p>`
+      : "";
+    $("acc-pl-table").innerHTML = `<p class="hint">For ${escapeHtml(when)}. Bills, purchases, and expenses are included by their own date.</p><div class="report-grid">
       <div class="report-card"><span>Income</span><strong>${money(data.income)}</strong></div>
       <div class="report-card"><span>Expense</span><strong>${money(data.expense)}</strong></div>
       <div class="report-card"><span>Net profit</span><strong>${money(data.netProfit)}</strong></div>
-    </div><table><thead><tr><th colspan="2">Income</th></tr></thead><tbody>${(data.incomeRows || [])
+    </div>${empty}<table><thead><tr><th colspan="2">Income</th></tr></thead><tbody>${incomeRows
       .map((r) => `<tr><td>${escapeHtml(r.code)} ${escapeHtml(r.name)}</td><td>${money(r.amount)}</td></tr>`)
-      .join("")}</tbody><thead><tr><th colspan="2">Expenses</th></tr></thead><tbody>${(data.expenseRows || [])
+      .join("") || `<tr><td colspan="2">None</td></tr>`}</tbody><thead><tr><th colspan="2">Expenses</th></tr></thead><tbody>${expenseRows
       .map((r) => `<tr><td>${escapeHtml(r.code)} ${escapeHtml(r.name)}</td><td>${money(r.amount)}</td></tr>`)
-      .join("")}</tbody></table>`;
+      .join("") || `<tr><td colspan="2">None</td></tr>`}</tbody></table>`;
   }
   if (name === "balance-sheet") {
     const data = await api(`/api/accounts/balance-sheet?asOf=${encodeURIComponent(asOf)}`);
@@ -16504,9 +16518,11 @@ async function reloadAccountsFromDates() {
   }
 }
 $("acc-from")?.addEventListener("change", () => {
+  if ($("acc-asof") && $("acc-to")?.value) $("acc-asof").value = $("acc-to").value;
   reloadAccountsFromDates();
 });
 $("acc-to")?.addEventListener("change", () => {
+  if ($("acc-asof") && $("acc-to")?.value) $("acc-asof").value = $("acc-to").value;
   reloadAccountsFromDates();
 });
 $("acc-asof")?.addEventListener("change", () => {

@@ -302,17 +302,44 @@ function pos_replace_ledger_journal($bid, $uid, $kind, $amount, $method, $entryN
   return pos_post_receipt_journal($bid, $uid, $amount, $method, $entryNo, $ledgerId);
 }
 
+function pos_journal_event_joins() {
+  return "LEFT JOIN sales_orders so ON j.reference_type = 'sales_order' AND so.id = j.reference_id AND so.business_id = j.business_id
+    LEFT JOIN purchases pu ON j.reference_type = 'purchase' AND pu.id = j.reference_id AND pu.business_id = j.business_id
+    LEFT JOIN expenses ex ON j.reference_type = 'expense' AND ex.id = j.reference_id AND ex.business_id = j.business_id";
+}
+
+function pos_journal_event_date_sql() {
+  return "CASE
+    WHEN j.reference_type = 'sales_order' AND so.created_at IS NOT NULL THEN DATE(so.created_at)
+    WHEN j.reference_type = 'purchase' AND pu.purchase_date IS NOT NULL THEN DATE(pu.purchase_date)
+    WHEN j.reference_type = 'expense' AND ex.expense_date IS NOT NULL THEN DATE(ex.expense_date)
+    ELSE j.voucher_date
+  END";
+}
+
+function pos_journal_in_force_sql() {
+  return "(j.reference_type <> 'sales_order' OR so.id IS NULL OR LOWER(COALESCE(so.status,'')) NOT IN ('cancelled','void'))";
+}
+
 function pos_lines_for_period($bid, $from, $to) {
   pos_ensure_coa($bid);
   [$start, $end] = pos_normalize_range($from, $to);
+  $eventDate = pos_journal_event_date_sql();
+  $joins = pos_journal_event_joins();
+  $inForce = pos_journal_in_force_sql();
   return pos_q(
     "SELECT a.code, a.name, a.account_group,
-            COALESCE(SUM(CASE WHEN j.id IS NULL THEN 0 ELSE l.debit END),0) AS debit,
-            COALESCE(SUM(CASE WHEN j.id IS NULL THEN 0 ELSE l.credit END),0) AS credit
+            COALESCE(SUM(x.debit),0) AS debit,
+            COALESCE(SUM(x.credit),0) AS credit
      FROM chart_of_accounts a
-     LEFT JOIN journal_lines l ON l.account_id = a.id AND l.business_id = a.business_id
-     LEFT JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = a.business_id
-       AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
+     LEFT JOIN (
+       SELECT l.account_id, l.business_id, l.debit, l.credit
+       FROM journal_lines l
+       JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+       $joins
+       WHERE $eventDate >= ? AND $eventDate < DATE_ADD(?, INTERVAL 1 DAY)
+         AND $inForce
+     ) x ON x.account_id = a.id AND x.business_id = a.business_id
      WHERE a.business_id = ? AND a.active = 1
      GROUP BY a.id, a.code, a.name, a.account_group
      ORDER BY a.code",
@@ -834,24 +861,30 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       ? strtolower(trim((string) $_GET["book"]))
       : "all";
     $ph = implode(",", array_fill(0, count($codes), "?"));
+    $eventDate = pos_journal_event_date_sql();
+    $joins = pos_journal_event_joins();
+    $inForce = pos_journal_in_force_sql();
     $openingRows = pos_q(
       "SELECT COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0) AS opening
        FROM journal_lines l
        JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+       $joins
        JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
-       WHERE l.business_id = ? AND j.voucher_date < ? AND a.code IN ($ph)",
+       WHERE l.business_id = ? AND $eventDate < ? AND $inForce AND a.code IN ($ph)",
       "ss" . str_repeat("s", count($codes)),
       array_merge([$bid, $from], $codes)
     );
     $opening = pos_round2($openingRows[0]["opening"] ?? 0);
     $rows = pos_q(
-      "SELECT j.voucher_no, j.voucher_date, j.voucher_type, j.narration, a.code, a.name, l.debit, l.credit
+      "SELECT j.voucher_no, $eventDate AS voucher_date, j.voucher_type, j.narration, a.code, a.name, l.debit, l.credit
        FROM journal_lines l
        JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+       $joins
        JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
-       WHERE l.business_id = ? AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
+       WHERE l.business_id = ? AND $eventDate >= ? AND $eventDate < DATE_ADD(?, INTERVAL 1 DAY)
+         AND $inForce
          AND a.code IN ($ph)
-       ORDER BY j.voucher_date, j.voucher_no, a.code",
+       ORDER BY voucher_date, j.voucher_no, a.code",
       "sss" . str_repeat("s", count($codes)),
       array_merge([$bid, $from, $to], $codes)
     );

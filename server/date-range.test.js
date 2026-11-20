@@ -18,8 +18,9 @@ test("shop presets and reversed ranges stay on the Kolkata calendar", () => {
 test("account statements ignore vouchers outside the selected dates", () => {
   for (const rel of ["server/accounting.js", "pos-accounting.php"]) {
     const src = read(rel);
-    assert.match(src, /CASE WHEN j\.id IS NULL THEN 0 ELSE l\.debit END/, rel);
-    assert.match(src, /voucher_date >= \? AND j\.voucher_date < DATE_ADD\(\?, INTERVAL 1 DAY\)/, rel);
+    assert.match(src, /DATE\(so\.created_at\)/, rel);
+    assert.match(src, /pu\.purchase_date/, rel);
+    assert.match(src, /ex\.expense_date/, rel);
     assert.match(src, /openingBalance|opening/, rel);
   }
   assert.deepEqual(cashBookCodes("cash"), ["1001"]);
