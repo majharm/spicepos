@@ -23,8 +23,10 @@ import {
   trialBalance,
   buildPartyLedger,
   partyLedgerSignedAmount,
+  partyLedgerSides,
 } from "./accounting.js";
 import { fyRangeForToday } from "./fy.js";
+import { normalizeRange } from "./date-range.js";
 import { createdBetween, ledgerEventBetween, ledgerEventBeforeDay, ledgerEventOrderAsc, saleNotVoidSql } from "./sql-time.js";
 
 function payMoney(raw) {
@@ -963,24 +965,40 @@ export function registerAccounts(app) {
 
   app.get("/api/accounts/ledger", requirePerm("accounts"), async (req, res) => {
     try {
-      const from = req.query.from || new Date().toISOString().slice(0, 10);
-      const to = req.query.to || from;
+      const span = normalizeRange(req.query.from, req.query.to);
       const partyType = String(req.query.party_type || "").trim().toLowerCase();
       const partyId = String(req.query.party_id || "").trim();
-      const filters = ["business_id = ?", createdBetween()];
-      const params = [bid(), from, to];
+      const filters = ["business_id = ?", ledgerEventBetween()];
+      const params = [bid(), span.from, span.to];
+      const priorFilters = ["business_id = ?", ledgerEventBeforeDay()];
+      const priorParams = [bid(), span.from];
       if ((partyType === "customer" || partyType === "supplier") && partyId) {
         filters.push("party_type = ?", "party_id = ?");
+        priorFilters.push("party_type = ?", "party_id = ?");
         params.push(partyType, partyId);
+        priorParams.push(partyType, partyId);
       }
+      const prior = await query(
+        `SELECT entry_type, amount FROM account_ledger WHERE ${priorFilters.join(" AND ")}`,
+        priorParams,
+      );
+      const opening = round2(
+        prior.reduce((sum, row) => sum + partyLedgerSignedAmount(row.entry_type, row.amount), 0),
+      );
       const rows = await query(
         `SELECT * FROM account_ledger
          WHERE ${filters.join(" AND ")}
-         ORDER BY created_at DESC, entry_no DESC
-         LIMIT 500`,
+         ORDER BY ${ledgerEventOrderAsc()}
+         LIMIT 5000`,
         params,
       );
-      res.json(rows);
+      let balance = opening;
+      const mapped = rows.map((row) => {
+        const sides = partyLedgerSides(row.entry_type, row.amount);
+        balance = round2(balance + partyLedgerSignedAmount(row.entry_type, row.amount));
+        return { ...row, debit: sides.debit, credit: sides.credit, balance };
+      });
+      res.json({ rows: mapped, opening, closing: balance, from: span.from, to: span.to });
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }
@@ -998,8 +1016,9 @@ export function registerAccounts(app) {
         res.status(400).json({ error: "party_id is required" });
         return;
       }
-      const from = req.query.from || new Date().toISOString().slice(0, 10);
-      const to = req.query.to || from;
+      const span = normalizeRange(req.query.from, req.query.to);
+      const from = span.from;
+      const to = span.to;
       const prior = await query(
         `SELECT entry_type, amount FROM account_ledger
          WHERE business_id = ? AND party_type = ? AND party_id = ? AND ${ledgerEventBeforeDay()}`,
@@ -1525,9 +1544,8 @@ export function registerAccounts(app) {
 
   app.get("/api/accounts/trial-balance", requirePerm("accounts"), async (req, res) => {
     try {
-      const from = String(req.query.from || new Date().toISOString().slice(0, 10));
-      const to = String(req.query.to || from);
-      res.json(await trialBalance(from, to));
+      const span = normalizeRange(req.query.from, req.query.to);
+      res.json(await trialBalance(span.from, span.to));
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }
@@ -1535,9 +1553,8 @@ export function registerAccounts(app) {
 
   app.get("/api/accounts/profit-loss", requirePerm("accounts"), async (req, res) => {
     try {
-      const from = String(req.query.from || new Date().toISOString().slice(0, 10));
-      const to = String(req.query.to || from);
-      res.json(await profitAndLoss(from, to));
+      const span = normalizeRange(req.query.from, req.query.to);
+      res.json(await profitAndLoss(span.from, span.to));
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }
@@ -1545,7 +1562,7 @@ export function registerAccounts(app) {
 
   app.get("/api/accounts/balance-sheet", requirePerm("accounts"), async (req, res) => {
     try {
-      const asOf = String(req.query.asOf || new Date().toISOString().slice(0, 10));
+      const asOf = normalizeRange(req.query.asOf, req.query.asOf).to;
       res.json(await balanceSheet(asOf));
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
@@ -1554,9 +1571,8 @@ export function registerAccounts(app) {
 
   app.get("/api/accounts/cash-book", requirePerm("accounts"), async (req, res) => {
     try {
-      const from = String(req.query.from || new Date().toISOString().slice(0, 10));
-      const to = String(req.query.to || from);
-      res.json(await cashBook(from, to));
+      const span = normalizeRange(req.query.from, req.query.to);
+      res.json(await cashBook(span.from, span.to, undefined, req.query.book));
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
     }
@@ -1564,18 +1580,17 @@ export function registerAccounts(app) {
 
   app.get("/api/accounts/journal", requirePerm("accounts"), async (req, res) => {
     try {
-      const from = req.query.from || new Date().toISOString().slice(0, 10);
-      const to = req.query.to || from;
+      const span = normalizeRange(req.query.from, req.query.to);
       const rows = await query(
         `SELECT j.*, GROUP_CONCAT(CONCAT(a.code, ':', l.debit, '/', l.credit) SEPARATOR ' | ') AS \`lines\`
          FROM journal_entries j
          LEFT JOIN journal_lines l ON l.journal_id = j.id
          LEFT JOIN chart_of_accounts a ON a.id = l.account_id
-         WHERE j.business_id = ? AND j.voucher_date BETWEEN ? AND ?
+         WHERE j.business_id = ? AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
          GROUP BY j.id
          ORDER BY j.voucher_date DESC, j.voucher_no DESC
          LIMIT 300`,
-        [bid(), from, to],
+        [bid(), span.from, span.to],
       );
       res.json(rows);
     } catch (err) {
@@ -1585,15 +1600,14 @@ export function registerAccounts(app) {
 
   app.get("/api/expenses", requirePerm("accounts"), async (req, res) => {
     const fy = fyRangeForToday();
-    const from = String(req.query.from || fy.from);
-    const to = String(req.query.to || fy.to);
+    const span = normalizeRange(req.query.from || fy.from, req.query.to || fy.to);
     try {
       const rows = await query(
         `SELECT * FROM expenses
-         WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+         WHERE business_id = ? AND expense_date >= ? AND expense_date < DATE_ADD(?, INTERVAL 1 DAY)
          ORDER BY expense_date DESC, created_at DESC
          LIMIT 200`,
-        [bid(), from, to],
+        [bid(), span.from, span.to],
       );
       res.json(rows);
     } catch (err) {
@@ -1634,7 +1648,7 @@ export function registerAccounts(app) {
             id,
             bid(),
             expenseNumber,
-            expense_date || new Date().toISOString().slice(0, 10),
+            expense_date || normalizeRange().from,
             String(category || cat.name),
             cat.code,
             amt,

@@ -1,11 +1,13 @@
 /** Indian financial year: 1 April – 31 March. */
 
+import { shopToday } from "./date-range.js";
+
 export function indianFinancialYear(ymd) {
-  const s = String(ymd || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const today = shopToday();
+  const s = String(ymd || today).slice(0, 10);
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const now = new Date();
-  const year = m ? Number(m[1]) : now.getUTCFullYear();
-  const month = m ? Number(m[2]) : now.getUTCMonth() + 1;
+  const year = m ? Number(m[1]) : Number(today.slice(0, 4));
+  const month = m ? Number(m[2]) : Number(today.slice(5, 7));
   const startYear = month >= 4 ? year : year - 1;
   const endYear = startYear + 1;
   return {
@@ -17,7 +19,7 @@ export function indianFinancialYear(ymd) {
 }
 
 export function fyRangeForToday(todayYmd) {
-  const today = String(todayYmd || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const today = String(todayYmd || shopToday()).slice(0, 10);
   const fy = indianFinancialYear(today);
   const asOf = today < fy.from ? fy.from : today > fy.to ? fy.to : today;
   return {

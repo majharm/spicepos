@@ -433,21 +433,16 @@
     home?.querySelectorAll("[data-m-range]").forEach((btn) => btn.classList.toggle("is-on", btn.dataset.mRange === kind));
     const from = $("rep-from");
     const to = $("rep-to");
-    const today = typeof root.ymd === "function" ? root.ymd() : new Date().toISOString().slice(0, 10);
+    const today = typeof root.ymd === "function" ? root.ymd() : root.POSDateRange?.shopToday?.() || new Date().toISOString().slice(0, 10);
     if (from && to) {
-      if (kind === "today") {
-        from.value = today;
-        to.value = today;
-      } else if (kind === "yesterday" || kind === "week") {
-        const range = root.POSOfferProfit?.presetRange?.(kind, today);
-        from.value = range?.from || today;
-        to.value = range?.to || today;
-      } else if (kind === "month") {
-        const d = new Date(`${today}T00:00:00`);
-        from.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-        to.value = today;
-      } else if (kind === "fy") {
+      if (kind === "fy") {
         $("rep-this-fy")?.click();
+      } else {
+        const range = root.POSDateRange?.presetRange?.(kind, today) || root.POSOfferProfit?.presetRange?.(kind, today);
+        if (range?.from) {
+          from.value = range.from;
+          to.value = range.to || range.from;
+        }
       }
     }
     if ($("report-form") && typeof $("report-form").requestSubmit === "function") $("report-form").requestSubmit();

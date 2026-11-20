@@ -2454,6 +2454,7 @@ const ACC_REPORT_TITLES = {
   "profit-loss": "Profit & loss",
   "balance-sheet": "Balance sheet",
   "cash-book": "Cash book",
+  "bank-book": "Bank book",
 };
 
 function shopPrintName() {
@@ -10309,23 +10310,41 @@ function offerProfitQuery() {
   return params.toString();
 }
 
-function syncReportPresetChips() {
-  const from = $("rep-from")?.value || "";
-  const to = $("rep-to")?.value || "";
-  const today = ymd();
-  const presets = globalThis.POSOfferProfit;
-  let on = "custom";
-  if (presets && today) {
-    for (const key of ["today", "yesterday", "week", "month"]) {
-      const range = presets.presetRange(key, today);
-      if (range.from === from && range.to === to) on = key;
-    }
-  }
-  document.querySelectorAll("#rep-range-chips [data-rep-preset]").forEach((btn) => {
-    const active = btn.dataset.repPreset === on;
+function alignDateInputs(fromId, toId) {
+  const api = globalThis.POSDateRange;
+  const from = $(fromId);
+  const to = $(toId);
+  if (!api || !from?.value || !to?.value) return;
+  const span = api.normalizeRange(from.value, to.value, ymd());
+  from.value = span.from;
+  to.value = span.to;
+}
+
+function syncPresetChips(boxId, attr, fromId, toId) {
+  const api = globalThis.POSDateRange;
+  const on = api ? api.matchingPreset($(fromId)?.value, $(toId)?.value, ymd()) : "custom";
+  document.querySelectorAll(`#${boxId} [${attr}]`).forEach((btn) => {
+    const active = btn.getAttribute(attr) === on;
     btn.classList.toggle("is-on", active);
     btn.setAttribute("aria-pressed", active ? "true" : "false");
   });
+}
+
+function syncReportPresetChips() {
+  syncPresetChips("rep-range-chips", "data-rep-preset", "rep-from", "rep-to");
+}
+
+async function applyDatePreset(preset, fromId, toId, extraId) {
+  if (!preset || preset === "custom") {
+    $(fromId)?.focus();
+    return false;
+  }
+  const range = globalThis.POSDateRange?.presetRange(preset, ymd());
+  if (!range?.from) return false;
+  if ($(fromId)) $(fromId).value = range.from;
+  if ($(toId)) $(toId).value = range.to;
+  if (extraId && $(extraId)) $(extraId).value = range.to;
+  return true;
 }
 
 let fillingOfferFilters = false;
@@ -10367,6 +10386,8 @@ function fillOfferProfitFilters(report) {
 async function loadReports() {
   if (!$("rep-from").value || !$("rep-to").value) applyFyRange("rep-from", "rep-to", null, "rep-fy-year");
   else fillFyYearSelect("rep-fy-year", indianFinancialYear($("rep-from").value || ymd()).startYear);
+  alignDateInputs("rep-from", "rep-to");
+  syncReportPresetChips();
   const from = $("rep-from").value;
   const to = $("rep-to").value;
   $("rep-excel-all").href = excelHref();
@@ -10824,8 +10845,9 @@ async function attachMissingOrderPayments(orders) {
   if (!missing.length) return list;
   try {
     const to = shopDateInputValue();
-    const rows = await api(`/api/accounts/ledger?from=2015-01-01&to=${encodeURIComponent(to)}`);
-    const receipts = (Array.isArray(rows) ? rows : []).filter(
+    const pack = await api(`/api/accounts/ledger?from=2015-01-01&to=${encodeURIComponent(to)}`);
+    const rows = Array.isArray(pack) ? pack : pack?.rows || [];
+    const receipts = rows.filter(
       (r) => String(r.entry_type || "").toLowerCase() === "receipt",
     );
     const by = new Map();
@@ -12808,7 +12830,9 @@ let accTab = "receivables";
 function accPeriod() {
   if (!$("acc-from")?.value || !$("acc-to")?.value) applyFyRange("acc-from", "acc-to", "acc-asof", "acc-fy-year");
   else fillFyYearSelect("acc-fy-year", indianFinancialYear($("acc-from").value || ymd()).startYear);
+  alignDateInputs("acc-from", "acc-to");
   if (!$("acc-asof")?.value) $("acc-asof").value = $("acc-to").value;
+  syncPresetChips("acc-range-chips", "data-acc-preset", "acc-from", "acc-to");
   return { from: $("acc-from").value, to: $("acc-to").value, asOf: $("acc-asof").value };
 }
 
@@ -12944,17 +12968,25 @@ async function loadAccountsTab(name) {
     return;
   }
   if (name === "ledger") {
-    const rows = await api(`/api/accounts/ledger?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const pack = await api(`/api/accounts/ledger?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const rows = Array.isArray(pack) ? pack : pack?.rows || [];
+    const opening = Array.isArray(pack) ? 0 : Number(pack?.opening) || 0;
+    const closing = Array.isArray(pack) ? 0 : Number(pack?.closing) || 0;
     state.ledgerRows = rows;
-    $("acc-ledger-table").innerHTML = `<table><thead><tr>
-      <th>Entry</th><th>Type</th><th>Party</th><th>Amount</th><th>Method</th><th>Reference</th><th>Notes</th><th>Date</th><th></th>
-    </tr></thead><tbody>${rows.map((r, i) => {
+    $("acc-ledger-table").innerHTML = `<div class="report-grid">
+      <div class="report-card"><span>Opening</span><strong>${ledgerBalanceText(opening)}</strong></div>
+      <div class="report-card"><span>Closing</span><strong>${ledgerBalanceText(closing)}</strong></div>
+    </div><table><thead><tr>
+      <th>Date</th><th>Entry</th><th>Type</th><th>Party</th><th>Debit</th><th>Credit</th><th>Balance</th><th></th>
+    </tr></thead><tbody>
+    <tr><td>${escapeHtml(formatShopDate(from))}</td><td></td><td>Opening</td><td></td><td>${opening > 0 ? money(opening) : "—"}</td><td>${opening < 0 ? money(Math.abs(opening)) : "—"}</td><td>${ledgerBalanceText(opening)}</td><td></td></tr>
+    ${rows.map((r, i) => {
       const printable = r.entry_type === "receipt" || r.entry_type === "payment";
       return `<tr>
-      <td>${escapeHtml(r.entry_no)}</td><td>${escapeHtml(r.entry_type)}</td><td>${escapeHtml(r.party_name || "—")}</td>
-      <td>${money(Number(r.amount) || 0)}</td><td>${escapeHtml(r.payment_method || "—")}</td>
-      <td>${escapeHtml(r.reference_type || "—")}</td><td>${escapeHtml(r.notes || "—")}</td>
       <td>${escapeHtml(formatShopDate(r.payment_date || r.created_at))}</td>
+      <td>${escapeHtml(r.entry_no)}</td><td>${escapeHtml(r.entry_type)}</td><td>${escapeHtml(r.party_name || "—")}</td>
+      <td>${r.debit ? money(r.debit) : "—"}</td><td>${r.credit ? money(r.credit) : "—"}</td>
+      <td>${ledgerBalanceText(r.balance)}</td>
       <td>${printable ? voucherRowActions(i) : ""}</td></tr>`;
     }).join("")}</tbody></table>`;
   }
@@ -12999,14 +13031,28 @@ async function loadAccountsTab(name) {
       <div class="report-card"><span>Equity (+ P&amp;L)</span><strong>${money(data.equity)}</strong></div>
     </div>${groupTable("Assets", data.groups?.asset)}${groupTable("Liabilities", data.groups?.liability)}${groupTable("Equity", data.groups?.equity)}<p class="hint">Retained profit included: ${money(data.netProfit)}</p>`;
   }
-  if (name === "cash-book") {
-    const data = await api(`/api/accounts/cash-book?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-    $("acc-cash-table").innerHTML = `<p class="hint">Closing balance: <strong>${money(data.closingBalance)}</strong></p><table><thead><tr>
-      <th>Date</th><th>Voucher</th><th>Type</th><th>Account</th><th>Debit</th><th>Credit</th><th>Balance</th>
-    </tr></thead><tbody>${(data.entries || [])
-      .map((r) => `<tr><td>${escapeHtml(r.voucher_date)}</td><td>${escapeHtml(r.voucher_no)}</td><td>${escapeHtml(r.voucher_type)}</td><td>${escapeHtml(r.name)}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${money(r.balance)}</td></tr>`)
-      .join("")}</tbody></table>`;
+  if (name === "cash-book" || name === "bank-book") {
+    const book = name === "bank-book" ? "bank" : "cash";
+    const data = await api(`/api/accounts/cash-book?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&book=${book}`);
+    paintMoneyBook(name === "bank-book" ? "acc-bank-table" : "acc-cash-table", data);
   }
+}
+
+function paintMoneyBook(targetId, data) {
+  const el = $(targetId);
+  if (!el) return;
+  const opening = Number(data?.openingBalance) || 0;
+  const rows = data?.entries || [];
+  el.innerHTML = `<div class="report-grid">
+    <div class="report-card"><span>Opening</span><strong>${money(opening)}</strong></div>
+    <div class="report-card"><span>Closing</span><strong>${money(data?.closingBalance || 0)}</strong></div>
+  </div><table><thead><tr>
+      <th>Date</th><th>Voucher</th><th>Type</th><th>Account</th><th>Debit</th><th>Credit</th><th>Balance</th>
+    </tr></thead><tbody>
+    <tr><td>${escapeHtml(formatShopDate(data?.from))}</td><td></td><td>Opening</td><td></td><td></td><td></td><td>${money(opening)}</td></tr>
+    ${rows
+      .map((r) => `<tr><td>${escapeHtml(formatShopDate(r.voucher_date))}</td><td>${escapeHtml(r.voucher_no)}</td><td>${escapeHtml(r.voucher_type)}</td><td>${escapeHtml(r.name)}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${money(r.balance)}</td></tr>`)
+      .join("")}</tbody></table>`;
 }
 
 function fillExpenseCategories() {
@@ -13029,6 +13075,8 @@ async function loadExpenses() {
   if ($("exp-date") && !$("exp-date").value) $("exp-date").value = ymd();
   if (!$("exp-from")?.value || !$("exp-to")?.value) applyFyRange("exp-from", "exp-to", null, "exp-fy-year");
   else fillFyYearSelect("exp-fy-year", indianFinancialYear($("exp-from")?.value || ymd()).startYear);
+  alignDateInputs("exp-from", "exp-to");
+  syncPresetChips("exp-range-chips", "data-exp-preset", "exp-from", "exp-to");
   paintExpensePreview();
   const from = $("exp-from").value;
   const to = $("exp-to").value;
@@ -16319,26 +16367,25 @@ $("rep-fy-year")?.addEventListener("change", async () => {
   applyFyYear($("rep-fy-year").value, "rep-from", "rep-to");
   await loadReports();
 });
-$("rep-from")?.addEventListener("change", () => {
+async function reloadReportsFromDates() {
+  alignDateInputs("rep-from", "rep-to");
   syncFySelectFromDates("rep-fy-year", "rep-from");
   syncReportPresetChips();
+  if ($("view-reports") && !$("view-reports").hidden) await loadReports();
+}
+$("rep-from")?.addEventListener("change", () => {
+  reloadReportsFromDates();
 });
 $("rep-to")?.addEventListener("change", () => {
-  syncFySelectFromDates("rep-fy-year", "rep-from");
-  syncReportPresetChips();
+  reloadReportsFromDates();
 });
-$("rep-range-chips")?.addEventListener("click", (e) => {
+$("rep-range-chips")?.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-rep-preset]");
   if (!btn) return;
-  const preset = btn.dataset.repPreset;
-  if (preset && preset !== "custom") {
-    const range = globalThis.POSOfferProfit?.presetRange(preset, ymd());
-    if (range?.from && $("rep-from")) $("rep-from").value = range.from;
-    if (range?.to && $("rep-to")) $("rep-to").value = range.to;
+  const applied = await applyDatePreset(btn.dataset.repPreset, "rep-from", "rep-to");
+  if (applied) {
     syncFySelectFromDates("rep-fy-year", "rep-from");
-    $("report-form")?.requestSubmit();
-  } else {
-    $("rep-from")?.focus();
+    await loadReports();
   }
   syncReportPresetChips();
 });
@@ -16445,7 +16492,33 @@ $("acc-fy-year")?.addEventListener("change", async () => {
     $("acc-hint").className = "hint error";
   }
 });
-$("acc-from")?.addEventListener("change", () => syncFySelectFromDates("acc-fy-year", "acc-from"));
+async function reloadAccountsFromDates() {
+  alignDateInputs("acc-from", "acc-to");
+  syncFySelectFromDates("acc-fy-year", "acc-from");
+  syncPresetChips("acc-range-chips", "data-acc-preset", "acc-from", "acc-to");
+  try {
+    await loadAccountsTab(accTab);
+  } catch (err) {
+    $("acc-hint").textContent = err.message;
+    $("acc-hint").className = "hint error";
+  }
+}
+$("acc-from")?.addEventListener("change", () => {
+  reloadAccountsFromDates();
+});
+$("acc-to")?.addEventListener("change", () => {
+  reloadAccountsFromDates();
+});
+$("acc-asof")?.addEventListener("change", () => {
+  reloadAccountsFromDates();
+});
+$("acc-range-chips")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-acc-preset]");
+  if (!btn) return;
+  const applied = await applyDatePreset(btn.dataset.accPreset, "acc-from", "acc-to", "acc-asof");
+  if (applied) await reloadAccountsFromDates();
+  else syncPresetChips("acc-range-chips", "data-acc-preset", "acc-from", "acc-to");
+});
 $("acc-print")?.addEventListener("click", () => printAccountsReport());
 $("exp-this-fy")?.addEventListener("click", async () => {
   applyFyRange("exp-from", "exp-to", null, "exp-fy-year");
@@ -16455,7 +16528,25 @@ $("exp-fy-year")?.addEventListener("change", async () => {
   applyFyYear($("exp-fy-year").value, "exp-from", "exp-to");
   await loadExpenses();
 });
-$("exp-from")?.addEventListener("change", () => syncFySelectFromDates("exp-fy-year", "exp-from"));
+async function reloadExpensesFromDates() {
+  alignDateInputs("exp-from", "exp-to");
+  syncFySelectFromDates("exp-fy-year", "exp-from");
+  syncPresetChips("exp-range-chips", "data-exp-preset", "exp-from", "exp-to");
+  await loadExpenses();
+}
+$("exp-from")?.addEventListener("change", () => {
+  reloadExpensesFromDates();
+});
+$("exp-to")?.addEventListener("change", () => {
+  reloadExpensesFromDates();
+});
+$("exp-range-chips")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-exp-preset]");
+  if (!btn) return;
+  const applied = await applyDatePreset(btn.dataset.expPreset, "exp-from", "exp-to");
+  if (applied) await reloadExpensesFromDates();
+  else syncPresetChips("exp-range-chips", "data-exp-preset", "exp-from", "exp-to");
+});
 $("exp-print")?.addEventListener("click", () => {
   printFinance({
     title: "Expenses",

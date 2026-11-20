@@ -111,7 +111,7 @@ test("Cafe, restaurant, and bar share shift and payment wiring", () => {
   const barPhp = read("pos-bar.php");
   const barUi = read("js/bar-ui.js");
   assert.match(index, /js\/pay-integrity\.js\?v=20261012table1/);
-  assert.match(index, /app\.js\?v=20261120tix1/);
+  assert.match(index, /app\.js\?v=20261120day1/);
   assert.match(index, /js\/restaurant\.js\?v=20261012set4/);
   assert.match(index, /js\/bar-ui\.js\?v=20261012table1/);
   assert.match(app, /idempotencyKey/);

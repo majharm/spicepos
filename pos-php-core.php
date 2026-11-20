@@ -148,6 +148,33 @@ function pos_shop_tz_offset() {
   return pos_env("POS_TZ_OFFSET", "+05:30");
 }
 
+function pos_shop_today() {
+  $zone = pos_shop_timezone();
+  try {
+    return (new DateTime("now", new DateTimeZone($zone)))->format("Y-m-d");
+  } catch (Exception $e) {
+    return (new DateTime("now", new DateTimeZone("Asia/Kolkata")))->format("Y-m-d");
+  }
+}
+
+function pos_ymd($value) {
+  $s = trim((string) $value);
+  if (preg_match("/^(\d{4}-\d{2}-\d{2})/", $s, $m)) return $m[1];
+  return "";
+}
+
+function pos_normalize_range($from, $to, $today = "") {
+  $day = pos_ymd($today) ?: pos_shop_today();
+  $start = pos_ymd($from) ?: $day;
+  $end = pos_ymd($to) ?: $start;
+  if ($start > $end) {
+    $swap = $start;
+    $start = $end;
+    $end = $swap;
+  }
+  return [$start, $end];
+}
+
 function pos_timezone_options() {
   return [
     ["Asia/Kolkata", "India (IST, UTC+5:30)", "+05:30"],

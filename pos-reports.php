@@ -297,10 +297,7 @@ function pos_dsa_sales_to_sheets($data) {
 }
 
 function pos_report_range($from, $to) {
-  $fy = function_exists("pos_indian_fy") ? pos_indian_fy() : ["from" => date("Y") . "-04-01", "to" => date("Y-m-d")];
-  $end = $to ?: date("Y-m-d");
-  $start = $from ?: $fy["from"];
-  return [$start, $end];
+  return pos_normalize_range($from, $to);
 }
 
 function pos_ensure_report_columns() {
@@ -374,7 +371,7 @@ function pos_build_reports($bid, $from, $to) {
   pos_ensure_report_columns();
   [$start, $end] = pos_report_range($from, $to);
   $salesWhere = "business_id = ? AND " . pos_created_between() . "";
-  $poWhere = "business_id = ? AND purchase_date BETWEEN ? AND ?";
+  $poWhere = "business_id = ? AND purchase_date >= ? AND purchase_date < DATE_ADD(?, INTERVAL 1 DAY)";
 
   $summary = pos_q(
     "SELECT COUNT(*) AS bills,
@@ -496,7 +493,7 @@ function pos_build_reports($bid, $from, $to) {
        FROM purchase_lines l
        JOIN purchases p ON p.id = l.purchase_id
        LEFT JOIN items i ON i.id = l.item_id
-       WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
+       WHERE p.business_id = ? AND p.purchase_date >= ? AND p.purchase_date < DATE_ADD(?, INTERVAL 1 DAY)
        ORDER BY p.purchase_date, l.item_name",
       "sss",
       [$bid, $start, $end]
@@ -517,14 +514,14 @@ function pos_build_reports($bid, $from, $to) {
     $expenses = pos_q(
       "SELECT expense_number, expense_date, category, account_code, amount, gst, payment_method, notes,
               (amount + gst) AS total
-       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+       FROM expenses WHERE business_id = ? AND expense_date >= ? AND expense_date < DATE_ADD(?, INTERVAL 1 DAY)
        ORDER BY expense_date",
       "sss",
       [$bid, $start, $end]
     );
     $expenseSum = pos_q(
       "SELECT COALESCE(SUM(amount),0) AS amount, COALESCE(SUM(gst),0) AS gst, COUNT(*) AS bills
-       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?",
+       FROM expenses WHERE business_id = ? AND expense_date >= ? AND expense_date < DATE_ADD(?, INTERVAL 1 DAY)",
       "sss",
       [$bid, $start, $end]
     ) ?: $expenseSum;
@@ -574,7 +571,7 @@ function pos_build_reports($bid, $from, $to) {
      FROM purchase_lines l
      JOIN purchases p ON p.id = l.purchase_id
      LEFT JOIN suppliers s ON s.id = p.supplier_id
-     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?",
+     WHERE p.business_id = ? AND p.purchase_date >= ? AND p.purchase_date < DATE_ADD(?, INTERVAL 1 DAY)",
     "sss",
     [$bid, $start, $end]
   );

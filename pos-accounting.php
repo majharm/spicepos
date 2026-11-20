@@ -304,20 +304,28 @@ function pos_replace_ledger_journal($bid, $uid, $kind, $amount, $method, $entryN
 
 function pos_lines_for_period($bid, $from, $to) {
   pos_ensure_coa($bid);
+  [$start, $end] = pos_normalize_range($from, $to);
   return pos_q(
     "SELECT a.code, a.name, a.account_group,
-            COALESCE(SUM(l.debit),0) AS debit,
-            COALESCE(SUM(l.credit),0) AS credit
+            COALESCE(SUM(CASE WHEN j.id IS NULL THEN 0 ELSE l.debit END),0) AS debit,
+            COALESCE(SUM(CASE WHEN j.id IS NULL THEN 0 ELSE l.credit END),0) AS credit
      FROM chart_of_accounts a
      LEFT JOIN journal_lines l ON l.account_id = a.id AND l.business_id = a.business_id
      LEFT JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = a.business_id
-       AND j.voucher_date BETWEEN ? AND ?
+       AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
      WHERE a.business_id = ? AND a.active = 1
      GROUP BY a.id, a.code, a.name, a.account_group
      ORDER BY a.code",
     "sss",
-    [$from, $to, $bid]
+    [$start, $end, $bid]
   );
+}
+
+function pos_cash_book_codes($book) {
+  $key = strtolower(trim((string) $book));
+  if ($key === "cash") return ["1001"];
+  if ($key === "bank") return ["1002", "1003"];
+  return ["1001", "1002", "1003"];
 }
 
 function pos_party_ledger_signed_amount($entryType, $amount) {
@@ -509,10 +517,9 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
 
   if ($path === "expenses" && $method === "GET") {
     $fy = pos_indian_fy();
-    $from = $_GET["from"] ?? $fy["from"];
-    $to = $_GET["to"] ?? $fy["to"];
+    [$from, $to] = pos_normalize_range($_GET["from"] ?? $fy["from"], $_GET["to"] ?? $fy["to"]);
     pos_send(200, pos_q(
-      "SELECT * FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+      "SELECT * FROM expenses WHERE business_id = ? AND expense_date >= ? AND expense_date < DATE_ADD(?, INTERVAL 1 DAY)
        ORDER BY expense_date DESC, created_at DESC LIMIT 200",
       "sss",
       [$bid, $from, $to]
@@ -612,23 +619,40 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   }
 
   if ($path === "accounts/ledger" && $method === "GET") {
-    $from = $_GET["from"] ?? date("Y-m-d");
-    $to = $_GET["to"] ?? $from;
+    [$from, $to] = pos_normalize_range($_GET["from"] ?? "", $_GET["to"] ?? "");
     $partyType = strtolower(trim((string) ($_GET["party_type"] ?? "")));
     $partyId = trim((string) ($_GET["party_id"] ?? ""));
+    $partySql = "";
+    $partyTypes = "";
+    $partyParams = [];
     if (($partyType === "customer" || $partyType === "supplier") && $partyId !== "") {
-      pos_send(200, pos_q(
-        "SELECT * FROM account_ledger WHERE business_id = ? AND " . pos_created_between() . "
-         AND party_type = ? AND party_id = ?
-         ORDER BY created_at DESC, entry_no DESC LIMIT 500",
-        "sssss", [$bid, $from, $to, $partyType, $partyId]
-      ));
+      $partySql = " AND party_type = ? AND party_id = ?";
+      $partyTypes = "ss";
+      $partyParams = [$partyType, $partyId];
     }
-    pos_send(200, pos_q(
-      "SELECT * FROM account_ledger WHERE business_id = ? AND " . pos_created_between() . "
-       ORDER BY created_at DESC, entry_no DESC LIMIT 500",
-      "sss", [$bid, $from, $to]
-    ));
+    $prior = pos_q(
+      "SELECT entry_type, amount FROM account_ledger WHERE business_id = ? AND " . pos_ledger_event_before_day() . $partySql,
+      "ss" . $partyTypes,
+      array_merge([$bid, $from], $partyParams)
+    );
+    $opening = 0.0;
+    foreach ($prior as $row) {
+      $opening = pos_round2($opening + pos_party_ledger_signed_amount($row["entry_type"] ?? "", $row["amount"] ?? 0));
+    }
+    $rows = pos_q(
+      "SELECT * FROM account_ledger WHERE business_id = ? AND " . pos_ledger_event_between() . $partySql . "
+       ORDER BY " . pos_ledger_event_order_asc() . " LIMIT 5000",
+      "sss" . $partyTypes,
+      array_merge([$bid, $from, $to], $partyParams)
+    );
+    $balance = $opening;
+    $mapped = [];
+    foreach ($rows as $row) {
+      $sides = pos_party_ledger_sides($row["entry_type"] ?? "", $row["amount"] ?? 0);
+      $balance = pos_round2($balance + pos_party_ledger_signed_amount($row["entry_type"] ?? "", $row["amount"] ?? 0));
+      $mapped[] = array_merge($row, ["debit" => $sides["debit"], "credit" => $sides["credit"], "balance" => $balance]);
+    }
+    pos_send(200, ["rows" => $mapped, "opening" => $opening, "closing" => $balance, "from" => $from, "to" => $to, "php" => true]);
   }
 
   if ($path === "accounts/party-ledger" && $method === "GET") {
@@ -640,8 +664,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     if ($partyId === "") {
       pos_send(400, ["error" => "party_id is required", "php" => true]);
     }
-    $from = $_GET["from"] ?? date("Y-m-d");
-    $to = $_GET["to"] ?? $from;
+    [$from, $to] = pos_normalize_range($_GET["from"] ?? "", $_GET["to"] ?? "");
     $prior = pos_q(
       "SELECT entry_type, amount FROM account_ledger
        WHERE business_id = ? AND party_type = ? AND party_id = ? AND " . pos_ledger_event_before_day(),
@@ -764,7 +787,7 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   }
 
   if ($path === "accounts/balance-sheet" && $method === "GET") {
-    $asOf = $_GET["asOf"] ?? date("Y-m-d");
+    [, $asOf] = pos_normalize_range($_GET["asOf"] ?? "", $_GET["asOf"] ?? "");
     $rows = pos_lines_for_period($bid, "2000-01-01", $asOf);
     $groups = ["asset" => [], "liability" => [], "equity" => []];
     $assets = 0;
@@ -805,18 +828,34 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
   }
 
   if ($path === "accounts/cash-book" && $method === "GET") {
-    $from = $_GET["from"] ?? date("Y-m-d");
-    $to = $_GET["to"] ?? $from;
+    [$from, $to] = pos_normalize_range($_GET["from"] ?? "", $_GET["to"] ?? "");
+    $codes = pos_cash_book_codes($_GET["book"] ?? "all");
+    $book = in_array(strtolower(trim((string) ($_GET["book"] ?? ""))), ["cash", "bank", "all"], true)
+      ? strtolower(trim((string) $_GET["book"]))
+      : "all";
+    $ph = implode(",", array_fill(0, count($codes), "?"));
+    $openingRows = pos_q(
+      "SELECT COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0) AS opening
+       FROM journal_lines l
+       JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+       JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
+       WHERE l.business_id = ? AND j.voucher_date < ? AND a.code IN ($ph)",
+      "ss" . str_repeat("s", count($codes)),
+      array_merge([$bid, $from], $codes)
+    );
+    $opening = pos_round2($openingRows[0]["opening"] ?? 0);
     $rows = pos_q(
       "SELECT j.voucher_no, j.voucher_date, j.voucher_type, j.narration, a.code, a.name, l.debit, l.credit
        FROM journal_lines l
-       JOIN journal_entries j ON j.id = l.journal_id
-       JOIN chart_of_accounts a ON a.id = l.account_id
-       WHERE l.business_id = ? AND j.voucher_date BETWEEN ? AND ? AND a.code IN ('1001','1002','1003')
+       JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+       JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
+       WHERE l.business_id = ? AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
+         AND a.code IN ($ph)
        ORDER BY j.voucher_date, j.voucher_no, a.code",
-      "sss", [$bid, $from, $to]
+      "sss" . str_repeat("s", count($codes)),
+      array_merge([$bid, $from, $to], $codes)
     );
-    $balance = 0;
+    $balance = $opening;
     $entries = [];
     foreach ($rows as $r) {
       $debit = pos_round2($r["debit"]);
@@ -824,18 +863,20 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       $balance = pos_round2($balance + $debit - $credit);
       $entries[] = array_merge($r, ["debit" => $debit, "credit" => $credit, "balance" => $balance]);
     }
-    pos_send(200, ["from" => $from, "to" => $to, "entries" => $entries, "closingBalance" => $balance, "php" => true]);
+    pos_send(200, [
+      "from" => $from, "to" => $to, "book" => $book, "openingBalance" => $opening,
+      "entries" => $entries, "closingBalance" => $balance, "php" => true,
+    ]);
   }
 
   if ($path === "accounts/journal" && $method === "GET") {
-    $from = $_GET["from"] ?? date("Y-m-d");
-    $to = $_GET["to"] ?? $from;
+    [$from, $to] = pos_normalize_range($_GET["from"] ?? "", $_GET["to"] ?? "");
     pos_send(200, pos_q(
       "SELECT j.*, GROUP_CONCAT(CONCAT(a.code, ':', l.debit, '/', l.credit) SEPARATOR ' | ') AS `lines`
        FROM journal_entries j
        LEFT JOIN journal_lines l ON l.journal_id = j.id
        LEFT JOIN chart_of_accounts a ON a.id = l.account_id
-       WHERE j.business_id = ? AND j.voucher_date BETWEEN ? AND ?
+       WHERE j.business_id = ? AND j.voucher_date >= ? AND j.voucher_date < DATE_ADD(?, INTERVAL 1 DAY)
        GROUP BY j.id ORDER BY j.voucher_date DESC, j.voucher_no DESC LIMIT 300",
       "sss", [$bid, $from, $to]
     ));
