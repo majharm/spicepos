@@ -361,7 +361,7 @@
         <h3>Live chat</h3>
         <span class="support-pill">Live</span>
       </div>
-      <p class="support-panel-note">${audience === "master" ? "This shop sees your reply on Support in the business admin console." : "The ATAV support team sees this as you type and send. Tickets stay below for longer issues."}</p>
+      <p class="support-panel-note">${audience === "master" ? "This shop sees your reply in the chat box at the bottom of the business admin console." : "The ATAV support team sees this in their live chat."}</p>
       ${shop}
       <div class="support-chat-log" id="${logId}" data-last="${escapeHtml(last)}">${chatLogHtml(rows)}</div>
       <form class="support-chat-form" id="${formId}">
@@ -369,6 +369,30 @@
         <div class="support-ticket-actions wide"><button class="btn primary" type="submit">Send</button><span class="hint" id="${hintId}"></span></div>
       </form>
     </section>`;
+  }
+
+  function footerChatHtml() {
+    return `<aside class="support-dock" id="support-dock">
+      <section class="support-dock-panel" id="support-dock-panel" hidden>
+        <header class="support-dock-head">
+          <div>
+            <strong>Support chat</strong>
+            <span>ATAV support team</span>
+          </div>
+          <button type="button" class="support-dock-close" id="support-dock-close" aria-label="Close chat">×</button>
+        </header>
+        <div class="support-chat-log" id="support-chat-log" data-last="">${chatLogHtml([])}</div>
+        <form class="support-dock-compose" id="support-chat-form">
+          <textarea name="body" rows="1" maxlength="2000" required placeholder="Message the support team" aria-label="Message"></textarea>
+          <button class="btn primary" type="submit">Send</button>
+          <span class="hint" id="support-chat-hint"></span>
+        </form>
+      </section>
+      <button type="button" class="support-dock-launcher" id="support-dock-open" aria-expanded="false" aria-controls="support-dock-panel">
+        <span class="support-dock-launcher-copy"><strong>Chat</strong><span>Support team</span></span>
+        <span class="support-dock-badge" id="support-dock-badge" hidden>New</span>
+      </button>
+    </aside>`;
   }
 
   function chatInboxHtml(rows) {
@@ -424,6 +448,7 @@
     ticketThreadHtml,
     chatLogHtml,
     chatPanelHtml,
+    footerChatHtml,
     chatInboxHtml,
   };
 });

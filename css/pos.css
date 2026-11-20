@@ -3709,6 +3709,133 @@ tr:last-child td { border-bottom: 0; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.support-dock {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: min(380px, calc(100vw - 24px));
+  pointer-events: none;
+}
+.support-dock > * { pointer-events: auto; }
+.support-dock-launcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px 10px 14px;
+  background: #0f172a;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28);
+  cursor: pointer;
+}
+.support-dock-launcher-copy { display: grid; text-align: left; line-height: 1.15; }
+.support-dock-launcher-copy span { font-size: 11px; font-weight: 650; color: #99f6e4; }
+.support-dock.is-open .support-dock-launcher { display: none; }
+.support-dock-badge {
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.support-dock-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: min(520px, calc(100dvh - 96px));
+  margin-bottom: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+.support-dock-panel[hidden] { display: none !important; }
+.support-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 12px 14px;
+  background: linear-gradient(135deg, #0f172a, #0f766e);
+  color: #fff;
+}
+.support-dock-head strong { display: block; font-size: 15px; }
+.support-dock-head span { display: block; font-size: 12px; font-weight: 650; color: #ccfbf1; }
+.support-dock-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.support-dock .support-chat-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: #f8fafc;
+}
+.support-dock .support-chat-bubble {
+  justify-self: end;
+  border-radius: 12px 12px 4px 12px;
+  background: #ccfbf1;
+  border-color: #99f6e4;
+}
+.support-dock .support-chat-bubble.is-master {
+  justify-self: start;
+  border-radius: 12px 12px 12px 4px;
+  background: #fff;
+  border-color: var(--line);
+}
+.support-dock-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+}
+.support-dock-compose textarea {
+  width: 100%;
+  min-height: 40px;
+  max-height: 96px;
+  resize: none;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.support-dock-compose .btn { min-height: 40px; }
+.support-dock-compose .hint { grid-column: 1 / -1; min-height: 0; margin: 0; }
+body.m-app:not(.counter-mode) .support-dock {
+  bottom: calc(var(--m-tab-h, 68px) + env(safe-area-inset-bottom) + 10px);
+}
+@media (max-width: 640px) {
+  .support-dock {
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+  .support-dock-panel { height: min(70dvh, 560px); }
+}
 @media (max-width: 900px) {
   .support-ticket-split { grid-template-columns: 1fr; }
   .support-ticket-copy strong { white-space: normal; }
@@ -10782,6 +10909,14 @@ html[data-scheme="dark"] .saas-kpi,
 html[data-scheme="dark"] .saas-card { background: #111827; }
 html[data-scheme="dark"] .saas-seg button.is-on { background: #1e293b; color: #fff; }
 html[data-scheme="dark"] .hint { color: #94a3b8; }
+html[data-scheme="dark"] .support-dock-panel,
+html[data-scheme="dark"] .support-dock-compose,
+html[data-scheme="dark"] .support-dock .support-chat-log,
+html[data-scheme="dark"] .support-dock-compose textarea {
+  background: #111827;
+  color: #e5e7eb;
+}
+html[data-scheme="dark"] .support-dock .support-chat-bubble.is-master { background: #1e293b; }
 html[data-scheme="dark"] .saas-list strong { color: #f3f4f6; }
 html[data-scheme="dark"] .saas-list span,
 html[data-scheme="dark"] .saas-list em { color: #94a3b8; }
