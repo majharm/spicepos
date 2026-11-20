@@ -2432,7 +2432,7 @@ async function renderMasterChat(body) {
   body.innerHTML = masterDesk(
     "People",
     "Live chat",
-    "Shops write from Support in the business admin console. Replies show up there within a few seconds.",
+    "Shops write from the chat box at the bottom of the business admin console. Replies show up there within a few seconds.",
     detail ? [] : [
       { label: "Chats", value: String(chats.length) },
       { label: "Waiting", value: String(waiting), warn: waiting > 0 },

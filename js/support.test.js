@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import "./support.js";
 
 const S = globalThis.SupportPage;
@@ -108,6 +109,23 @@ test("live chat panel and inbox", () => {
   assert.match(inbox, /data-chat-open="biz-1"/);
   assert.match(inbox, /Need help/);
   assert.match(inbox, />New</);
+});
+
+test("shop chat box lives in the footer dock", () => {
+  const html = S.footerChatHtml();
+  assert.match(html, /id="support-dock"/);
+  assert.match(html, /id="support-dock-panel" hidden/);
+  assert.match(html, /id="support-chat-log"/);
+  assert.match(html, /id="support-chat-form"/);
+  assert.match(html, /id="support-dock-open"/);
+  assert.match(html, /Support chat/);
+  assert.match(html, /Message the support team/);
+  const app = readFileSync(new URL("./app.js", import.meta.url), "utf8");
+  const paint = app.slice(app.indexOf("async function paintSupport"), app.indexOf("async function refreshSupportChat"));
+  assert.match(app, /footerChatHtml\(\)/);
+  assert.match(app, /function mountSupportDock/);
+  assert.doesNotMatch(paint, /chatPanelHtml/);
+  assert.doesNotMatch(paint, /support-chat/);
 });
 
 test("login support chips", () => {

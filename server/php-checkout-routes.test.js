@@ -324,7 +324,7 @@ test("Master Admin can set passwords and unlock locked accounts", () => {
   assert.match(core, /pos_register_business\(\$body, true\)/);
   assert.match(core, /strtotime\("\+1 year"\)/);
   assert.match(read("server/onboard.js"), /INTERVAL 1 YEAR/);
-  assert.match(read("master.html"), /master\.js\?v=20261120chat1/);
+  assert.match(read("master.html"), /master\.js\?v=20261120dock1/);
   assert.match(read("api/master/dsa-sales/index.php"), /master\/dsa-sales/);
   assert.match(read("api/master/dsa-sales/excel/index.php"), /master\/dsa-sales\/excel/);
   assert.match(core, /master\/dsa-sales/);
@@ -504,7 +504,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="btn-shift-table"/);
   assert.match(index, /id="set-table-shifting"/);
   assert.match(restaurant, /function canShiftTable/);
-  assert.match(index, /pos\.css\?v=20261120chat1/);
+  assert.match(index, /pos\.css\?v=20261120dock1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
   assert.match(index, /app\.js\?v=20261120pl1/);
   assert.match(index, /footwear\.js\?v=20261012print1/);

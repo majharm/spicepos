@@ -3617,7 +3617,6 @@ function showView(name) {
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
-  else stopSupportChat();
   if (name === "dashboard") {
     if (!viewStillFresh("dashboard")) loadDashboard();
     if (isGymShop()) globalThis.POSGymUi?.loadGymBoard?.();
@@ -9053,6 +9052,8 @@ function bindSupportCopy(root) {
 let supportTicketId = "";
 let supportPaint = 0;
 let supportChatTimer = 0;
+let supportDockSeen = "";
+let supportDockReady = false;
 
 function stopSupportChat() {
   if (supportChatTimer) clearInterval(supportChatTimer);
@@ -9061,13 +9062,65 @@ function stopSupportChat() {
 
 function startSupportChat() {
   stopSupportChat();
-  supportChatTimer = setInterval(() => {
-    if (state.currentView !== "support") {
-      stopSupportChat();
-      return;
+  supportChatTimer = setInterval(() => refreshSupportChat(), 4000);
+}
+
+function setSupportDockOpen(open) {
+  const dock = document.getElementById("support-dock");
+  const panel = document.getElementById("support-dock-panel");
+  const launcher = document.getElementById("support-dock-open");
+  if (!dock || !panel) return;
+  panel.hidden = !open;
+  dock.classList.toggle("is-open", open);
+  if (launcher) launcher.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    const log = document.getElementById("support-chat-log");
+    if (log) {
+      supportDockSeen = log.dataset.last || supportDockSeen;
+      log.scrollTop = log.scrollHeight;
     }
-    refreshSupportChat();
-  }, 4000);
+    const badge = document.getElementById("support-dock-badge");
+    if (badge) badge.hidden = true;
+    panel.querySelector("textarea")?.focus();
+  }
+}
+
+function paintSupportDockBadge(messages) {
+  const badge = document.getElementById("support-dock-badge");
+  const panel = document.getElementById("support-dock-panel");
+  if (!badge || !panel) return;
+  const last = messages.length ? messages[messages.length - 1] : null;
+  if (!supportDockReady) {
+    supportDockSeen = last?.id || "";
+    supportDockReady = true;
+    badge.hidden = true;
+    return;
+  }
+  if (!panel.hidden) {
+    supportDockSeen = last?.id || "";
+    badge.hidden = true;
+    return;
+  }
+  badge.hidden = !(last && last.author_role === "master" && last.id && last.id !== supportDockSeen);
+}
+
+function mountSupportDock() {
+  const app = document.getElementById("app");
+  if (!app || !window.SupportPage?.footerChatHtml) return;
+  let dock = document.getElementById("support-dock");
+  if (!dock) {
+    app.insertAdjacentHTML("beforeend", window.SupportPage.footerChatHtml());
+    dock = document.getElementById("support-dock");
+  }
+  if (!dock) return;
+  if (dock.dataset.bound !== "1") {
+    dock.dataset.bound = "1";
+    dock.querySelector("#support-dock-open")?.addEventListener("click", () => setSupportDockOpen(true));
+    dock.querySelector("#support-dock-close")?.addEventListener("click", () => setSupportDockOpen(false));
+    bindSupportChat(dock);
+  }
+  refreshSupportChat();
+  startSupportChat();
 }
 
 function renderSupport() {
@@ -9098,26 +9151,11 @@ async function paintSupport(root) {
       detail = null;
     }
   }
-  let chatMessages = [];
-  if (window.SupportPage.chatPanelHtml) {
-    try {
-      const chat = await api("/api/support/chat");
-      chatMessages = chat.messages || [];
-    } catch (err) {
-      if (err?.message && /sign in/i.test(err.message)) return;
-      if (!loadError) loadError = err.message || "Could not load the chat";
-    }
-  }
   if (stamp !== supportPaint) return;
   const desk = window.SupportPage.ticketDeskHtml ? window.SupportPage.ticketDeskHtml(tickets, detail, loadError) : "";
-  const chat = window.SupportPage.chatPanelHtml ? window.SupportPage.chatPanelHtml(chatMessages, { audience: "shop" }) : "";
-  root.innerHTML = `${page}${chat}${desk}`;
+  root.innerHTML = `${page}${desk}`;
   bindSupportCopy(root);
   bindSupportTickets(root);
-  bindSupportChat(root);
-  startSupportChat();
-  const log = root.querySelector("#support-chat-log");
-  if (log) log.scrollTop = log.scrollHeight;
 }
 
 async function refreshSupportChat() {
@@ -9127,10 +9165,17 @@ async function refreshSupportChat() {
     const data = await api("/api/support/chat");
     const messages = data.messages || [];
     const last = messages.length ? messages[messages.length - 1].id || "" : "";
-    if (log.dataset.last === last) return;
+    if (log.dataset.last === last) {
+      if (!supportDockReady) {
+        supportDockSeen = last;
+        supportDockReady = true;
+      }
+      return;
+    }
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 64;
     log.innerHTML = window.SupportPage.chatLogHtml(messages);
     log.dataset.last = last;
+    paintSupportDockBadge(messages);
     if (nearBottom) log.scrollTop = log.scrollHeight;
   } catch {
     /* keep the thread on screen */
@@ -9138,7 +9183,14 @@ async function refreshSupportChat() {
 }
 
 function bindSupportChat(root) {
-  root.querySelector("#support-chat-form")?.addEventListener("submit", async (event) => {
+  const form = root.querySelector("#support-chat-form");
+  form?.querySelector("textarea")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const hint = form.querySelector(".hint");
@@ -9153,6 +9205,7 @@ function bindSupportChat(root) {
         const messages = saved.messages || [];
         log.innerHTML = window.SupportPage.chatLogHtml(messages);
         log.dataset.last = messages.length ? messages[messages.length - 1].id || "" : "";
+        paintSupportDockBadge(messages);
         log.scrollTop = log.scrollHeight;
       }
       if (hint) {
@@ -9273,6 +9326,7 @@ async function loadBootstrap() {
   applyQuickAddVisibility();
   applyFastMode();
   paintPlatformSupport();
+  mountSupportDock();
   renderCustomersSelect();
   applyUiLocale();
   fillExpenseCategories();
