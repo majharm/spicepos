@@ -381,8 +381,8 @@
           </div>
           <button type="button" class="support-dock-close" id="support-dock-close" aria-label="Close chat">×</button>
         </header>
-        <div class="support-chat-log" id="support-chat-log" data-last="">${chatLogHtml([])}</div>
-        <form class="support-dock-compose" id="support-chat-form">
+        <div class="support-chat-log" id="support-chat-log" data-support-chat-log data-last="">${chatLogHtml([])}</div>
+        <form class="support-dock-compose" id="support-chat-form" data-support-chat-form>
           <textarea name="body" rows="1" maxlength="2000" required placeholder="Message the support team" aria-label="Message"></textarea>
           <button class="btn primary" type="submit">Send</button>
           <span class="hint" id="support-chat-hint"></span>
@@ -393,6 +393,28 @@
         <span class="support-dock-badge" id="support-dock-badge" hidden>New</span>
       </button>
     </aside>`;
+  }
+
+  function bizChatHtml(messages, error) {
+    const rows = Array.isArray(messages) ? messages : [];
+    const last = rows.length ? rows[rows.length - 1].id || "" : "";
+    const problem = error ? `<p class="hint error">${escapeHtml(error)}</p>` : "";
+    return `<section class="biz-live-chat">
+      <header class="biz-live-chat-head">
+        <div>
+          <strong>Live chat</strong>
+          <span>ATAV support team</span>
+        </div>
+        <span class="support-pill">Live</span>
+      </header>
+      ${problem}
+      <div class="support-chat-log" id="biz-chat-log" data-support-chat-log data-last="${escapeHtml(last)}">${chatLogHtml(rows)}</div>
+      <form class="support-dock-compose biz-live-chat-compose" id="biz-chat-form" data-support-chat-form>
+        <textarea name="body" rows="1" maxlength="2000" required placeholder="Message the support team" aria-label="Message"></textarea>
+        <button class="btn primary" type="submit">Send</button>
+        <span class="hint" id="biz-chat-hint"></span>
+      </form>
+    </section>`;
   }
 
   function chatInboxHtml(rows) {
@@ -449,6 +471,7 @@
     chatLogHtml,
     chatPanelHtml,
     footerChatHtml,
+    bizChatHtml,
     chatInboxHtml,
   };
 });

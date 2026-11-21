@@ -3825,6 +3825,69 @@ tr:last-child td { border-bottom: 0; }
 }
 .support-dock-compose .btn { min-height: 40px; }
 .support-dock-compose .hint { grid-column: 1 / -1; min-height: 0; margin: 0; }
+#view-support-chat.view {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#view-support-chat .items-desk.support-desk {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 12px 16px;
+  display: flex;
+}
+#view-support-chat #biz-live-chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  width: 100%;
+}
+.biz-live-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.biz-live-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #0b1f3a, #1d4ed8);
+  color: #fff;
+}
+.biz-live-chat-head strong { display: block; font-size: 16px; }
+.biz-live-chat-head > div span { display: block; font-size: 12px; font-weight: 650; color: #dbeafe; }
+.biz-live-chat .support-pill { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.biz-live-chat .support-chat-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: #f8fafc;
+}
+.biz-live-chat .support-chat-bubble {
+  justify-self: end;
+  border-radius: 12px 12px 4px 12px;
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+.biz-live-chat .support-chat-bubble.is-master {
+  justify-self: start;
+  border-radius: 12px 12px 12px 4px;
+  background: #fff;
+  border-color: var(--line);
+}
+.biz-live-chat-compose { border-top: 1px solid var(--line); background: #fff; }
+.biz-live-chat > .hint { margin: 0; padding: 8px 14px 0; }
 body.m-app:not(.counter-mode) .support-dock {
   bottom: calc(var(--m-tab-h, 68px) + env(safe-area-inset-bottom) + 10px);
 }
@@ -10917,6 +10980,11 @@ html[data-scheme="dark"] .support-dock-compose textarea {
   color: #e5e7eb;
 }
 html[data-scheme="dark"] .support-dock .support-chat-bubble.is-master { background: #1e293b; }
+html[data-scheme="dark"] .biz-live-chat,
+html[data-scheme="dark"] .biz-live-chat .support-chat-log,
+html[data-scheme="dark"] .biz-live-chat-compose,
+html[data-scheme="dark"] .biz-live-chat-compose textarea { background: #111827; color: #e5e7eb; }
+html[data-scheme="dark"] .biz-live-chat .support-chat-bubble.is-master { background: #1e293b; }
 html[data-scheme="dark"] .saas-list strong { color: #f3f4f6; }
 html[data-scheme="dark"] .saas-list span,
 html[data-scheme="dark"] .saas-list em { color: #94a3b8; }
