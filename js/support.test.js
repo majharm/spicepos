@@ -128,6 +128,29 @@ test("shop chat box lives in the footer dock", () => {
   assert.doesNotMatch(paint, /support-chat/);
 });
 
+test("business admin live chat panel", () => {
+  const html = S.bizChatHtml(
+    [{ id: "m1", author_role: "shop", author_name: "Asha", body: "Printer is offline", created_at: "2026-11-21 10:00:00" }],
+  );
+  assert.match(html, /class="biz-live-chat"/);
+  assert.match(html, /id="biz-chat-form"/);
+  assert.match(html, /id="biz-chat-log"/);
+  assert.match(html, /data-support-chat-log/);
+  assert.match(html, /data-support-chat-form/);
+  assert.match(html, /Printer is offline/);
+  assert.match(html, /Live chat/);
+  const failed = S.bizChatHtml([], "Could not load the chat");
+  assert.match(failed, /Could not load the chat/);
+  const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(index, /data-view="support-chat"/);
+  assert.match(index, /id="view-support-chat"/);
+  assert.match(index, /id="biz-live-chat"/);
+  const app = readFileSync(new URL("./app.js", import.meta.url), "utf8");
+  assert.match(app, /function renderBizChat/);
+  assert.match(app, /bizChatHtml/);
+  assert.match(app, /"support-chat": "support"/);
+});
+
 test("login support chips", () => {
   assert.equal(S.loginHtml({}), "");
   const html = S.loginHtml({ support_phone: "9876543210", support_email: "help@atavtelecom.in" });

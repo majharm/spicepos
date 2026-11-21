@@ -1177,6 +1177,7 @@ const VIEW_META = {
   branches: { title: "Branches", subtitle: "Locations, active status, and branch login" },
   devices: { title: "Hardware & devices", subtitle: "Registers, terminals, and weighing scale" },
   support: { title: "Support", subtitle: "Call, WhatsApp, email, or send a ticket to the ATAV support team" },
+  "support-chat": { title: "Live chat", subtitle: "Message the ATAV support team from this business admin panel" },
   accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
   reports: { title: "Reports", subtitle: "Pick a report, then Show, Excel, or Print" },
@@ -3150,6 +3151,7 @@ function applyNav() {
       branches: "branches",
       devices: "devices",
       support: "support",
+      "support-chat": "support",
       accounts: "accounts",
       expenses: "accounts",
       reports: "reports",
@@ -3617,6 +3619,8 @@ function showView(name) {
   if (name === "purchases") loadPurchases();
   if (name === "suppliers") loadSuppliers();
   if (name === "support") renderSupport();
+  if (name === "support-chat") renderBizChat();
+  syncSupportDockWithView();
   if (name === "dashboard") {
     if (!viewStillFresh("dashboard")) loadDashboard();
     if (isGymShop()) globalThis.POSGymUi?.loadGymBoard?.();
@@ -9096,12 +9100,33 @@ function paintSupportDockBadge(messages) {
     badge.hidden = true;
     return;
   }
-  if (!panel.hidden) {
+  if (!panel.hidden || state.currentView === "support-chat") {
     supportDockSeen = last?.id || "";
     badge.hidden = true;
     return;
   }
   badge.hidden = !(last && last.author_role === "master" && last.id && last.id !== supportDockSeen);
+}
+
+function syncSupportDockWithView() {
+  const dock = document.getElementById("support-dock");
+  if (!dock) return;
+  const onChat = state.currentView === "support-chat";
+  dock.hidden = onChat;
+  if (onChat) setSupportDockOpen(false);
+}
+
+function paintSupportChatLogs(messages) {
+  const html = window.SupportPage?.chatLogHtml?.(messages);
+  if (html == null) return;
+  const last = messages.length ? messages[messages.length - 1].id || "" : "";
+  document.querySelectorAll("[data-support-chat-log]").forEach((log) => {
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 64;
+    log.innerHTML = html;
+    log.dataset.last = last;
+    if (nearBottom) log.scrollTop = log.scrollHeight;
+  });
+  paintSupportDockBadge(messages);
 }
 
 function mountSupportDock() {
@@ -9121,6 +9146,7 @@ function mountSupportDock() {
   }
   refreshSupportChat();
   startSupportChat();
+  syncSupportDockWithView();
 }
 
 function renderSupport() {
@@ -9159,31 +9185,47 @@ async function paintSupport(root) {
 }
 
 async function refreshSupportChat() {
-  const log = document.getElementById("support-chat-log");
-  if (!log || !window.SupportPage?.chatLogHtml) return;
+  const logs = [...document.querySelectorAll("[data-support-chat-log]")];
+  if (!logs.length || !window.SupportPage?.chatLogHtml) return;
   try {
     const data = await api("/api/support/chat");
     const messages = data.messages || [];
     const last = messages.length ? messages[messages.length - 1].id || "" : "";
-    if (log.dataset.last === last) {
+    if (logs.every((log) => log.dataset.last === last)) {
       if (!supportDockReady) {
         supportDockSeen = last;
         supportDockReady = true;
       }
       return;
     }
-    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 64;
-    log.innerHTML = window.SupportPage.chatLogHtml(messages);
-    log.dataset.last = last;
-    paintSupportDockBadge(messages);
-    if (nearBottom) log.scrollTop = log.scrollHeight;
+    paintSupportChatLogs(messages);
   } catch {
     /* keep the thread on screen */
   }
 }
 
+async function renderBizChat() {
+  const root = $("biz-live-chat");
+  if (!root || !window.SupportPage?.bizChatHtml) return;
+  let messages = [];
+  let error = "";
+  try {
+    const data = await api("/api/support/chat");
+    messages = data.messages || [];
+  } catch (err) {
+    if (err?.message && /sign in/i.test(err.message)) return;
+    error = err.message || "Could not load the chat";
+  }
+  if (state.currentView !== "support-chat") return;
+  root.innerHTML = window.SupportPage.bizChatHtml(messages, error);
+  bindSupportChat(root);
+  const log = root.querySelector("[data-support-chat-log]");
+  if (log) log.scrollTop = log.scrollHeight;
+  paintSupportDockBadge(messages);
+}
+
 function bindSupportChat(root) {
-  const form = root.querySelector("#support-chat-form");
+  const form = root.querySelector("[data-support-chat-form]");
   form?.querySelector("textarea")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -9200,14 +9242,7 @@ function bindSupportChat(root) {
     try {
       const saved = await api("/api/support/chat", { method: "POST", body: JSON.stringify(body) });
       form.reset();
-      const log = root.querySelector("#support-chat-log");
-      if (log && window.SupportPage?.chatLogHtml) {
-        const messages = saved.messages || [];
-        log.innerHTML = window.SupportPage.chatLogHtml(messages);
-        log.dataset.last = messages.length ? messages[messages.length - 1].id || "" : "";
-        paintSupportDockBadge(messages);
-        log.scrollTop = log.scrollHeight;
-      }
+      paintSupportChatLogs(saved.messages || []);
       if (hint) {
         hint.textContent = "Sent.";
         hint.className = "hint ok";
