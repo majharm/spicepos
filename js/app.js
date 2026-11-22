@@ -1177,7 +1177,7 @@ const VIEW_META = {
   branches: { title: "Branches", subtitle: "Locations, active status, and branch login" },
   devices: { title: "Hardware & devices", subtitle: "Registers, terminals, and weighing scale" },
   support: { title: "Support", subtitle: "Call, WhatsApp, email, or send a ticket to the ATAV support team" },
-  accounts: { title: "Accounts", subtitle: "Receivables, payables, GL, and books" },
+  accounts: { title: "Accounts", subtitle: "Ledgers, books, statements, and the chart of accounts" },
   expenses: { title: "Expenses", subtitle: "Rent, power, wages, and other shop costs" },
   reports: { title: "Reports", subtitle: "Pick a report, then Show, Excel, or Print" },
   growth: { title: "AI Growth", subtitle: "What happened, why, what to do next — from this shop's data" },
@@ -12963,6 +12963,97 @@ async function loadSuppliers() {
 }
 
 let accTab = "receivables";
+let coaRows = [];
+
+const ACC_COPY = {
+  receivables: ["Receivables", "Customers who still owe this shop."],
+  payables: ["Payables", "Suppliers this shop still has to pay."],
+  "customer-ledger": ["Customer ledger", "Opening due, invoices, and receipts for one customer."],
+  "supplier-ledger": ["Supplier ledger", "Opening payable, purchase bills, and payments for one supplier."],
+  ledger: ["Day book", "Every receipt and payment in the selected dates."],
+  journal: ["Journal", "Double-entry vouchers posted from bills, purchases, and expenses."],
+  "cash-book": ["Cash book", "Cash in hand, with the running balance."],
+  "bank-book": ["Bank book", "Bank and UPI clearing, with the running balance."],
+  "trial-balance": ["Trial balance", "Debit and credit totals for every ledger in the period."],
+  "profit-loss": ["Profit and loss", "Income and expenses for the selected dates."],
+  "balance-sheet": ["Balance sheet", "Assets, liabilities, and equity as of the selected date."],
+  coa: ["Chart of accounts", "Assets, liabilities, equity, income, and expenses. Bills post to the system ledgers. Add a ledger for anything else."],
+};
+
+const COA_BOOK = [
+  { group: "asset", title: "Assets", nature: "Debit", note: "What the shop owns.", heads: [
+    { title: "Cash and bank", codes: ["1001", "1002", "1003"] },
+    { title: "Receivables", codes: ["1101"] },
+    { title: "Inventory", codes: ["1201"] },
+    { title: "Input GST", codes: ["2301", "2302", "2303"] },
+  ]},
+  { group: "liability", title: "Liabilities", nature: "Credit", note: "What the shop owes.", heads: [
+    { title: "Payables", codes: ["2101"] },
+    { title: "Output GST", codes: ["2201", "2202", "2203"] },
+  ]},
+  { group: "equity", title: "Equity", nature: "Credit", note: "Owner's capital and drawings.", heads: [
+    { title: "Capital", codes: ["3101", "3201"] },
+  ]},
+  { group: "income", title: "Income", nature: "Credit", note: "Sales and other income. Sales discount reduces income.", heads: [
+    { title: "Sales", codes: ["4101", "4102", "4103"] },
+  ]},
+  { group: "expense", title: "Expenses", nature: "Debit", note: "Purchases and the cost of running the shop.", heads: [
+    { title: "Purchases", codes: ["5101"] },
+    { title: "Operating expenses", codes: ["5102", "5103", "5104", "5105", "5106", "5107", "5108", "5109", "5110", "5111", "5199"] },
+  ]},
+];
+
+function coaGroupTitle(group) {
+  return COA_BOOK.find((row) => row.group === group)?.title || "Other";
+}
+
+function paintAccHero(name) {
+  const copy = ACC_COPY[name] || ACC_COPY.receivables;
+  if ($("acc-hero-title")) $("acc-hero-title").textContent = copy[0];
+  if ($("acc-hero-lede")) $("acc-hero-lede").textContent = copy[1];
+  const period = $("acc-period-form");
+  if (period) period.hidden = name === "coa";
+}
+
+function renderCoaTable(rows) {
+  const el = $("acc-coa-table");
+  if (!el) return;
+  const q = String($("coa-search")?.value || "").trim().toLowerCase();
+  const list = (rows || []).filter((row) => {
+    if (!q) return true;
+    return `${row.code} ${row.name} ${coaGroupTitle(row.account_group)}`.toLowerCase().includes(q);
+  });
+  const used = new Set();
+  const sections = COA_BOOK.map((section) => {
+    const heads = section.heads.map((head) => {
+      const lines = list.filter((row) => head.codes.includes(String(row.code)));
+      lines.forEach((row) => used.add(String(row.code)));
+      return { title: head.title, lines };
+    });
+    const extra = list.filter((row) => row.account_group === section.group && !used.has(String(row.code)) && !section.heads.some((head) => head.codes.includes(String(row.code))));
+    extra.forEach((row) => used.add(String(row.code)));
+    if (extra.length) heads.push({ title: "Other ledgers", lines: extra });
+    return { ...section, heads: heads.filter((head) => head.lines.length) };
+  }).filter((section) => section.heads.length);
+  const stray = list.filter((row) => !used.has(String(row.code)));
+  if (!sections.length && !stray.length) {
+    el.innerHTML = `<p class="hint">${rows?.length ? "No ledgers match." : "No ledgers yet."}</p>`;
+    return;
+  }
+  const tableFor = (lines) => `<div class="table-wrap"><table><thead><tr>
+      <th>Code</th><th>Ledger</th><th>Nature</th><th>Kind</th>
+    </tr></thead><tbody>${lines.map((row) => `<tr>
+      <td>${escapeHtml(row.code)}</td>
+      <td>${escapeHtml(row.name)}</td>
+      <td>${escapeHtml(COA_BOOK.find((g) => g.group === row.account_group)?.nature || "—")}</td>
+      <td>${Number(row.is_system) === 1 ? "System" : "Custom"}${Number(row.active) === 0 ? " · Inactive" : ""}</td>
+    </tr>`).join("")}</tbody></table></div>`;
+  el.innerHTML = `${sections.map((section) => `<section class="coa-group">
+      <h3>${escapeHtml(section.title)}</h3>
+      <p>${escapeHtml(section.note)} Nature: ${escapeHtml(section.nature)}.</p>
+      ${section.heads.map((head) => `<h4>${escapeHtml(head.title)}</h4>${tableFor(head.lines)}`).join("")}
+    </section>`).join("")}${stray.length ? `<section class="coa-group"><h3>Other</h3>${tableFor(stray)}</section>` : ""}`;
+}
 
 function accountPeriodCaption(from, to) {
   const start = formatShopDate(from) || String(from || "");
@@ -12989,6 +13080,7 @@ function setAccTab(name) {
   document.querySelectorAll(".acc-pane").forEach((pane) => {
     pane.hidden = pane.id !== `acc-pane-${name}`;
   });
+  paintAccHero(name);
   loadAccountsTab(name);
 }
 globalThis.setAccountsTab = setAccTab;
@@ -13136,10 +13228,8 @@ async function loadAccountsTab(name) {
     }).join("")}</tbody></table>`;
   }
   if (name === "coa") {
-    const rows = await api("/api/accounts/coa");
-    $("acc-coa-table").innerHTML = `<table><thead><tr><th>Code</th><th>Name</th><th>Group</th></tr></thead><tbody>${rows
-      .map((r) => `<tr><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.account_group)}</td></tr>`)
-      .join("")}</tbody></table>`;
+    coaRows = await api("/api/accounts/coa");
+    renderCoaTable(coaRows);
   }
   if (name === "journal") {
     const rows = await api(`/api/accounts/journal?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
@@ -14904,6 +14994,41 @@ $("modal-close").addEventListener("click", () => {
 document.querySelector(".accounts-toolbar")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-acc-tab]");
   if (btn) setAccTab(btn.dataset.accTab);
+});
+$("coa-search")?.addEventListener("input", () => renderCoaTable(coaRows));
+$("coa-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const hint = $("coa-hint");
+  const btn = e.target.querySelector("button[type='submit']");
+  if (hint) {
+    hint.textContent = "Saving ledger…";
+    hint.className = "hint";
+  }
+  if (btn) btn.disabled = true;
+  try {
+    await api("/api/accounts/coa", {
+      method: "POST",
+      body: JSON.stringify({
+        code: $("coa-code")?.value || "",
+        name: $("coa-name")?.value || "",
+        account_group: $("coa-group")?.value || "",
+      }),
+    });
+    if ($("coa-code")) $("coa-code").value = "";
+    if ($("coa-name")) $("coa-name").value = "";
+    if (hint) {
+      hint.textContent = "Ledger added.";
+      hint.className = "hint ok";
+    }
+    await loadAccountsTab("coa");
+  } catch (err) {
+    if (hint) {
+      hint.textContent = err.message;
+      hint.className = "hint error";
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 });
 $("acc-customer")?.addEventListener("change", () => {
   if (accTab === "customer-ledger") loadPartyLedgerTab("customer").catch((err) => {

@@ -13,6 +13,7 @@ import {
   ensureCoa,
   EXPENSE_COA,
   getCoa,
+  createCoaAccount,
   postExpenseJournal,
   postPaymentJournal,
   postReceiptJournal,
@@ -1539,6 +1540,14 @@ export function registerAccounts(app) {
       res.json(await getCoa());
     } catch (err) {
       res.status(500).json({ error: String(err.message) });
+    }
+  });
+
+  app.post("/api/accounts/coa", requirePerm("accounts"), async (req, res) => {
+    try {
+      res.json(await createCoaAccount(req.body || {}));
+    } catch (err) {
+      res.status(err.status || 400).json({ error: String(err.message) });
     }
   });
 

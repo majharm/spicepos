@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger, sortPartyLedgerRows, allocatePartyLedgerInvoices } from "./accounting.js";
+import { DEFAULT_COA, validateCoaAccount, expenseJournalLines, saleDiscountAmount, buildPartyLedger, sortPartyLedgerRows, allocatePartyLedgerInvoices } from "./accounting.js";
 import { splitGstAmount } from "./gst-supply.js";
 import { splitInvoiceCollection } from "./accounts.js";
 
@@ -39,7 +39,18 @@ test("DEFAULT_COA seeds core ledger, GST, and expense accounts", () => {
   assert.ok(DEFAULT_COA.some((a) => a.code === "2203" && a.account_group === "liability"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "2303" && a.account_group === "asset"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "5102" && a.account_group === "expense"));
+  assert.ok(DEFAULT_COA.some((a) => a.code === "3201" && a.account_group === "equity"));
+  assert.ok(DEFAULT_COA.some((a) => a.code === "4103" && a.account_group === "income"));
   assert.equal(DEFAULT_COA.filter((a) => a.account_group === "expense").length, 12);
+  assert.equal(validateCoaAccount({ code: "12", name: "Petty", account_group: "asset" }).error, "Account code must be 4 digits");
+  assert.equal(validateCoaAccount({ code: "1601", name: "P", account_group: "asset" }).error, "Account name is required");
+  assert.equal(validateCoaAccount({ code: "1601", name: "Petty cash", account_group: "cash" }).error, "Choose Assets, Liabilities, Equity, Income, or Expenses");
+  assert.equal(validateCoaAccount({ code: "1001", name: "Petty cash", account_group: "asset" }).error, "That code is a system ledger");
+  assert.equal(validateCoaAccount({ code: "1601", name: "Petty cash", account_group: "asset" }, ["1601"]).error, "Account code already exists");
+  const made = validateCoaAccount({ code: "1601", name: "  Petty   cash ", group: "asset" });
+  assert.equal(made.ok, true);
+  assert.equal(made.account.name, "Petty cash");
+  assert.equal(made.account.is_system, 0);
 });
 
 test("sale journal lines are balanced", () => {
@@ -159,6 +170,7 @@ test("customer-wise ledger allocates receipts to the invoice and reports billed/
 
 test("Accounts wires customer and supplier ledgers", () => {
   const accounts = readFileSync(path.join(root, "server/accounts.js"), "utf8");
+  const accounting = readFileSync(path.join(root, "server/accounting.js"), "utf8");
   const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
   const app = readFileSync(path.join(root, "js/app.js"), "utf8");
   const index = readFileSync(path.join(root, "index.html"), "utf8");
@@ -183,6 +195,14 @@ test("Accounts wires customer and supplier ledgers", () => {
   assert.match(index, /id="acc-supplier"/);
   assert.match(index, /id="acc-pane-customer-ledger"/);
   assert.match(index, /id="acc-pane-supplier-ledger"/);
+  assert.match(index, /id="coa-form"/);
+  assert.match(index, /class="acc-nav-group"/);
+  assert.match(app, /function renderCoaTable/);
+  assert.match(app, /function paintAccHero/);
+  assert.match(accounts, /app\.post\("\/api\/accounts\/coa"/);
+  assert.match(php, /accounts\/coa" && \$method === "POST"/);
+  assert.match(accounting, /export function validateCoaAccount/);
+  assert.match(accounting, /export async function createCoaAccount/);
   assert.match(accounts, /AS \\`lines\\`/);
   assert.match(php, /AS `lines`/);
 });
