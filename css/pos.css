@@ -3836,6 +3836,14 @@ body.m-app:not(.counter-mode) .support-dock {
   }
   .support-dock-panel { height: min(70dvh, 560px); }
 }
+/* restaurant-counter-chat: keep the chat launcher off Pay, KOT, Hold, and Clear */
+body.restaurant-mode.counter-mode .support-dock {
+  right: auto;
+  left: 16px;
+  bottom: 16px;
+  width: min(380px, calc(100vw - 24px));
+  align-items: flex-start;
+}
 @media (max-width: 900px) {
   .support-ticket-split { grid-template-columns: 1fr; }
   .support-ticket-copy strong { white-space: normal; }
@@ -7577,10 +7585,38 @@ body.apparel-mode #item-size-wrap { display: none; }
   body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-panel {
     padding-bottom: 0;
   }
-  body.restaurant-mode.counter-mode .stage.is-counter .bill-extras,
-  body.restaurant-mode.counter-mode .stage.is-counter .bill-settle,
-  body.restaurant-mode.counter-mode .stage.is-counter .line-si-btn,
-  body.restaurant-mode.counter-mode .stage.is-counter .line-si {
+  body.restaurant-mode.counter-mode .stage.is-counter .bill-extras {
+    display: none !important;
+  }
+  body.restaurant-mode.counter-mode .support-dock {
+    display: none;
+  }
+  /* restaurant-counter-paid: amount collected stays on the phone and tablet bill */
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-settle {
+    display: grid !important;
+    gap: 4px;
+    padding-top: 4px;
+  }
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-settle label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 750;
+  }
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-settle input {
+    width: 7.2em;
+    min-height: 40px;
+    text-align: right;
+    font-size: 16px;
+    font-weight: 800;
+  }
+  body.restaurant-mode.counter-mode .stage.is-counter .pay-this-hint {
+    display: none;
+  }
+  body.restaurant-mode.counter-mode:not(.has-cart) .stage.is-counter .bill-settle,
+  body.restaurant-mode.bill-collapsed .stage.is-counter .bill-settle {
     display: none !important;
   }
   body.restaurant-mode.counter-mode.has-cart .stage.is-counter .ticket-head,
