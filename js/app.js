@@ -9054,6 +9054,21 @@ let supportPaint = 0;
 let supportChatTimer = 0;
 let supportDockSeen = "";
 let supportDockReady = false;
+const heardSupportReply = new Set();
+let supportReplyPrimed = false;
+
+function hearSupportReply(messages) {
+  let fresh = false;
+  for (const row of messages || []) {
+    if (!row?.id || row.author_role !== "master") continue;
+    if (!heardSupportReply.has(row.id)) {
+      if (supportReplyPrimed) fresh = true;
+      heardSupportReply.add(row.id);
+    }
+  }
+  supportReplyPrimed = true;
+  if (fresh) window.SupportPage?.playChatSound?.();
+}
 
 function stopSupportChat() {
   if (supportChatTimer) clearInterval(supportChatTimer);
@@ -9115,6 +9130,7 @@ function mountSupportDock() {
   if (!dock) return;
   if (dock.dataset.bound !== "1") {
     dock.dataset.bound = "1";
+    document.addEventListener("pointerdown", () => window.SupportPage?.primeChatSound?.(), { once: true, capture: true });
     dock.querySelector("#support-dock-open")?.addEventListener("click", () => setSupportDockOpen(true));
     dock.querySelector("#support-dock-close")?.addEventListener("click", () => setSupportDockOpen(false));
     bindSupportChat(dock);
@@ -9164,6 +9180,7 @@ async function refreshSupportChat() {
   try {
     const data = await api("/api/support/chat");
     const messages = data.messages || [];
+    hearSupportReply(messages);
     const last = messages.length ? messages[messages.length - 1].id || "" : "";
     if (log.dataset.last === last) {
       if (!supportDockReady) {
@@ -9184,6 +9201,14 @@ async function refreshSupportChat() {
 
 function bindSupportChat(root) {
   const form = root.querySelector("#support-chat-form");
+  const fileInput = form?.querySelector('input[type="file"]');
+  const pending = form?.querySelector("[data-chat-file]");
+  fileInput?.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (!pending) return;
+    pending.hidden = !file;
+    pending.textContent = file ? `Attached · ${file.name}` : "";
+  });
   form?.querySelector("textarea")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -9195,11 +9220,16 @@ function bindSupportChat(root) {
     const form = event.currentTarget;
     const hint = form.querySelector(".hint");
     const button = form.querySelector("button[type=submit]");
-    const body = Object.fromEntries(new FormData(form).entries());
     if (button) button.disabled = true;
     try {
-      const saved = await api("/api/support/chat", { method: "POST", body: JSON.stringify(body) });
+      const payload = await window.SupportPage.chatFormPayload(form);
+      const saved = await api("/api/support/chat", { method: "POST", body: JSON.stringify(payload) });
       form.reset();
+      const pending = form.querySelector("[data-chat-file]");
+      if (pending) {
+        pending.hidden = true;
+        pending.textContent = "";
+      }
       const log = root.querySelector("#support-chat-log");
       if (log && window.SupportPage?.chatLogHtml) {
         const messages = saved.messages || [];

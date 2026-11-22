@@ -80,18 +80,47 @@ function pos_support_ticket_schema() {
     author_role VARCHAR(16) NOT NULL,
     author_name VARCHAR(120) NOT NULL DEFAULT '',
     body TEXT NOT NULL,
+    attachment_name VARCHAR(180) NOT NULL DEFAULT '',
+    attachment_mime VARCHAR(80) NOT NULL DEFAULT '',
+    attachment_data MEDIUMTEXT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_support_chat_shop (business_id, created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+  if (function_exists("pos_ensure_columns")) {
+    pos_ensure_columns("support_chat_messages", [
+      "attachment_name" => "VARCHAR(180) NOT NULL DEFAULT ''",
+      "attachment_mime" => "VARCHAR(80) NOT NULL DEFAULT ''",
+      "attachment_data" => "MEDIUMTEXT NULL",
+    ]);
+  }
   pos_support_align_collation("support_tickets");
   pos_support_align_collation("support_ticket_replies");
   pos_support_align_collation("support_chat_messages");
   $done = true;
 }
 
+function pos_support_chat_file($body) {
+  $file = $body["attachment"] ?? null;
+  if (!is_array($file)) return [null, ""];
+  $data = trim((string) ($file["data"] ?? ""));
+  if ($data === "") return [null, ""];
+  if (!preg_match('#^data:(image/(?:jpeg|jpg|png|webp|gif)|application/pdf);base64,([A-Za-z0-9+/=\s]+)$#i', $data, $m)) {
+    return [null, "Attach a photo or PDF"];
+  }
+  $b64 = preg_replace('/\s+/', '', $m[2]);
+  if (strlen($b64) < 16) return [null, "That file is empty"];
+  if (strlen($b64) > 1400000) return [null, "Attachment must be under 1 MB"];
+  $mime = strtolower($m[1]) === "image/jpg" ? "image/jpeg" : strtolower($m[1]);
+  $name = trim((string) ($file["name"] ?? "file"));
+  $name = preg_replace('/[^\w.\- ()]+/', '', basename(str_replace("\\", "/", $name)));
+  if ($name === "") $name = "file";
+  $name = substr($name, 0, 120);
+  return [["name" => $name, "mime" => $mime, "data" => "data:" . $mime . ";base64," . $b64], ""];
+}
+
 function pos_support_chat_load($bid) {
   $rows = pos_q(
-    "SELECT id, business_id, author_role, author_name, body, created_at
+    "SELECT id, business_id, author_role, author_name, body, attachment_name, attachment_mime, attachment_data, created_at
      FROM support_chat_messages
      WHERE business_id = ?
      ORDER BY created_at DESC, id DESC
@@ -102,11 +131,12 @@ function pos_support_chat_load($bid) {
   return array_reverse($rows ?: []);
 }
 
-function pos_support_chat_add($bid, $role, $name, $body) {
+function pos_support_chat_add($bid, $role, $name, $body, $file = null) {
+  $file = is_array($file) ? $file : ["name" => "", "mime" => "", "data" => null];
   pos_q(
-    "INSERT INTO support_chat_messages (id, business_id, author_role, author_name, body) VALUES (?,?,?,?,?)",
-    "sssss",
-    [pos_uuid(), $bid, $role, $name, $body]
+    "INSERT INTO support_chat_messages (id, business_id, author_role, author_name, body, attachment_name, attachment_mime, attachment_data) VALUES (?,?,?,?,?,?,?,?)",
+    "ssssssss",
+    [pos_uuid(), $bid, $role, $name, (string) $body, $file["name"] ?? "", $file["mime"] ?? "", $file["data"] ?? ""]
   );
   return pos_support_chat_load($bid);
 }
@@ -221,14 +251,16 @@ function pos_support_ticket_dispatch($path, $method, $body, $bid, $auth) {
   if ($path === "support/chat" && $method === "POST") {
     if ($bid === "") pos_send(401, ["error" => "Sign in required"]);
     $message = pos_support_body($body["body"] ?? "");
-    if ($message === "") pos_send(400, ["error" => "Write a message"]);
-    $messages = pos_support_chat_add($bid, "shop", pos_support_actor_name($auth, "Shop"), $message);
+    [$file, $fileError] = pos_support_chat_file($body);
+    if ($fileError !== "") pos_send(400, ["error" => $fileError]);
+    if ($message === "" && !$file) pos_send(400, ["error" => "Write a message or attach a photo"]);
+    $messages = pos_support_chat_add($bid, "shop", pos_support_actor_name($auth, "Shop"), $message, $file);
     pos_send(200, ["messages" => $messages, "php" => true]);
   }
 
   if ($path === "master/support-chat" && $method === "GET") {
     $rows = pos_q(
-      "SELECT c.business_id, b.name AS shop_name, c.body, c.author_role, c.author_name, c.created_at
+      "SELECT c.business_id, b.name AS shop_name, c.body, c.attachment_name, c.author_role, c.author_name, c.created_at
        FROM support_chat_messages c
        JOIN (
          SELECT business_id, MAX(created_at) AS created_at
@@ -251,10 +283,12 @@ function pos_support_ticket_dispatch($path, $method, $body, $bid, $auth) {
 
   if (preg_match("#^master/support-chat/([^/]+)$#", $path, $m) && $method === "POST") {
     $message = pos_support_body($body["body"] ?? "");
-    if ($message === "") pos_send(400, ["error" => "Write a message"]);
+    [$file, $fileError] = pos_support_chat_file($body);
+    if ($fileError !== "") pos_send(400, ["error" => $fileError]);
+    if ($message === "" && !$file) pos_send(400, ["error" => "Write a message or attach a photo"]);
     $shops = pos_q("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", "s", [$m[1]]);
     if (!$shops) pos_send(404, ["error" => "Shop not found"]);
-    $messages = pos_support_chat_add($m[1], "master", pos_support_actor_name($auth, "Support"), $message);
+    $messages = pos_support_chat_add($m[1], "master", pos_support_actor_name($auth, "Support"), $message, $file);
     pos_send(200, ["shop" => $shops[0], "messages" => $messages, "php" => true]);
   }
 

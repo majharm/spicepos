@@ -109,6 +109,31 @@ test("live chat panel and inbox", () => {
   assert.match(inbox, /data-chat-open="biz-1"/);
   assert.match(inbox, /Need help/);
   assert.match(inbox, />New</);
+  const open = S.chatInboxHtml(
+    [{ business_id: "biz-1", shop_name: "SWAMI MASALE", author_role: "shop", body: "", attachment_name: "bill.pdf", created_at: "2026-11-20 12:01:00" }],
+    "biz-1",
+  );
+  assert.match(open, /is-open/);
+  assert.match(open, /Attachment · bill.pdf/);
+  const photo = S.chatLogHtml([
+    {
+      id: "m2",
+      author_role: "master",
+      body: "",
+      attachment_name: "counter.png",
+      attachment_mime: "image/png",
+      attachment_data: "data:image/png;base64,aaaa",
+    },
+  ]);
+  assert.match(photo, /<img/);
+  assert.match(photo, /counter\.png/);
+  assert.equal(S.chatAttachment({ data: "data:text/html;base64,aaaa" }).error, "Attach a photo or PDF");
+  const ok = S.chatAttachment({ name: "note.pdf", data: "data:application/pdf;base64," + "A".repeat(20) });
+  assert.equal(ok.mime, "application/pdf");
+  assert.equal(ok.name, "note.pdf");
+  assert.equal(typeof S.playChatSound, "function");
+  assert.match(master, /Attach/);
+  assert.match(S.footerChatHtml(), /Attach/);
 });
 
 test("shop chat box lives in the footer dock", () => {

@@ -193,6 +193,97 @@
     return String(value ?? "").replaceAll("\r\n", "\n").trim().slice(0, 2000);
   }
 
+  function chatFileName(value) {
+    const base = String(value || "file").split(/[/\\]/).pop() || "file";
+    const clean = base.replace(/[^\w.\- ()]+/g, "").trim().slice(0, 120);
+    return clean || "file";
+  }
+
+  function chatAttachment(raw) {
+    if (!raw) return null;
+    const data = String(raw.data || raw.attachment_data || raw.attachment || "").trim();
+    if (!data) return null;
+    const match = data.match(/^data:(image\/(?:jpeg|jpg|png|webp|gif)|application\/pdf);base64,([A-Za-z0-9+/=\s]+)$/i);
+    if (!match) return { error: "Attach a photo or PDF" };
+    const b64 = match[2].replace(/\s/g, "");
+    if (b64.length < 16) return { error: "That file is empty" };
+    if (b64.length > 1_400_000) return { error: "Attachment must be under 1 MB" };
+    const mime = match[1].toLowerCase() === "image/jpg" ? "image/jpeg" : match[1].toLowerCase();
+    return { name: chatFileName(raw.name || raw.file_name || raw.attachment_name), mime, data: `data:${mime};base64,${b64}` };
+  }
+
+  function readChatFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        resolve(null);
+        return;
+      }
+      if (!/^(image\/(jpeg|jpg|png|webp|gif)|application\/pdf)$/i.test(file.type || "")) {
+        reject(new Error("Attach a photo or PDF"));
+        return;
+      }
+      if (file.size > 900_000) {
+        reject(new Error("Attachment must be under 1 MB"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const parsed = chatAttachment({ name: file.name, data: reader.result });
+        if (!parsed || parsed.error) reject(new Error(parsed?.error || "Could not read the file"));
+        else resolve(parsed);
+      };
+      reader.onerror = () => reject(new Error("Could not read the file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function chatFormPayload(form) {
+    const body = ticketBody(form?.querySelector("[name=body]")?.value);
+    const file = form?.querySelector('input[type="file"]')?.files?.[0] || null;
+    const attachment = await readChatFile(file);
+    if (!body && !attachment) throw new Error("Write a message or attach a photo");
+    return { body, attachment };
+  }
+
+  let chatAudio = null;
+  function playChatSound() {
+    const Ctx = typeof window !== "undefined" ? window.AudioContext || window.webkitAudioContext : null;
+    if (!Ctx) return;
+    try {
+      if (!chatAudio) chatAudio = new Ctx();
+      const play = () => {
+        const now = chatAudio.currentTime;
+        const osc = chatAudio.createOscillator();
+        const gain = chatAudio.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(620, now + 0.14);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.07, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+        osc.connect(gain);
+        gain.connect(chatAudio.destination);
+        osc.start(now);
+        osc.stop(now + 0.28);
+      };
+      if (chatAudio.state === "suspended") chatAudio.resume().then(play).catch(() => {});
+      else play();
+    } catch {
+      /* sound is optional */
+    }
+  }
+
+  function primeChatSound() {
+    const Ctx = typeof window !== "undefined" ? window.AudioContext || window.webkitAudioContext : null;
+    if (!Ctx) return;
+    try {
+      if (!chatAudio) chatAudio = new Ctx();
+      if (chatAudio.state === "suspended") chatAudio.resume().catch(() => {});
+    } catch {
+      /* sound is optional */
+    }
+  }
+
   function ticketStatusLabel(status, audience) {
     const key = ticketStatus(status) || "open";
     if (key === "resolved") return "Resolved";
@@ -332,6 +423,20 @@
     </section>`;
   }
 
+  function chatFileHtml(row) {
+    const data = String(row?.attachment_data || "");
+    const name = chatFileName(row?.attachment_name || "Attachment");
+    const mime = String(row?.attachment_mime || "");
+    if (!data && !row?.attachment_name) return "";
+    if (mime.startsWith("image/") && data.startsWith("data:image/")) {
+      return `<a class="support-chat-file" href="${escapeHtml(data)}" target="_blank" rel="noopener noreferrer"><img alt="${escapeHtml(name)}" src="${escapeHtml(data)}" /></a>`;
+    }
+    if (data.startsWith("data:")) {
+      return `<a class="support-chat-file is-doc" href="${escapeHtml(data)}" download="${escapeHtml(name)}" target="_blank" rel="noopener noreferrer">${escapeHtml(name)}</a>`;
+    }
+    return `<span class="support-chat-file is-doc">${escapeHtml(name)}</span>`;
+  }
+
   function chatLogHtml(messages) {
     const rows = Array.isArray(messages) ? messages : [];
     if (!rows.length) return `<p class="support-empty">No messages yet. Send one and the support team will see it here.</p>`;
@@ -339,12 +444,30 @@
       .map((row) => {
         const supportSide = row.author_role === "master";
         const who = supportSide ? "Support" : "Shop";
+        const name = String(row.author_name || "").trim();
+        const named = name && name.toLowerCase() !== who.toLowerCase() ? ` · ${escapeHtml(name)}` : "";
+        const text = row.body ? `<p>${escapeHtml(row.body)}</p>` : "";
         return `<article class="support-chat-bubble${supportSide ? " is-master" : ""}" data-chat-id="${escapeHtml(row.id || "")}">
-          <header><strong>${escapeHtml(who)}${row.author_name ? ` · ${escapeHtml(row.author_name)}` : ""}</strong><time>${escapeHtml(ticketWhen(row.created_at))}</time></header>
-          <p>${escapeHtml(row.body || "")}</p>
+          <header><strong>${escapeHtml(who)}${named}</strong><time>${escapeHtml(ticketWhen(row.created_at))}</time></header>
+          ${text}
+          ${chatFileHtml(row)}
         </article>`;
       })
       .join("");
+  }
+
+  function chatComposeHtml(formId, hintId, placeholder) {
+    return `<form class="support-chat-form" id="${formId}">
+      <div class="support-chat-compose">
+        <label class="support-chat-clip">Attach
+          <input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" aria-label="Attach a photo or PDF" />
+        </label>
+        <textarea name="body" rows="2" maxlength="2000" placeholder="${escapeHtml(placeholder)}" aria-label="Message"></textarea>
+        <button class="btn primary" type="submit">Send</button>
+      </div>
+      <p class="support-chat-pending" data-chat-file hidden></p>
+      <p class="hint" id="${hintId}"></p>
+    </form>`;
   }
 
   function chatPanelHtml(messages, opts) {
@@ -356,18 +479,21 @@
     const logId = audience === "master" ? "master-chat-log" : "support-chat-log";
     const hintId = audience === "master" ? "master-chat-hint" : "support-chat-hint";
     const placeholder = audience === "master" ? "Reply to this shop" : "Message the support team";
+    const title = audience === "master" && opts?.shopName ? opts.shopName : "Live chat";
+    const note = audience === "master"
+      ? "This shop sees your reply, photos, and PDFs in the chat box at the bottom of their console."
+      : "The ATAV support team sees this in their live chat.";
     return `<section class="support-chat" data-chat-last="${escapeHtml(last)}">
       <div class="support-chat-head">
-        <h3>Live chat</h3>
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          ${audience === "master" ? "" : shop}
+        </div>
         <span class="support-pill">Live</span>
       </div>
-      <p class="support-panel-note">${audience === "master" ? "This shop sees your reply in the chat box at the bottom of the business admin console." : "The ATAV support team sees this in their live chat."}</p>
-      ${shop}
+      <p class="support-panel-note">${note}</p>
       <div class="support-chat-log" id="${logId}" data-last="${escapeHtml(last)}">${chatLogHtml(rows)}</div>
-      <form class="support-chat-form" id="${formId}">
-        <label class="wide">Message<textarea name="body" rows="2" maxlength="2000" required placeholder="${escapeHtml(placeholder)}"></textarea></label>
-        <div class="support-ticket-actions wide"><button class="btn primary" type="submit">Send</button><span class="hint" id="${hintId}"></span></div>
-      </form>
+      ${chatComposeHtml(formId, hintId, placeholder)}
     </section>`;
   }
 
@@ -383,8 +509,12 @@
         </header>
         <div class="support-chat-log" id="support-chat-log" data-last="">${chatLogHtml([])}</div>
         <form class="support-dock-compose" id="support-chat-form">
-          <textarea name="body" rows="1" maxlength="2000" required placeholder="Message the support team" aria-label="Message"></textarea>
+          <label class="support-chat-clip">Attach
+            <input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" aria-label="Attach a photo or PDF" />
+          </label>
+          <textarea name="body" rows="1" maxlength="2000" placeholder="Message the support team" aria-label="Message"></textarea>
           <button class="btn primary" type="submit">Send</button>
+          <p class="support-chat-pending" data-chat-file hidden></p>
           <span class="hint" id="support-chat-hint"></span>
         </form>
       </section>
@@ -395,17 +525,26 @@
     </aside>`;
   }
 
-  function chatInboxHtml(rows) {
+  function chatPreview(row) {
+    const text = String(row?.body || "").trim();
+    if (text) return text;
+    if (row?.attachment_name) return `Attachment · ${row.attachment_name}`;
+    return "";
+  }
+
+  function chatInboxHtml(rows, openId) {
     const list = Array.isArray(rows) ? rows : [];
+    const open = String(openId || "");
     if (!list.length) return `<p class="support-empty">No live chats yet. A shop message shows up here.</p>`;
     return `<div class="support-ticket-list">${list
       .map((row) => {
         const waiting = row.author_role !== "master";
-        return `<button type="button" class="support-ticket-row" data-chat-open="${escapeHtml(row.business_id || "")}">
+        const current = open && row.business_id === open ? " is-open" : "";
+        return `<button type="button" class="support-ticket-row master-chat-row${current}${waiting ? " is-waiting" : ""}" data-chat-open="${escapeHtml(row.business_id || "")}">
           <span class="support-ticket-copy">
             <strong>${escapeHtml(row.shop_name || "Shop")}</strong>
             <span class="support-ticket-meta"><span>${escapeHtml(waiting ? "Shop" : "Support")}</span><span>${escapeHtml(ticketWhen(row.created_at))}</span></span>
-            <span class="support-chat-preview">${escapeHtml(row.body || "")}</span>
+            <span class="support-chat-preview">${escapeHtml(chatPreview(row))}</span>
           </span>
           <span class="support-pill${waiting ? "" : " is-resolved"}">${waiting ? "New" : "Replied"}</span>
         </button>`;
@@ -450,5 +589,10 @@
     chatPanelHtml,
     footerChatHtml,
     chatInboxHtml,
+    chatAttachment,
+    chatFormPayload,
+    playChatSound,
+    primeChatSound,
+    chatPreview,
   };
 });
