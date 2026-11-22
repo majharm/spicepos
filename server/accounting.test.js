@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { DEFAULT_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger, sortPartyLedgerRows, allocatePartyLedgerInvoices } from "./accounting.js";
+import { DEFAULT_COA, EXPENSE_COA, expenseJournalLines, saleDiscountAmount, buildPartyLedger, sortPartyLedgerRows, allocatePartyLedgerInvoices } from "./accounting.js";
 import { splitGstAmount } from "./gst-supply.js";
 import { splitInvoiceCollection } from "./accounts.js";
 
@@ -39,7 +39,16 @@ test("DEFAULT_COA seeds core ledger, GST, and expense accounts", () => {
   assert.ok(DEFAULT_COA.some((a) => a.code === "2203" && a.account_group === "liability"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "2303" && a.account_group === "asset"));
   assert.ok(DEFAULT_COA.some((a) => a.code === "5102" && a.account_group === "expense"));
-  assert.equal(DEFAULT_COA.filter((a) => a.account_group === "expense").length, 12);
+  assert.ok(EXPENSE_COA.some((a) => a.code === "5112" && a.name === "Water"));
+  assert.ok(EXPENSE_COA.some((a) => a.code === "5124" && a.name === "Aggregator commission"));
+  assert.equal(EXPENSE_COA.at(-1).code, "5199");
+  assert.equal(DEFAULT_COA.filter((a) => a.account_group === "expense").length, EXPENSE_COA.length + 1);
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-accounting.php"), "utf8");
+  for (const row of EXPENSE_COA) {
+    assert.match(app, new RegExp(`code: "${row.code}", name: "`));
+    assert.match(php, new RegExp(`\\["${row.code}", "${row.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}", "expense"\\]`));
+  }
 });
 
 test("sale journal lines are balanced", () => {
