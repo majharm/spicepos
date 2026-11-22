@@ -17,8 +17,10 @@ function pos_default_coa() {
     ["2202", "GST output SGST", "liability"],
     ["2203", "GST output IGST", "liability"],
     ["3101", "Capital account", "equity"],
+    ["3201", "Drawings", "equity"],
     ["4101", "Sales", "income"],
     ["4102", "Sales discount", "income"],
+    ["4103", "Other income", "income"],
     ["5101", "Purchase of goods", "expense"],
     ["5102", "Rent", "expense"],
     ["5103", "Electricity", "expense"],
@@ -766,6 +768,36 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
       "SELECT id, code, name, account_group, is_system, active FROM chart_of_accounts WHERE business_id = ? ORDER BY code",
       "s", [$bid]
     ));
+  }
+
+  if ($path === "accounts/coa" && $method === "POST") {
+    $code = trim((string) ($body["code"] ?? ""));
+    $name = preg_replace("/\s+/", " ", trim((string) ($body["name"] ?? "")));
+    $name = function_exists("mb_substr") ? mb_substr($name, 0, 80) : substr($name, 0, 80);
+    $group = strtolower(trim((string) ($body["account_group"] ?? $body["group"] ?? "")));
+    $groups = ["asset", "liability", "equity", "income", "expense"];
+    if (!preg_match("/^\d{4}$/", $code)) pos_send(400, ["error" => "Account code must be 4 digits"]);
+    if (strlen($name) < 2) pos_send(400, ["error" => "Account name is required"]);
+    if (!in_array($group, $groups, true)) pos_send(400, ["error" => "Choose Assets, Liabilities, Equity, Income, or Expenses"]);
+    foreach (pos_default_coa() as $row) {
+      if ($row[0] === $code) pos_send(400, ["error" => "That code is a system ledger"]);
+    }
+    $have = pos_q("SELECT id FROM chart_of_accounts WHERE business_id = ? AND code = ? LIMIT 1", "ss", [$bid, $code]);
+    if ($have) pos_send(400, ["error" => "Account code already exists"]);
+    $id = pos_uuid();
+    pos_q(
+      "INSERT INTO chart_of_accounts (id, business_id, code, name, account_group, is_system, active) VALUES (?,?,?,?,?,0,1)",
+      "sssss",
+      [$id, $bid, $code, $name, $group]
+    );
+    pos_send(200, [
+      "id" => $id,
+      "code" => $code,
+      "name" => $name,
+      "account_group" => $group,
+      "is_system" => 0,
+      "active" => 1,
+    ]);
   }
 
   if ($path === "accounts/trial-balance" && $method === "GET") {

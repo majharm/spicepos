@@ -12,7 +12,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261122cafe1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261122acc1" />
     <link rel="stylesheet" href="./css/online-store.css?v=20261116storemenu1" />
     <link rel="stylesheet" href="./css/ecommerce.css?v=20261117ecom1" />
     <link rel="stylesheet" href="./css/crm.css?v=20261117crm6" />
@@ -2703,21 +2703,40 @@
         </section>
         <section class="view view-finance" id="view-accounts" hidden>
           <h2 class="visually-hidden">Accounts</h2>
-          <p class="lede">Double-entry books: receivables, payables, customer and supplier ledgers, chart of accounts, trial balance, P&amp;L, balance sheet, and cash book.</p>
+          <div class="items-desk accounts-desk">
+          <header class="items-hero">
+            <div class="items-hero-copy">
+              <p class="items-kicker">Accounts</p>
+              <h3 id="acc-hero-title">Receivables</h3>
+              <p class="lede" id="acc-hero-lede">Customers who still owe this shop.</p>
+            </div>
+          </header>
           <div class="report-grid" id="acc-summary"></div>
-          <div class="accounts-toolbar">
-            <button class="btn acc-tab active" type="button" data-acc-tab="receivables">Receivables</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="payables">Payables</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="customer-ledger">Customer ledger</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="supplier-ledger">Supplier ledger</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="ledger">Day book</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="coa">Chart of accounts</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="journal">Journal</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="trial-balance">Trial balance</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="profit-loss">P&amp;L</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="balance-sheet">Balance sheet</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="cash-book">Cash book</button>
-            <button class="btn acc-tab" type="button" data-acc-tab="bank-book">Bank book</button>
+          <div class="accounts-toolbar" role="tablist" aria-label="Accounts">
+            <div class="acc-nav-group">
+              <span>Ledgers</span>
+              <button class="btn acc-tab active" type="button" data-acc-tab="receivables">Receivables</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="payables">Payables</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="customer-ledger">Customer ledger</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="supplier-ledger">Supplier ledger</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="ledger">Day book</button>
+            </div>
+            <div class="acc-nav-group">
+              <span>Books</span>
+              <button class="btn acc-tab" type="button" data-acc-tab="journal">Journal</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="cash-book">Cash book</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="bank-book">Bank book</button>
+            </div>
+            <div class="acc-nav-group">
+              <span>Statements</span>
+              <button class="btn acc-tab" type="button" data-acc-tab="trial-balance">Trial balance</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="profit-loss">P&amp;L</button>
+              <button class="btn acc-tab" type="button" data-acc-tab="balance-sheet">Balance sheet</button>
+            </div>
+            <div class="acc-nav-group">
+              <span>Masters</span>
+              <button class="btn acc-tab" type="button" data-acc-tab="coa">Chart of accounts</button>
+            </div>
           </div>
           <form class="report-toolbar" id="acc-period-form">
             <div class="reports-range-chips" id="acc-range-chips">
@@ -2759,13 +2778,32 @@
             <div class="table-wrap" id="acc-supplier-ledger-table"></div>
           </div>
           <div id="acc-pane-ledger" class="acc-pane" hidden><div class="table-wrap" id="acc-ledger-table"></div></div>
-          <div id="acc-pane-coa" class="acc-pane" hidden><div class="table-wrap" id="acc-coa-table"></div></div>
+          <div id="acc-pane-coa" class="acc-pane" hidden>
+            <form class="coa-form" id="coa-form">
+              <label>Code <input id="coa-code" inputmode="numeric" maxlength="4" required placeholder="1601" autocomplete="off" /></label>
+              <label>Ledger name <input id="coa-name" maxlength="80" required placeholder="Petty cash" autocomplete="off" /></label>
+              <label>Group
+                <select id="coa-group" aria-label="Account group">
+                  <option value="asset">Assets</option>
+                  <option value="liability">Liabilities</option>
+                  <option value="equity">Equity</option>
+                  <option value="income">Income</option>
+                  <option value="expense">Expenses</option>
+                </select>
+              </label>
+              <button class="btn primary" type="submit">Add ledger</button>
+            </form>
+            <p class="hint" id="coa-hint"></p>
+            <label class="coa-search">Search ledgers <input id="coa-search" type="search" placeholder="Code or name" /></label>
+            <div id="acc-coa-table"></div>
+          </div>
           <div id="acc-pane-journal" class="acc-pane" hidden><div class="table-wrap" id="acc-journal-table"></div></div>
           <div id="acc-pane-trial-balance" class="acc-pane" hidden><div class="table-wrap" id="acc-tb-table"></div></div>
           <div id="acc-pane-profit-loss" class="acc-pane" hidden><div class="table-wrap" id="acc-pl-table"></div></div>
           <div id="acc-pane-balance-sheet" class="acc-pane" hidden><div class="table-wrap" id="acc-bs-table"></div></div>
           <div id="acc-pane-cash-book" class="acc-pane" hidden><div class="table-wrap" id="acc-cash-table"></div></div>
           <div id="acc-pane-bank-book" class="acc-pane" hidden><div class="table-wrap" id="acc-bank-table"></div></div>
+          </div>
         </section>
         <section class="view view-finance" id="view-expenses" hidden>
           <h2 class="visually-hidden">Expenses</h2>
@@ -4058,7 +4096,7 @@
     <script src="./js/stock-desk.js?v=20261117stock0" defer></script>
     <script src="./js/crm.js?v=20261117crm6" defer></script>
     <script src="./js/security-login.js?v=20261118sec1" defer></script>
-    <script src="./js/app.js?v=20261120dock1" defer></script>
+    <script src="./js/app.js?v=20261122acc1" defer></script>
     <script src="./js/online-store-desk.js?v=20261116store1" defer></script>
     <script src="./js/ecommerce-desk.js?v=20261117ecom1" defer></script>
     <script src="./js/automation-shop.js?v=20261031auto1" defer></script>

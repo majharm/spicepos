@@ -34,13 +34,30 @@ export const DEFAULT_COA = [
   { code: "2202", name: "GST output SGST", account_group: "liability" },
   { code: "2203", name: "GST output IGST", account_group: "liability" },
   { code: "3101", name: "Capital account", account_group: "equity" },
+  { code: "3201", name: "Drawings", account_group: "equity" },
   { code: "4101", name: "Sales", account_group: "income" },
   { code: "4102", name: "Sales discount", account_group: "income" },
+  { code: "4103", name: "Other income", account_group: "income" },
   { code: "5101", name: "Purchase of goods", account_group: "expense" },
   ...EXPENSE_COA,
 ];
 
 const CASH_CODES = new Set(["1001", "1002", "1003"]);
+
+export const COA_GROUPS = ["asset", "liability", "equity", "income", "expense"];
+
+export function validateCoaAccount(input, existingCodes = []) {
+  const code = String(input?.code || "").trim();
+  const name = String(input?.name || "").trim().replace(/\s+/g, " ").slice(0, 80);
+  const group = String(input?.account_group || input?.group || "").trim().toLowerCase();
+  const taken = new Set((existingCodes || []).map((c) => String(c)));
+  if (!/^\d{4}$/.test(code)) return { ok: false, error: "Account code must be 4 digits" };
+  if (name.length < 2) return { ok: false, error: "Account name is required" };
+  if (!COA_GROUPS.includes(group)) return { ok: false, error: "Choose Assets, Liabilities, Equity, Income, or Expenses" };
+  if (DEFAULT_COA.some((row) => row.code === code)) return { ok: false, error: "That code is a system ledger" };
+  if (taken.has(code)) return { ok: false, error: "Account code already exists" };
+  return { ok: true, account: { code, name, account_group: group, is_system: 0, active: 1 } };
+}
 
 function isoDate(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return shopToday(value);
@@ -388,6 +405,31 @@ export async function getCoa(businessId = bid()) {
     "SELECT id, code, name, account_group, is_system, active FROM chart_of_accounts WHERE business_id = ? ORDER BY code",
     [businessId],
   );
+}
+
+export async function createCoaAccount(input, businessId = bid()) {
+  const { withTransaction } = await import("./db.js");
+  return withTransaction(async (conn) => {
+    await ensureCoa(conn, businessId);
+    const [rows] = await conn.query(
+      "SELECT code FROM chart_of_accounts WHERE business_id = ?",
+      [businessId],
+    );
+    const check = validateCoaAccount(input, rows.map((row) => row.code));
+    if (!check.ok) {
+      const err = new Error(check.error);
+      err.status = 400;
+      throw err;
+    }
+    const id = crypto.randomUUID();
+    const account = check.account;
+    await conn.query(
+      `INSERT INTO chart_of_accounts (id, business_id, code, name, account_group, is_system, active)
+       VALUES (?,?,?,?,?,0,1)`,
+      [id, businessId, account.code, account.name, account.account_group],
+    );
+    return { id, ...account };
+  });
 }
 
 export async function trialBalance(from, to, businessId = bid()) {
