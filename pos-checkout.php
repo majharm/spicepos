@@ -80,6 +80,13 @@ function pos_checkout_sale($bid, $branchId, $uid, $auth, $body) {
     $cust = pos_q("SELECT * FROM customers WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$customerId, $bid]);
     $customer = $cust[0] ?? null;
     if (!$customer) throw new Exception("Customer not found");
+    if ($qrOrderId !== "" && function_exists("pos_qr_bill_uses_guest") && pos_qr_bill_uses_guest($customer)) {
+      $qr = pos_q("SELECT customer_name, mobile FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$qrOrderId, $bid]);
+      if (!empty($qr[0]) && function_exists("pos_qr_remember_customer")) {
+        $guest = pos_qr_remember_customer($bid, $qrOrderId, $qr[0]);
+        if (!empty($guest["id"])) $customer = $guest;
+      }
+    }
     if (is_file(__DIR__ . "/pos-advanced.php")) require_once __DIR__ . "/pos-advanced.php";
     if (function_exists("pos_ensure_advanced_schema")) pos_ensure_advanced_schema();
     $built = [];

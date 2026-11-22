@@ -13,6 +13,7 @@ import {
   packMenuId,
   parsePackMenuId,
   qrMobileDigits,
+  qrBillUsesGuest,
   qrInvoiceTotals,
   qrOrderingBlocked,
   qrOrderingBlockMessage,
@@ -422,6 +423,28 @@ test("QR mobile digits match customers on the last ten numbers", () => {
   assert.equal(qrMobileDigits("9876543210"), "9876543210");
 });
 
+test("A QR bill keeps a chosen customer and replaces Walk-in with the guest", () => {
+  assert.equal(qrBillUsesGuest(null), true);
+  assert.equal(qrBillUsesGuest({ code: "CUS-001", name: "Walk-in" }), true);
+  assert.equal(qrBillUsesGuest({ code: "CUS-014", name: "Walk-in" }), true);
+  assert.equal(qrBillUsesGuest({ code: "CUS-014", name: "Ramesh" }), false);
+  const node = readFileSync(path.join(root, "server/qr-ordering.js"), "utf8");
+  const php = readFileSync(path.join(root, "pos-qr-ordering.php"), "utf8");
+  const checkout = readFileSync(path.join(root, "server/index.js"), "utf8");
+  const phpCheckout = readFileSync(path.join(root, "pos-checkout.php"), "utf8");
+  const app = readFileSync(path.join(root, "js/app.js"), "utf8");
+  const menu = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
+  assert.match(node, /export async function customerForQrCheckout/);
+  assert.match(node, /async function rememberQrCustomer/);
+  assert.match(node, /ADD COLUMN customer_id/);
+  assert.match(php, /function pos_qr_remember_customer/);
+  assert.match(php, /ADD COLUMN customer_id/);
+  assert.match(checkout, /customerForQrCheckout/);
+  assert.match(phpCheckout, /pos_qr_remember_customer/);
+  assert.match(app, /async function selectQrOrderCustomer/);
+  assert.match(menu, /atav\.qrGuest/);
+});
+
 test("QR offers skip a repeat Welcome 10% until the customer has enough bills", () => {
   const dosa = { id: "dosa", name: "Masala Dosa", category: "South Indian", retail_rate: 100, gst_rate: 0, base_unit: "PCS" };
   const welcome = {
@@ -500,7 +523,7 @@ test("QR menu page paints a visible offer board from live offers", () => {
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
   assert.match(html, /id="offer-board"/);
-  assert.match(html, /qr-order\.js\?v=20261116qrdate1/);
+  assert.match(html, /qr-order\.js\?v=20261122qrcust1/);
   assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy175/);
   assert.doesNotMatch(html, /offers\.js\?v=20260905deploy168/);
   assert.equal([...html.matchAll(/qr-order\.js\?v=/g)].length, 1);

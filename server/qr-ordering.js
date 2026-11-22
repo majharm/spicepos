@@ -85,6 +85,11 @@ export async function ensureQrOrderSchema(conn = null) {
     /* already present */
   }
   try {
+    await exec("ALTER TABLE qr_orders ADD COLUMN customer_id VARCHAR(255) NULL");
+  } catch {
+    /* already present */
+  }
+  try {
     await exec("ALTER TABLE sales_orders ADD COLUMN qr_order_id VARCHAR(255) NULL");
   } catch {
     /* already present */
@@ -724,6 +729,11 @@ export function qrMobileDigits(raw) {
   return String(raw || "").replace(/\D/g, "").slice(-10);
 }
 
+export function qrBillUsesGuest(customer) {
+  if (!customer) return true;
+  return String(customer.code || "") === "CUS-001" || /^walk-?in$/i.test(String(customer.name || "").trim());
+}
+
 function qrPayMethod(raw) {
   const method = globalThis.POSPay?.normalize?.(raw) || String(raw || "cash").toLowerCase();
   if (globalThis.POSPay?.isSaleMode?.(method)) return method;
@@ -768,6 +778,34 @@ async function findOrCreateQrCustomer(conn, order, businessId) {
   );
   const [rows] = await conn.query("SELECT * FROM customers WHERE id = ?", [id]);
   return rows[0];
+}
+
+async function rememberQrCustomer(conn, businessId, orderId, order) {
+  const guest = await findOrCreateQrCustomer(conn, order, businessId);
+  if (!guest?.id || !orderId) return guest || null;
+  try {
+    await conn.query("UPDATE qr_orders SET customer_id = ? WHERE id = ? AND business_id = ?", [
+      guest.id,
+      orderId,
+      businessId,
+    ]);
+  } catch {
+    /* column optional until migrate */
+  }
+  return guest;
+}
+
+export async function customerForQrCheckout(conn, businessId, qrOrderId, customer) {
+  const id = String(qrOrderId || "").trim();
+  if (!id || !qrBillUsesGuest(customer)) return customer;
+  const [rows] = await conn.query(
+    "SELECT customer_name, mobile FROM qr_orders WHERE id = ? AND business_id = ? LIMIT 1",
+    [id, businessId],
+  );
+  const order = rows[0];
+  if (!order) return customer;
+  const guest = await rememberQrCustomer(conn, businessId, id, order);
+  return guest?.id ? guest : customer;
 }
 
 async function loadSaleWithLines(conn, saleId, businessId) {
@@ -1176,10 +1214,15 @@ export function registerQrPublic(app) {
             );
           }
         }
+        const guest = await rememberQrCustomer(conn, business.id, id, {
+          customer_name: input.customerName,
+          mobile: input.mobile,
+        });
         return {
           id,
           order_number: number,
           status: "pending",
+          customer_id: guest?.id || "",
           subtotal,
           gst,
           total,
