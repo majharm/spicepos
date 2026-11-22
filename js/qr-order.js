@@ -726,6 +726,37 @@
     pollTrack();
   }
 
+  const guestKey = `atav.qrGuest.${shopKey}`;
+  function readGuest() {
+    try {
+      return JSON.parse(localStorage.getItem(guestKey) || "null");
+    } catch {
+      return null;
+    }
+  }
+  function writeGuest(name, mobile) {
+    const guest = { name: String(name || "").trim(), mobile: String(mobile || "").trim() };
+    if (!guest.name && !guest.mobile) return;
+    try {
+      localStorage.setItem(guestKey, JSON.stringify(guest));
+    } catch {
+      /* private mode */
+    }
+  }
+  function fillGuest() {
+    const saved = readGuest();
+    if (!saved) return;
+    const name = document.querySelector("#order-form [name=customer_name]");
+    const mobile = document.querySelector("#order-form [name=mobile]");
+    if (name && !name.value && saved.name) name.value = saved.name;
+    if (mobile && !mobile.value && saved.mobile) mobile.value = saved.mobile;
+  }
+  fillGuest();
+  $("order-form")?.addEventListener("input", () => {
+    const form = new FormData($("order-form"));
+    writeGuest(form.get("customer_name"), form.get("mobile"));
+  });
+
   $("order-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (sending) return;
@@ -788,7 +819,9 @@
       state.notes.clear();
       state.noteOpen.clear();
       renderCart();
+      writeGuest(form.get("customer_name"), form.get("mobile"));
       formEl.reset();
+      fillGuest();
       hint.textContent = "";
     } catch (err) {
       hint.textContent = err.message;

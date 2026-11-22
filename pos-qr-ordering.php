@@ -30,6 +30,7 @@ function pos_qr_ensure_schema() {
   @$db->query("ALTER TABLE qr_orders ADD COLUMN discount DECIMAL(12,2) NOT NULL DEFAULT 0");
   @$db->query("ALTER TABLE qr_orders ADD COLUMN offer_label VARCHAR(255) NULL");
   @$db->query("ALTER TABLE qr_orders ADD COLUMN sales_order_id VARCHAR(255) NULL");
+  @$db->query("ALTER TABLE qr_orders ADD COLUMN customer_id VARCHAR(255) NULL");
   @$db->query("ALTER TABLE qr_orders ADD COLUMN public_token VARCHAR(64) NULL");
   @$db->query("ALTER TABLE qr_orders ADD COLUMN eta_minutes INT NULL");
   @$db->query("ALTER TABLE sales_orders ADD COLUMN qr_order_id VARCHAR(255) NULL");
@@ -278,6 +279,22 @@ function pos_qr_pay_method($raw) {
   $method = function_exists("pos_pay_normalize") ? pos_pay_normalize($raw) : strtolower((string) $raw);
   if (function_exists("pos_pay_is_sale") && pos_pay_is_sale($method)) return $method;
   return in_array($method, ["cash", "upi", "card", "credit"], true) ? $method : "cash";
+}
+
+function pos_qr_bill_uses_guest($customer) {
+  if (!$customer) return true;
+  $code = (string) ($customer["code"] ?? "");
+  $name = trim((string) ($customer["name"] ?? ""));
+  return $code === "CUS-001" || (bool) preg_match("/^walk-?in$/i", $name);
+}
+
+function pos_qr_remember_customer($bid, $orderId, $order) {
+  $guest = pos_qr_find_or_create_customer($bid, $order);
+  if (empty($guest["id"]) || trim((string) $orderId) === "") return $guest;
+  try {
+    pos_q("UPDATE qr_orders SET customer_id = ? WHERE id = ? AND business_id = ?", "sss", [$guest["id"], $orderId, $bid]);
+  } catch (Exception $e) { /* column optional until migrate */ }
+  return $guest;
 }
 
 function pos_qr_find_or_create_customer($bid, $order) {
@@ -911,6 +928,10 @@ function pos_qr_public_dispatch($path, $method, $body) {
           );
         }
       }
+      pos_qr_remember_customer($business["id"], $id, [
+        "customer_name" => $input["customer_name"],
+        "mobile" => $input["mobile"],
+      ]);
       $db->commit();
     } catch (Throwable $e) {
       $db->rollback();

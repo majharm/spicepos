@@ -12505,6 +12505,37 @@ async function openInvoiceFromQr(invoice) {
   showOrder(invoice);
 }
 
+async function selectQrOrderCustomer(order) {
+  const mobile = digitsMobile(order.mobile);
+  const pick = (rows) =>
+    (rows || []).find((row) => order.customer_id && row.id === order.customer_id) ||
+    (mobile.length >= 10 ? (rows || []).find((row) => digitsMobile(row.mobile) === mobile && !isWalkInCustomer(row)) : null);
+  let known = pick(state.customers);
+  if (!known && mobile.length >= 10) {
+    try {
+      const rows = await api("/api/customers");
+      if (Array.isArray(rows)) {
+        state.customers = rows;
+        known = pick(rows);
+      }
+    } catch {
+      /* Pay still saves the guest */
+    }
+  }
+  if (!known && String(order.customer_name || "").trim() && mobile.length >= 10) {
+    try {
+      known = await saveCustomer({
+        name: String(order.customer_name).trim(),
+        mobile: String(order.mobile || "").trim(),
+        type: "b2c",
+      });
+    } catch {
+      /* Pay still saves the guest */
+    }
+  }
+  state.customerId = known?.id || walkInCustomer()?.id || state.customers[0]?.id || "";
+}
+
 async function openQrOrderInCounter(order) {
   const liveLines = (order.lines || []).filter((line) => state.items.some((item) => item.id === line.item_id));
   if (!liveLines.length) throw new Error("This order has no available catalog items");
@@ -12522,13 +12553,17 @@ async function openQrOrderInCounter(order) {
     qtyGm: Number(line.quantity_gm),
     notes: String(line.notes || "").trim(),
   }));
-  const known = state.customers.find((customer) => digitsMobile(customer.mobile) === digitsMobile(order.mobile));
-  const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
-  state.customerId = known?.id || walkIn?.id || "";
+  await selectQrOrderCustomer(order);
   renderCustomersSelect();
   renderCatalog();
   renderCart();
-  setHint(`QR order ${order.order_number} loaded. Check payment and tap Pay.`, "ok");
+  const guest = String(order.customer_name || "").trim();
+  setHint(
+    guest
+      ? `QR order ${order.order_number} for ${guest} loaded. Check payment and tap Pay.`
+      : `QR order ${order.order_number} loaded. Check payment and tap Pay.`,
+    "ok",
+  );
   showView("counter");
 }
 

@@ -59,7 +59,7 @@ import { registerBrandStaff, ensureBrandSchema, listBrands } from "./brands.js";
 import { registerCustomerDedupeStaff, registerCustomerDedupeMaster, ensureCustomerDedupeSchema } from "./customers-dedupe.js";
 import "../js/discount.js";
 import "../js/payment-methods.js";
-import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale } from "./qr-ordering.js";
+import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale, customerForQrCheckout } from "./qr-ordering.js";
 import { registerOnlineStorePublic, registerOnlineStoreStaff, registerOnlineStoreMaster, ensureOnlineStoreSchema } from "./online-store.js";
 import { registerEcommercePublic, registerEcommerceStaff, registerEcommerceMaster, ensureEcommerceSchema } from "./ecommerce.js";
 import { registerAggregatorPublic, registerAggregatorStaff } from "./aggregator.js";
@@ -1054,8 +1054,9 @@ app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res)
         "SELECT * FROM customers WHERE id = ? AND business_id = ?",
         [customerId, businessId],
       );
-      const customer = customers[0];
+      let customer = customers[0];
       if (!customer) throw new Error("Customer not found");
+      if (qrOrderId) customer = await customerForQrCheckout(conn, businessId, qrOrderId, customer);
 
       const built = [];
       for (const line of lines) {
