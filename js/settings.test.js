@@ -131,6 +131,6 @@ test("Settings hub groups company, hardware, table, and aggregator controls", ()
   assert.match(read("pos-php-till.php"), /quotations_enabled/);
   assert.match(read("pos-php-core.php"), /quotations_enabled/);
   assert.match(index, /app\.js\?v=20261120pl1/);
-  assert.match(index, /pos\.css\?v=20261120dock1/);
+  assert.match(index, /pos\.css\?v=20261122cafe1/);
   assert.match(index, /invoice\.js\?v=20261103bill1/);
 });
