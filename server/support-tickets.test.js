@@ -15,6 +15,10 @@ test("support ticket routes stay wired in Node and PHP", () => {
   assert.match(module, /\/api\/support\/chat/);
   assert.match(module, /\/api\/master\/support-chat/);
   assert.match(module, /support_chat_messages/);
+  assert.match(module, /attachment_name/);
+  assert.match(module, /chatAttachment/);
+  assert.match(twin, /pos_support_chat_file/);
+  assert.match(twin, /attachment_data/);
   assert.match(twin, /support\/chat/);
   assert.match(twin, /master\/support-chat/);
   assert.match(php, /master\/support-chat/);
@@ -33,11 +37,11 @@ test("support ticket routes stay wired in Node and PHP", () => {
 test("support ticket UI pins on shop and master pages", () => {
   const index = read("index.html");
   const master = read("master.html");
-  assert.match(index, /support\.js\?v=20261120dock1/);
-  assert.match(index, /js\/app\.js\?v=20261120dock1/);
-  assert.match(index, /pos\.css\?v=20261122cafe1/);
-  assert.match(master, /support\.js\?v=20261120dock1/);
-  assert.match(master, /master\.js\?v=20261120dock1/);
-  assert.match(master, /pos\.css\?v=20261122cafe1/);
+  assert.match(index, /support\.js\?v=20261123chat1/);
+  assert.match(index, /js\/app\.js\?v=20261123chat1/);
+  assert.match(index, /pos\.css\?v=20261123chat1/);
+  assert.match(master, /support\.js\?v=20261123chat1/);
+  assert.match(master, /master\.js\?v=20261123chat1/);
+  assert.match(master, /pos\.css\?v=20261123chat1/);
   assert.match(master, /data-tab="tickets"/);
 });

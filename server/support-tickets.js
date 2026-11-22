@@ -61,9 +61,23 @@ export async function ensureSupportTicketSchema() {
         author_role VARCHAR(16) NOT NULL,
         author_name VARCHAR(120) NOT NULL DEFAULT '',
         body TEXT NOT NULL,
+        attachment_name VARCHAR(180) NOT NULL DEFAULT '',
+        attachment_mime VARCHAR(80) NOT NULL DEFAULT '',
+        attachment_data MEDIUMTEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_support_chat_shop (business_id, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+      const cols = await query("SHOW COLUMNS FROM support_chat_messages");
+      const have = new Set(cols.map((col) => col.Field));
+      if (!have.has("attachment_name")) {
+        await query("ALTER TABLE support_chat_messages ADD COLUMN attachment_name VARCHAR(180) NOT NULL DEFAULT ''");
+      }
+      if (!have.has("attachment_mime")) {
+        await query("ALTER TABLE support_chat_messages ADD COLUMN attachment_mime VARCHAR(80) NOT NULL DEFAULT ''");
+      }
+      if (!have.has("attachment_data")) {
+        await query("ALTER TABLE support_chat_messages ADD COLUMN attachment_data MEDIUMTEXT NULL");
+      }
       for (const table of TICKET_TABLES) await alignTicketCollation(table);
     })().catch((err) => {
       ready = null;
@@ -114,7 +128,7 @@ async function addReply(ticket, role, name, body) {
 
 async function loadChat(businessId) {
   const messages = await query(
-    `SELECT id, business_id, author_role, author_name, body, created_at
+    `SELECT id, business_id, author_role, author_name, body, attachment_name, attachment_mime, attachment_data, created_at
      FROM support_chat_messages
      WHERE business_id = ?
      ORDER BY created_at DESC, id DESC
@@ -125,12 +139,29 @@ async function loadChat(businessId) {
   return messages;
 }
 
-async function addChat(businessId, role, name, body) {
+function chatInput(body) {
+  const text = Support.ticketBody(body?.body);
+  const file = Support.chatAttachment(body?.attachment);
+  if (file?.error) {
+    const err = new Error(file.error);
+    err.status = 400;
+    throw err;
+  }
+  if (!text && !file) {
+    const err = new Error("Write a message or attach a photo");
+    err.status = 400;
+    throw err;
+  }
+  return { text, file };
+}
+
+async function addChat(businessId, role, name, body, file) {
   const id = crypto.randomUUID();
   await query(
-    `INSERT INTO support_chat_messages (id, business_id, author_role, author_name, body)
-     VALUES (?,?,?,?,?)`,
-    [id, businessId, role, name, body],
+    `INSERT INTO support_chat_messages
+      (id, business_id, author_role, author_name, body, attachment_name, attachment_mime, attachment_data)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [id, businessId, role, name, body || "", file?.name || "", file?.mime || "", file?.data || null],
   );
   return loadChat(businessId);
 }
@@ -229,12 +260,11 @@ export function registerSupportTickets(app) {
   app.post("/api/support/chat", requireStaff, async (req, res) => {
     try {
       await ensureSupportTicketSchema();
-      const message = Support.ticketBody(req.body?.body);
-      if (!message) return fail(res, 400, "Write a message");
-      const messages = await addChat(bid(), "shop", personName(authUser(), "Shop"), message);
+      const { text, file } = chatInput(req.body || {});
+      const messages = await addChat(bid(), "shop", personName(authUser(), "Shop"), text, file);
       res.json({ messages });
     } catch (err) {
-      fail(res, 500, err.message || "Could not send the message");
+      fail(res, err.status || 500, err.message || "Could not send the message");
     }
   });
 
@@ -242,7 +272,7 @@ export function registerSupportTickets(app) {
     try {
       await ensureSupportTicketSchema();
       const chats = await query(
-        `SELECT c.business_id, b.name AS shop_name, c.body, c.author_role, c.author_name, c.created_at
+        `SELECT c.business_id, b.name AS shop_name, c.body, c.attachment_name, c.author_role, c.author_name, c.created_at
          FROM support_chat_messages c
          JOIN (
            SELECT business_id, MAX(created_at) AS created_at
@@ -275,15 +305,14 @@ export function registerSupportTickets(app) {
   app.post("/api/master/support-chat/:businessId", requireMaster, async (req, res) => {
     try {
       await ensureSupportTicketSchema();
-      const message = Support.ticketBody(req.body?.body);
-      if (!message) return fail(res, 400, "Write a message");
+      const { text, file } = chatInput(req.body || {});
       const businessId = String(req.params.businessId || "");
       const [shop] = await query("SELECT id, name FROM businesses WHERE id = ? LIMIT 1", [businessId]);
       if (!shop) return fail(res, 404, "Shop not found");
-      const messages = await addChat(businessId, "master", personName(req.auth?.admin, "Support"), message);
+      const messages = await addChat(businessId, "master", personName(req.auth?.admin, "Support"), text, file);
       res.json({ shop, messages });
     } catch (err) {
-      fail(res, 500, err.message || "Could not send the message");
+      fail(res, err.status || 500, err.message || "Could not send the message");
     }
   });
 

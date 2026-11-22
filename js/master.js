@@ -2370,37 +2370,84 @@ function startSupportChatPoll() {
   }, 4000);
 }
 
+const heardShopChat = new Set();
+
+function shopChatKeys(row) {
+  const keys = [];
+  if (row?.id) keys.push(`m:${row.id}`);
+  if (row?.business_id && row?.created_at) keys.push(`s:${row.business_id}:${row.created_at}`);
+  return keys;
+}
+
+function hearShopChat(rows, notify = false) {
+  let fresh = false;
+  for (const row of rows || []) {
+    if (!row || row.author_role === "master") continue;
+    for (const key of shopChatKeys(row)) {
+      if (!heardShopChat.has(key)) {
+        if (notify) fresh = true;
+        heardShopChat.add(key);
+      }
+    }
+  }
+  if (fresh) window.SupportPage?.playChatSound?.();
+}
+
+let masterChatSoundArmed = false;
+function armMasterChatSound() {
+  if (masterChatSoundArmed) return;
+  masterChatSoundArmed = true;
+  document.addEventListener("pointerdown", () => window.SupportPage?.primeChatSound?.(), { once: true, capture: true });
+}
+
+function bindMasterChatFile(form) {
+  const input = form?.querySelector('input[type="file"]');
+  const pending = form?.querySelector("[data-chat-file]");
+  input?.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (!pending) return;
+    pending.hidden = !file;
+    pending.textContent = file ? `Attached · ${file.name}` : "";
+  });
+}
+
+function bindMasterChatOpen(root) {
+  root.querySelectorAll("[data-chat-open]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      supportChatId = btn.getAttribute("data-chat-open") || "";
+      render();
+    });
+  });
+}
+
 async function refreshMasterChat() {
   const S = window.SupportPage;
   if (!S?.chatLogHtml) return;
   try {
-    if (supportChatId) {
-      const log = document.getElementById("master-chat-log");
-      if (!log) return;
-      const data = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`);
-      const messages = data.messages || [];
-      const last = messages.length ? messages[messages.length - 1].id || "" : "";
-      if (log.dataset.last === last) return;
-      const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 64;
-      log.innerHTML = S.chatLogHtml(messages);
-      log.dataset.last = last;
-      if (nearBottom) log.scrollTop = log.scrollHeight;
-      return;
-    }
     const list = document.getElementById("master-chat-inbox");
-    if (!list) return;
-    const data = await api("/api/master/support-chat");
-    const chats = data.chats || [];
-    const stamp = chats.map((row) => `${row.business_id}:${row.created_at}`).join("|");
-    if (list.dataset.stamp === stamp) return;
-    list.innerHTML = S.chatInboxHtml(chats);
-    list.dataset.stamp = stamp;
-    list.querySelectorAll("[data-chat-open]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        supportChatId = btn.getAttribute("data-chat-open") || "";
-        render();
-      });
-    });
+    if (list) {
+      const data = await api("/api/master/support-chat");
+      const chats = data.chats || [];
+      hearShopChat(chats, true);
+      const stamp = chats.map((row) => `${row.business_id}:${row.created_at}:${row.author_role}:${row.attachment_name || ""}`).join("|");
+      if (list.dataset.stamp !== stamp) {
+        list.innerHTML = S.chatInboxHtml(chats, supportChatId);
+        list.dataset.stamp = stamp;
+        bindMasterChatOpen(list);
+      }
+    }
+    if (!supportChatId) return;
+    const log = document.getElementById("master-chat-log");
+    if (!log) return;
+    const data = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`);
+    const messages = data.messages || [];
+    hearShopChat(messages, true);
+    const last = messages.length ? messages[messages.length - 1].id || "" : "";
+    if (log.dataset.last === last) return;
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    log.innerHTML = S.chatLogHtml(messages);
+    log.dataset.last = last;
+    if (nearBottom) log.scrollTop = log.scrollHeight;
   } catch {
     /* keep the open thread */
   }
@@ -2415,25 +2462,32 @@ async function renderMasterChat(body) {
   let chats = [];
   let detail = null;
   try {
-    if (supportChatId) {
-      detail = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`);
-    } else {
-      const data = await api("/api/master/support-chat");
-      chats = data.chats || [];
-    }
+    const data = await api("/api/master/support-chat");
+    chats = data.chats || [];
+    if (supportChatId) detail = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`);
   } catch (err) {
     body.innerHTML = `<p class="hint error">${attr(err.message)}</p>`;
     return;
   }
+  hearShopChat(chats);
+  if (detail?.messages) hearShopChat(detail.messages);
+  armMasterChatSound();
   const waiting = chats.filter((row) => row.author_role !== "master").length;
-  const inner = detail
-    ? `<div class="support-thread-head"><button type="button" class="btn ghost" data-chat-back>All chats</button></div>${S.chatPanelHtml(detail.messages || [], { audience: "master", shopName: detail.shop?.name || "Shop" })}`
-    : `<article class="support-panel"><h3>Shops</h3><p class="support-panel-note">Newest message first. Open a shop to reply in the live chat.</p><div id="master-chat-inbox">${S.chatInboxHtml(chats)}</div></article>`;
+  const thread = detail
+    ? `<div class="master-chat-back"><button type="button" class="btn ghost" data-chat-back>All chats</button></div>${S.chatPanelHtml(detail.messages || [], { audience: "master", shopName: detail.shop?.name || "Shop" })}`
+    : `<div class="master-chat-empty"><strong>Choose a shop</strong><p>Open a chat on the left. A sound plays when a shop sends a new message. You can reply with text, a photo, or a PDF.</p></div>`;
+  const inner = `<div class="master-chat${detail ? " has-thread" : ""}">
+    <aside class="master-chat-shops">
+      <header class="master-chat-shops-head"><strong>Shops</strong><span>Newest first · sound on</span></header>
+      <div id="master-chat-inbox">${S.chatInboxHtml(chats, supportChatId)}</div>
+    </aside>
+    <section class="master-chat-pane">${thread}</section>
+  </div>`;
   body.innerHTML = masterDesk(
     "People",
     "Live chat",
-    "Shops write from the chat box at the bottom of the business admin console. Replies show up there within a few seconds.",
-    detail ? [] : [
+    "Shops write from the chat box at the bottom of the business admin console. Replies, photos, and PDFs show up there within a few seconds.",
+    [
       { label: "Chats", value: String(chats.length) },
       { label: "Waiting", value: String(waiting), warn: waiting > 0 },
     ],
@@ -2449,21 +2503,35 @@ async function renderMasterChat(body) {
       render();
     });
   });
-  body.querySelector("#master-chat-form")?.addEventListener("submit", async (event) => {
+  const chatForm = body.querySelector("#master-chat-form");
+  bindMasterChatFile(chatForm);
+  chatForm?.querySelector("textarea")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      chatForm.requestSubmit();
+    }
+  });
+  chatForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const hint = document.getElementById("master-chat-hint");
     const button = form.querySelector("button[type=submit]");
-    const payload = Object.fromEntries(new FormData(form).entries());
     if (button) button.disabled = true;
     try {
+      const payload = await S.chatFormPayload(form);
       const saved = await api(`/api/master/support-chat/${encodeURIComponent(supportChatId)}`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
       form.reset();
+      const pending = form.querySelector("[data-chat-file]");
+      if (pending) {
+        pending.hidden = true;
+        pending.textContent = "";
+      }
       const log = document.getElementById("master-chat-log");
       const messages = saved.messages || [];
+      hearShopChat(messages, true);
       if (log) {
         log.innerHTML = S.chatLogHtml(messages);
         log.dataset.last = messages.length ? messages[messages.length - 1].id || "" : "";
