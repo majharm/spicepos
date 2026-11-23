@@ -784,7 +784,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     $packCards = [];
     try {
       $catalog = pos_q(
-        "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+        "SELECT id, name, category, subcategory, base_unit, unit, retail_rate, gst_rate, stock_gm, status
          FROM items WHERE business_id = ?",
         "s",
         [$business["id"]]
@@ -823,7 +823,7 @@ function pos_qr_public_dispatch($path, $method, $body) {
     if (!$business) pos_send(404, ["error" => "Shop not found", "php" => true]);
     if (pos_qr_ordering_blocked($business)) pos_send(403, ["error" => pos_qr_ordering_block_message($business), "php" => true]);
     $catalog = pos_q(
-      "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+      "SELECT id, name, category, subcategory, base_unit, unit, retail_rate, gst_rate, stock_gm, status
        FROM items WHERE business_id = ?",
       "s",
       [$business["id"]]

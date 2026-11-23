@@ -357,6 +357,13 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(app, /cafe-order-list/);
   assert.match(app, /cafe-order-card/);
   assert.match(app, /isRestaurantMobileLayout\(\) \? cafeMobileOrderHtml\(\) : cafeBillLinesHtml\(\)/);
+  assert.match(app, /function cafeLineDiscHtml/);
+  assert.match(app, /function cafeOfferNote/);
+  assert.match(app, /Offer \/ discount/);
+  assert.match(app, /offerAuto: state.offerAuto !== false/);
+  assert.match(app, /keepGift: Boolean\(gift\)/);
+  assert.match(css, /body\.restaurant-mode\.counter-mode\.has-cart:not\(\.bill-collapsed\) \.stage\.is-counter \.bill-extras \{\n    display: block !important;/);
+  assert.match(css, /body\.restaurant-mode \.cafe-offer/);
   assert.match(css, /restaurant-mobile-bill/);
   assert.match(css, /minmax\(320px, 56vh\)/);
   assert.match(css, /body\.restaurant-mode\.counter-mode\.has-cart\.bill-collapsed \.stage\.is-counter \.lines/);
@@ -366,7 +373,7 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(mobile, /display: block !important;/);
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
-  assert.match(index, /pos\.css\?v=20261122cafe1/);
+  assert.match(index, /pos\.css\?v=20261123offer1/);
   assert.match(mobile, /restaurant-counter-paid/);
   assert.match(mobile, /body\.restaurant-mode\.counter-mode\.has-cart:not\(\.bill-collapsed\) \.stage\.is-counter \.bill-settle \{\n    display: grid !important;/);
   assert.match(mobile, /body\.restaurant-mode\.bill-collapsed \.stage\.is-counter \.bill-settle \{\n    display: none !important;/);

@@ -128,7 +128,7 @@ test("InvoiceJet phone overlay is on POS login, home, and tab bar", () => {
   assert.match(js, /isPhone\(\) && openMobileReport/);
   assert.doesNotMatch(css, /body:not\(\.m-preview\) #m-home/);
   assert.match(read("css/pos.css"), /phone-pos: same tablet chrome/);
-  assert.match(read("index.html"), /pos\.css\?v=20261122cafe1/);
+  assert.match(read("index.html"), /pos\.css\?v=20261123offer1/);
   assert.equal(M.openMobileReport("not-a-report"), false);
   assert.equal(M.openMobileReport("daily-sales"), true);
   assert.match(js, /dailySalesRows/);

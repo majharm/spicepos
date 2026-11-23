@@ -11,7 +11,7 @@ function offerEngine() {
 
 function fillOfferSelects() {
   const items = (state.items || []).slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
-  const cats = [...new Set(items.map((i) => i.category).filter(Boolean))];
+  const cats = [...new Set(items.flatMap((i) => [i.category, i.subcategory]).filter(Boolean))];
   const itemOpts = items.map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join("");
   const catOpts = `<option value="">Any category</option>${cats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}`;
   const multi = $("off-items");

@@ -422,6 +422,14 @@
     return plan;
   }
 
+  function offerCategoryHit(line, wanted) {
+    const want = String(wanted || "").trim().toLowerCase();
+    if (!want) return false;
+    return [line?.category, line?.subcategory, line?.item?.category, line?.item?.subcategory].some(
+      (name) => String(name || "").trim().toLowerCase() === want,
+    );
+  }
+
   function qualifyingLines(offer, cart) {
     const cond = parseConditions(offer);
     const type = offer.offer_type || offer.type;
@@ -437,10 +445,7 @@
       }
       if (type === "advance") {
         if (cond.item_ids.length) return cond.item_ids.includes(id);
-        if (cond.category) {
-          const cat = String(line.category || line.item?.category || "");
-          return cat.toLowerCase() === cond.category.toLowerCase();
-        }
+        if (cond.category) return offerCategoryHit(line, cond.category);
         return true;
       }
       if (billWide) return true;
@@ -449,10 +454,7 @@
         if (type === "free_gift" && cond.free_item_id && id === cond.free_item_id) return true;
         return cond.item_ids.includes(id);
       }
-      if ((type === "category" || cond.category) && cond.category) {
-        const cat = String(line.category || line.item?.category || "");
-        return cat.toLowerCase() === cond.category.toLowerCase();
-      }
+      if ((type === "category" || cond.category) && cond.category) return offerCategoryHit(line, cond.category);
       return !cond.item_ids.length && !cond.category;
     });
   }
@@ -839,7 +841,12 @@
     const cond = parseConditions(offer);
     const ids = cond.item_ids;
     const rows = (items || []).filter((i) => !ids.length || ids.includes(i.id));
-    const scoped = cond.category ? rows.filter((i) => String(i.category || "").toLowerCase() === cond.category.toLowerCase()) : rows;
+    const scoped = cond.category
+      ? rows.filter((i) => {
+          const want = cond.category.toLowerCase();
+          return String(i.category || "").toLowerCase() === want || String(i.subcategory || "").toLowerCase() === want;
+        })
+      : rows;
     const pick = (ids.length ? scoped.filter((i) => ids.includes(i.id)) : scoped).slice(0, 8);
     const original = round2(pick.reduce((s, i) => s + num(i.retail_rate || i.rate_per_kg || i.mrp), 0));
     const cost = round2(pick.reduce((s, i) => s + num(i.purchase_rate || i.cost), 0));

@@ -59,6 +59,7 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(node, /recordOfferRedemptions/);
   assert.match(php, /pos_create_offer/);
   assert.match(php, /function pos_offer_ymd/);
+  assert.match(php, /function pos_offer_category_hit/);
   assert.match(php, /function pos_offer_clock/);
   assert.match(engine, /start === "00:00" && end === "00:00"/);
   assert.match(engine, /Advanced offer/);
@@ -69,7 +70,7 @@ test("shop UI wires the Offers desk and Counter auto-apply", () => {
   assert.match(app, /O\.liveStatus\(o, ctx\.now, ctx\.timeZone\)/);
   assert.match(php, /pos_find_offer/);
   assert.match(till, /pos_offers_dispatch/);
-  assert.match(app, /isClassicBillShop\(\) && !line\.freeGiftOfferId && !line\.offerId && Number\(line\.discountValue\) > 0/);
+  assert.match(app, /isClassicBillShop\(\) \|\| isRestaurantShop\(\)\) && !line\.keepGift && !line\.freeGiftOfferId && !line\.offerId && Number\(line\.discountValue\) > 0/);
   assert.match(ui, /!offerList\.length/);
   assert.match(ui, /Set it to Active for the Counter to apply it/);
   const save = ui.slice(ui.indexOf("async function saveOfferForm"), ui.indexOf("function bindOffersUi"));
@@ -113,6 +114,7 @@ test("classic Counter applies offers and keeps a typed line discount", () => {
     POSUnits: { isCount: () => true },
     lineCalc: () => ({ gross: 100, taxable: 100 }),
     isClassicBillShop: () => true,
+    isRestaurantShop: () => false,
     $: (id) => inputs[id] || null,
   });
   runInContext(`${engine}\n${fns}`, ctx);
@@ -195,6 +197,7 @@ test("Counter adds the configured free item when an eligible product is billed",
       return { gross, taxable: gross };
     },
     isClassicBillShop: () => classic,
+    isRestaurantShop: () => false,
     clampBillQty: (_item, want) => Math.round(Number(want) || 0),
     newCartLineId: () => `free-${state.cart.length}`,
     cartLineKey: (line) => String(line?.lineId || line?.itemId || ""),

@@ -224,6 +224,7 @@
       gross: amount,
       taxable: amount,
       category: item.category || "",
+      subcategory: item.subcategory || "",
       item,
     };
   }

@@ -98,6 +98,36 @@ test("QR based orders apply a PHP-shaped combo percent even when offer_price is 
   assert.equal(priced.subtotal, 92);
 });
 
+test("QR category offer matches a menu section stored as subcategory", () => {
+  const priced = applyQrOffers(
+    [
+      {
+        item: { id: "dosa", name: "Masala dosa", category: "Menu", subcategory: "South Indian", base_unit: "PCS" },
+        unit: "PCS",
+        quantityBase: 1,
+        amount: 80,
+        gstRate: 0,
+        gstAmount: 0,
+        lineId: "dosa",
+      },
+    ],
+    {
+      offers: [
+        {
+          name: "South Indian 10%",
+          offer_type: "category",
+          status: "active",
+          category: "South Indian",
+          discount_type: "pct",
+          discount_value: 10,
+        },
+      ],
+    },
+  );
+  assert.equal(priced.discount, 8);
+  assert.equal(priced.built[0].amount, 72);
+});
+
 test("QR based orders apply an offer whose MySQL end date is 0000-00-00", () => {
   const priced = applyQrOffers(
     [
@@ -500,7 +530,7 @@ test("QR menu page paints a visible offer board from live offers", () => {
   const js = readFileSync(path.join(root, "js/qr-order.js"), "utf8");
   const css = readFileSync(path.join(root, "css/qr-order.css"), "utf8");
   assert.match(html, /id="offer-board"/);
-  assert.match(html, /qr-order\.js\?v=20261116qrdate1/);
+  assert.match(html, /qr-order\.js\?v=20261123offer1/);
   assert.doesNotMatch(html, /qr-order\.js\?v=20260905deploy175/);
   assert.doesNotMatch(html, /offers\.js\?v=20260905deploy168/);
   assert.equal([...html.matchAll(/qr-order\.js\?v=/g)].length, 1);

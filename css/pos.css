@@ -1690,7 +1690,17 @@ body.restaurant-mode .cafe-bill-table .cafe-item .who {
   font-size: 13px;
   line-height: 1.3;
 }
-body.restaurant-mode .cafe-bill-table .cafe-item .line-disc {
+body.restaurant-mode .cafe-offer {
+  margin-top: 2px;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+body.restaurant-mode .cafe-bill-table .cafe-item .line-disc,
+body.restaurant-mode .cafe-order-card .line-disc,
+body.restaurant-mode.counter-mode .stage.is-counter .cafe-item .line-disc,
+body.restaurant-mode.counter-mode .stage.is-counter .cafe-order-card .line-disc {
+  display: flex !important;
   margin-top: 6px;
 }
 body.restaurant-mode .cafe-bill-table .qty {
@@ -7585,8 +7595,13 @@ body.apparel-mode #item-size-wrap { display: none; }
   body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-panel {
     padding-bottom: 0;
   }
-  body.restaurant-mode.counter-mode .stage.is-counter .bill-extras {
-    display: none !important;
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-extras {
+    display: block !important;
+    margin: 0 10px;
+    padding: 0;
+  }
+  body.restaurant-mode.counter-mode.has-cart:not(.bill-collapsed) .stage.is-counter .bill-extras > summary {
+    min-height: 36px;
   }
   body.restaurant-mode.counter-mode .support-dock {
     display: none;

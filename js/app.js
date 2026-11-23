@@ -706,6 +706,30 @@ function cafeBillLineName(item) {
   return itemVariantText(item) ? `${item.name} · ${itemVariantText(item)}` : item.name;
 }
 
+function cafeLineDiscHtml(line, key) {
+  if (!canDiscount()) return "";
+  return `<div class="line-disc">
+    <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
+      <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
+      <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
+    </select>
+    <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
+  </div>`;
+}
+
+function cafeOfferNote(line) {
+  if (line?.freeGiftOfferId) return "Free with offer";
+  const id = String(line?.lineId || "");
+  const itemId = String(line?.itemId || "");
+  const applied = (state.appliedOffers?.applied || []).find((offer) => {
+    const map = offer?.lineDiscounts || {};
+    return Number(map[id] || map[itemId] || 0) > 0;
+  });
+  if (applied?.name) return applied.name;
+  const pending = (state.appliedOffers?.pending || []).find((offer) => !offer.itemIds?.length || offer.itemIds.includes(itemId));
+  return pending?.message || "";
+}
+
 function cafeBillLinesHtml() {
   const rows = state.cart
     .map((line) => {
@@ -718,20 +742,13 @@ function cafeBillLinesHtml() {
       const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
       const calc = lineCalc(item, line);
       const key = cartLineKey(line);
-      const disc = canDiscount()
-        ? `<div class="line-disc">
-              <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
-                <option value="amt"${(line.discountType || "amt") === "amt" ? " selected" : ""}>₹</option>
-                <option value="pct"${line.discountType === "pct" ? " selected" : ""}>%</option>
-              </select>
-              <input data-line-disc="${escapeHtml(key)}" type="number" min="0" step="0.01" value="${escapeHtml(line.discountValue || 0)}" aria-label="Line discount" />
-            </div>`
-        : "";
+      const offerNote = cafeOfferNote(line);
       const note = restaurantLineNoteHtml(line, key);
       return `<tr>
           <td class="cafe-item">
             <div class="who">${escapeHtml(cafeBillLineName(item))}</div>
-            ${disc}
+            ${offerNote ? `<div class="cafe-offer">${escapeHtml(offerNote)}</div>` : ""}
+            ${cafeLineDiscHtml(line, key)}
           </td>
           <td class="cafe-qty">
             <div class="qty">
@@ -769,11 +786,14 @@ function cafeMobileOrderHtml() {
       const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
       const calc = lineCalc(item, line);
       const key = cartLineKey(line);
+      const offerNote = cafeOfferNote(line);
       return `<article class="cafe-order-card">
         <div class="cafe-order-top">
           <div class="who">${escapeHtml(cafeBillLineName(item))}</div>
           <button type="button" class="classic-del cafe-del-btn" data-del-line="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
         </div>
+        ${offerNote ? `<div class="cafe-offer">${escapeHtml(offerNote)}</div>` : ""}
+        ${cafeLineDiscHtml(line, key)}
         <div class="cafe-order-ops">
           <div class="qty">
             <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
@@ -3843,6 +3863,9 @@ function tableHoldPayload() {
     lastPack: state.lastPack,
     billDiscountType: state.billDiscountType,
     billDiscountValue: state.billDiscountValue,
+    offerAuto: state.offerAuto !== false,
+    offerBillLocked: Boolean(state.offerBillLocked),
+    offerDroveBill: Boolean(state.offerDroveBill),
     extraCharges: state.extraCharges || 0,
     loyaltyRedeem: state.loyaltyRedeem,
     kotPrinted: state.kotPrinted || [],
@@ -3876,6 +3899,9 @@ function applyHoldToCart(payload, opts = {}) {
   state.cart = (payload?.cart || []).map(cartLineFromHold).filter((l) => l.itemId && l.qtyGm > 0);
   state.billDiscountType = payload.billDiscountType || "amt";
   state.billDiscountValue = Number(payload.billDiscountValue) || 0;
+  state.offerAuto = payload.offerAuto !== false;
+  state.offerBillLocked = Boolean(payload.offerBillLocked);
+  state.offerDroveBill = Boolean(payload.offerDroveBill);
   state.extraCharges = Number(payload.extraCharges) || 0;
   state.loyaltyRedeem = Number(payload.loyaltyRedeem) || 0;
   if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
@@ -4270,6 +4296,14 @@ async function selectDiningTable(tableNo) {
     state.kotPrinted = [];
     state.lastPack = null;
     state.activeQrOrderId = "";
+    state.offerAuto = true;
+    state.offerBillLocked = false;
+    state.offerDroveBill = false;
+    state.billDiscountType = "amt";
+    state.billDiscountValue = 0;
+    if ($("bill-disc-type")) $("bill-disc-type").value = "amt";
+    if ($("bill-disc-value")) $("bill-disc-value").value = 0;
+    resetOfferPopup();
     if ($("pack-choice")) $("pack-choice").value = "";
   }
   state.activeTable = next;
@@ -4762,6 +4796,9 @@ async function recallHeldBill(id) {
   state.cart = payload.cart.map(cartLineFromHold).filter((l) => l.itemId && l.qtyGm > 0);
   state.billDiscountType = payload.billDiscountType || "amt";
   state.billDiscountValue = Number(payload.billDiscountValue) || 0;
+  state.offerAuto = payload.offerAuto !== false;
+  state.offerBillLocked = Boolean(payload.offerBillLocked);
+  state.offerDroveBill = Boolean(payload.offerDroveBill);
   state.loyaltyRedeem = Number(payload.loyaltyRedeem) || 0;
   if ($("bill-disc-type")) $("bill-disc-type").value = state.billDiscountType;
   if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
@@ -6656,6 +6693,7 @@ function offerCartContext() {
         gross: calc.gross || calc.taxable,
         taxable: calc.gross || calc.taxable,
         category: item?.category,
+        subcategory: item?.subcategory,
         item,
         freeGiftOfferId: line.freeGiftOfferId || "",
       };
@@ -6699,6 +6737,10 @@ function syncFreeGiftLines() {
   for (let i = state.cart.length - 1; i >= 0; i -= 1) {
     const line = state.cart[i];
     if (!line.freeGiftOfferId) continue;
+    if (line.keepGift) {
+      wanted.delete(String(line.freeGiftOfferId));
+      continue;
+    }
     const plan = wanted.get(String(line.freeGiftOfferId));
     const item = plan ? state.items.find((row) => String(row.id) === String(plan.giftId)) : null;
     if (!plan || !item || String(line.itemId) !== String(plan.giftId)) {
@@ -6747,12 +6789,18 @@ function applyOffersToCart() {
   const result = O.evaluateAll(offers, ctx);
   state.appliedOffers = result;
   state.cart.forEach((line) => {
-    if (isClassicBillShop() && !line.freeGiftOfferId && !line.offerId && Number(line.discountValue) > 0) return;
+    if ((isClassicBillShop() || isRestaurantShop()) && !line.keepGift && !line.freeGiftOfferId && !line.offerId && Number(line.discountValue) > 0) return;
     const byLine = result.lineDiscounts?.[line.lineId] ?? result.lineDiscounts?.[String(line.lineId || "")];
     const byItem = result.lineDiscounts?.[line.itemId] ?? result.lineDiscounts?.[String(line.itemId || "")];
     const d = Number(byLine != null ? byLine : byItem || 0);
     const item = state.items.find((i) => i.id === line.itemId);
     const gross = item ? Number(lineCalc(item, { ...line, discountType: "amt", discountValue: 0 }).gross || 0) : 0;
+    if (line.keepGift) {
+      line.discountType = "amt";
+      line.discountValue = gross;
+      line.offerId = true;
+      return;
+    }
     const capped = Math.min(Math.max(0, d), gross);
     if (capped > 0) {
       line.discountType = "amt";
@@ -12516,18 +12564,41 @@ async function openQrOrderInCounter(order) {
     state.activeTable = R.normalizeTableNo(order.table_no) || R.PARCEL;
     syncActiveFloor(state.activeTable);
   }
-  state.cart = liveLines.map((line) => ({
-    lineId: newCartLineId(),
-    itemId: line.item_id,
-    qtyGm: Number(line.quantity_gm),
-    notes: String(line.notes || "").trim(),
-  }));
+  state.offerAuto = true;
+  state.offerBillLocked = false;
+  state.offerDroveBill = false;
+  state.billDiscountType = "amt";
+  state.billDiscountValue = 0;
+  state.cart = liveLines.map((line) => {
+    const gift = /^Free item:(.+)$/i.exec(String(line.notes || "").trim());
+    return {
+      lineId: newCartLineId(),
+      itemId: line.item_id,
+      qtyGm: Number(line.quantity_gm) || 0,
+      notes: gift ? "" : String(line.notes || "").trim(),
+      freeGiftOfferId: gift ? gift[1] : "",
+      keepGift: Boolean(gift),
+      discountType: "amt",
+      discountValue: 0,
+      offerId: "",
+    };
+  });
   const known = state.customers.find((customer) => digitsMobile(customer.mobile) === digitsMobile(order.mobile));
   const walkIn = state.customers.find((customer) => customer.code === "CUS-001") || state.customers[0];
   state.customerId = known?.id || walkIn?.id || "";
   renderCustomersSelect();
   renderCatalog();
   renderCart();
+  const promised = Number(order.discount) || 0;
+  const applied = (Number(cartTotals().discount) || 0) + (Number(cartTotals().lineDiscount) || 0);
+  if (promised > applied + 0.05) {
+    state.offerBillLocked = true;
+    state.billDiscountType = "amt";
+    state.billDiscountValue = Math.max(0, Math.round((promised - (Number(cartTotals().lineDiscount) || 0)) * 100) / 100);
+    if ($("bill-disc-type")) $("bill-disc-type").value = "amt";
+    if ($("bill-disc-value")) $("bill-disc-value").value = state.billDiscountValue;
+    renderCart();
+  }
   setHint(`QR order ${order.order_number} loaded. Check payment and tap Pay.`, "ok");
   showView("counter");
 }
@@ -13472,6 +13543,21 @@ function paintCustomerFace(t) {
   if ($("face-gst-row")) $("face-gst-row").hidden = !shown(t?.tax);
 }
 
+function paintOfferDiscountLabel(totals) {
+  const el = $("bill-extras-summary");
+  if (!el) return;
+  const off = (Number(totals?.discount) || 0) + (Number(totals?.lineDiscount) || 0);
+  if (isRestaurantShop()) {
+    el.textContent = off > 0.009 ? `Offer · −${money(off)}` : "Offer / discount";
+    if (off > 0.009) {
+      const extras = $("bill-extras");
+      if (extras) extras.open = true;
+    }
+    return;
+  }
+  el.textContent = isPrintShop() ? "Discount & charges" : "Discount";
+}
+
 function paintBillFigures() {
   const t = cartTotals();
   const families = [...new Set(state.cart.map((l) => POSUnits.typeOf(itemUnit(state.items.find((i) => i.id === l.itemId))).family))];
@@ -13487,6 +13573,7 @@ function paintBillFigures() {
   const discount = (t.discount || 0) + (t.lineDiscount || 0);
   const showTax = has && Number(t.tax) > 0;
   if ($("subtotal")) $("subtotal").textContent = money(t.gross || t.subtotal || 0);
+  paintOfferDiscountLabel(t);
   if ($("subtotal-row")) $("subtotal-row").hidden = !has;
   if ($("taxable")) $("taxable").textContent = money(t.taxable || 0);
   if ($("tax")) $("tax").textContent = money(t.tax || 0);
