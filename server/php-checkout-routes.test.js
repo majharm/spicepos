@@ -403,7 +403,7 @@ test("POS boot skips API probe and slims catalog photos", () => {
   assert.match(index, /invoice\.js\?v=20261103bill1/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy167/);
   assert.doesNotMatch(index, /app\.js\?v=20260905deploy166/);
-  assert.match(index, /offers\.js\?v=20261107qrfree1/);
+  assert.match(index, /offers\.js\?v=20261123offer1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
   assert.match(login, /x-pos-20260830e\.js\?v=20261118sec1/);
   assert.match(loginJs, /saveLoginSpec/);
@@ -504,7 +504,7 @@ test("Restaurant Counter can create named dining tables", () => {
   assert.match(index, /id="btn-shift-table"/);
   assert.match(index, /id="set-table-shifting"/);
   assert.match(restaurant, /function canShiftTable/);
-  assert.match(index, /pos\.css\?v=20261122cafe1/);
+  assert.match(index, /pos\.css\?v=20261123offer1/);
   assert.match(index, /restaurant\.js\?v=20261012set4/);
   assert.match(index, /app\.js\?v=20261120pl1/);
   assert.match(index, /footwear\.js\?v=20261012print1/);

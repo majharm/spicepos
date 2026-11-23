@@ -546,6 +546,21 @@ function pos_offer_piece_qty($line) {
   return $q > 200 ? pos_offer_r2($q / 1000) : $q;
 }
 
+function pos_offer_category_hit($line, $cat) {
+  $want = strtolower(trim((string) $cat));
+  if ($want === "") return false;
+  $names = [
+    $line["category"] ?? "",
+    $line["subcategory"] ?? "",
+    is_array($line["item"] ?? null) ? ($line["item"]["category"] ?? "") : "",
+    is_array($line["item"] ?? null) ? ($line["item"]["subcategory"] ?? "") : "",
+  ];
+  foreach ($names as $name) {
+    if (strtolower(trim((string) $name)) === $want) return true;
+  }
+  return false;
+}
+
 function pos_offer_line_key($line) {
   $key = trim((string) ($line["lineId"] ?? ""));
   if ($key !== "") return $key;
@@ -568,7 +583,7 @@ function pos_offer_qualifying_lines($o, $cart) {
       if ($ids) {
         if (in_array($id, $ids, true)) $out[] = $line;
       } elseif ($cat !== "") {
-        if (strcasecmp((string) ($line["category"] ?? ""), $cat) === 0) $out[] = $line;
+        if (pos_offer_category_hit($line, $cat)) $out[] = $line;
       } else {
         $out[] = $line;
       }
@@ -596,7 +611,7 @@ function pos_offer_qualifying_lines($o, $cart) {
       continue;
     }
     if (($type === "category" || $cat !== "") && $cat !== "") {
-      if (strcasecmp((string) ($line["category"] ?? ""), $cat) === 0) $out[] = $line;
+      if (pos_offer_category_hit($line, $cat)) $out[] = $line;
       continue;
     }
     if (!$ids && $cat === "") $out[] = $line;
@@ -928,7 +943,7 @@ function pos_qr_gift_item($bid, $itemId, $built) {
     if ((string) ($line["item"]["id"] ?? "") === (string) $itemId) return $line["item"];
   }
   $rows = pos_q(
-    "SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status FROM items WHERE id = ? AND business_id = ? LIMIT 1",
+    "SELECT id, name, category, subcategory, base_unit, unit, retail_rate, gst_rate, stock_gm, status FROM items WHERE id = ? AND business_id = ? LIMIT 1",
     "ss",
     [(string) $itemId, (string) $bid]
   );
@@ -1036,6 +1051,7 @@ function pos_apply_qr_offers($built, $bid, $customer = null) {
       "isCount" => $isCount,
       "gross" => (float) $line["amount"],
       "category" => $item["category"] ?? "",
+      "subcategory" => $item["subcategory"] ?? "",
       "freeGiftOfferId" => $line["freeGiftOfferId"] ?? "",
     ];
   }

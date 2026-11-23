@@ -323,6 +323,7 @@ export function qrOfferCart(built) {
       gross: Number(line.amount) || 0,
       taxable: Number(line.amount) || 0,
       category: item.category || "",
+      subcategory: item.subcategory || "",
       item,
     };
   });
@@ -969,7 +970,7 @@ export function registerQrPublic(app) {
         [business.id],
       );
       const catalog = await query(
-        `SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+        `SELECT id, name, category, subcategory, base_unit, unit, retail_rate, gst_rate, stock_gm, status
          FROM items WHERE business_id = ?`,
         [business.id],
       );
@@ -1074,7 +1075,7 @@ export function registerQrPublic(app) {
         await ensureQrOrderSchema(conn);
         const built = [];
         const catalogRows = await conn.query(
-          `SELECT id, name, category, base_unit, unit, retail_rate, gst_rate, stock_gm, status
+          `SELECT id, name, category, subcategory, base_unit, unit, retail_rate, gst_rate, stock_gm, status
            FROM items WHERE business_id = ?`,
           [business.id],
         ).then(([rows]) => rows);

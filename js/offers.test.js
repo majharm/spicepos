@@ -167,6 +167,23 @@ test("minimum purchase and first-purchase eligibility", () => {
   assert.equal(O.evaluateOffer(offer, { cart: [line("x", 1200)], customer: { bills: 2 }, now }), null);
 });
 
+test("a category offer matches a restaurant menu section stored as subcategory", () => {
+  const offer = O.normalize({
+    name: "South Indian 10%",
+    type: "category",
+    status: "active",
+    category: "South Indian",
+    discount_type: "pct",
+    discount_value: 10,
+  });
+  const dosa = line("dosa", 80, { category: "Menu" });
+  dosa.subcategory = "South Indian";
+  dosa.item.subcategory = "South Indian";
+  const hit = O.evaluateOffer(offer, { cart: [dosa], now: new Date("2026-09-05T12:00:00") });
+  assert.equal(hit.discount, 8);
+  assert.equal(hit.scope, "lines");
+});
+
 test("happy hours only apply inside the time window", () => {
   const offer = O.normalize({
     name: "Happy hours",
