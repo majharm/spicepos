@@ -309,8 +309,8 @@ test("Resort POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /id="view-resort-housekeeping"/);
   assert.match(index, /id="resort-settings-box"/);
   assert.match(index, /js\/resort\.js\?v=20261124room4/);
-  assert.match(index, /js\/resort-ui\.js\?v=20261124room4/);
-  assert.match(index, /css\/resort\.css\?v=20261124room3/);
+  assert.match(index, /js\/resort-ui\.js\?v=20261124room5/);
+  assert.match(index, /css\/resort\.css\?v=20261124room5/);
   assert.match(index, /id="nav-restaurant-sub"/);
   assert.match(index, /id="nav-resort-group"/);
   const restaurantNav = index.slice(index.indexOf('id="nav-restaurant-sub"'), index.indexOf('id="nav-resort-group"'));
@@ -329,6 +329,11 @@ test("Resort POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /id="rb-room"/);
   assert.match(index, /class="room-book-layout"/);
   assert.match(read("js/resort-ui.js"), /function stayCard/);
+  assert.match(read("js/resort-ui.js"), /function roomCard/);
+  assert.match(index, /class="room-desk-layout"/);
+  assert.match(index, /data-room-filter="available"/);
+  assert.match(index, /id="room-hero-stats"/);
+  assert.match(read("css/resort.css"), /\.room-card-grid/);
   assert.match(read("css/resort.css"), /body\.resort-mode \.nav-btn\.resort-only:not\(\[hidden\]\) \{ display: flex; \}/);
   assert.match(index, /receptionist/);
   assert.match(index, /housekeeping/);
