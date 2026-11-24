@@ -308,8 +308,8 @@ test("Resort POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /id="view-resort-desk"/);
   assert.match(index, /id="view-resort-housekeeping"/);
   assert.match(index, /id="resort-settings-box"/);
-  assert.match(index, /js\/resort\.js\?v=20261011resort1/);
-  assert.match(index, /js\/resort-ui\.js\?v=20261124room1/);
+  assert.match(index, /js\/resort\.js\?v=20261124room4/);
+  assert.match(index, /js\/resort-ui\.js\?v=20261124room4/);
   assert.match(index, /css\/resort\.css\?v=20261124room3/);
   assert.match(index, /id="nav-restaurant-sub"/);
   assert.match(index, /id="nav-resort-group"/);
@@ -333,6 +333,11 @@ test("Resort POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /receptionist/);
   assert.match(index, /housekeeping/);
   assert.match(app, /function isResortShop/);
+  assert.match(app, /isResortShop\(\) && !resortOnlineOrdersOn\(\)/);
+  assert.match(read("js/resort-ui.js"), /name="show_online_orders"/);
+  assert.match(read("js/resort.js"), /show_online_orders: false/);
+  assert.match(read("server/resort.js"), /show_online_orders: flag\(patch\.show_online_orders/);
+  assert.match(read("pos-resort.php"), /function pos_resort_menu_flags/);
   assert.match(app, /resort-mode/);
   assert.match(node, /registerResortStaff/);
   assert.match(node, /ensureResortSchema/);

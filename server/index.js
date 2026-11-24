@@ -54,7 +54,7 @@ import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./sa
 import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrintInvoiceLines } from "./print.js";
 import { registerGymPublic, registerGymStaff, ensureGymSchema } from "./gym.js";
 import { registerBarStaff, ensureBarSchema } from "./bar.js";
-import { registerResortPublic, registerResortStaff, ensureResortSchema } from "./resort.js";
+import { registerResortPublic, registerResortStaff, ensureResortSchema, resortMenuFlags } from "./resort.js";
 import { registerBrandStaff, ensureBrandSchema, listBrands } from "./brands.js";
 import { registerCustomerDedupeStaff, registerCustomerDedupeMaster, ensureCustomerDedupeSchema } from "./customers-dedupe.js";
 import "../js/discount.js";
@@ -440,6 +440,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       combos,
       offers,
       offerSettings,
+      resortMenu: await resortMenuFlags(businessId, business).catch(() => ({ show_online_orders: 0 })),
     });
     scheduleShopAlerts(businessId);
   } catch (err) {

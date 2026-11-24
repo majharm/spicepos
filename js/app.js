@@ -9317,6 +9317,7 @@ async function loadBootstrap() {
     }
   }
   state.company = data.company;
+  state.resortMenu = data.resortMenu || { show_online_orders: 0 };
   applyBusinessFlags(data.business);
   applyNav();
   state.support = data.support || {};
@@ -12016,8 +12017,13 @@ function aggregatorSettings() {
   };
 }
 
+function resortOnlineOrdersOn() {
+  return globalThis.POSResort?.flagOn?.(state.resortMenu?.show_online_orders) === true;
+}
+
 function aggregatorDeskAllowed() {
   if (!(isRestaurantShop() || isBarShop())) return false;
+  if (isResortShop() && !resortOnlineOrdersOn()) return false;
   const s = aggregatorSettings();
   return Boolean(s.zomato_allowed || s.swiggy_allowed);
 }

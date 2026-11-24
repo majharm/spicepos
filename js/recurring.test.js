@@ -222,7 +222,7 @@ test("recurring invoices stay behind the business switch and post through sales"
   assert.match(read("css/pos.css"), /\.recur-stat-row/);
   assert.match(read("css/pos.css"), /\.recurring-desk \[hidden\]/);
   assert.match(app, /view === "recurring"\) btn\.hidden = !can\("orders"\)/);
-  assert.match(app, /state\.company = data\.company;\n  applyBusinessFlags\(data\.business\);\n  applyNav\(\)/);
+  assert.match(app, /state\.company = data\.company;\n  state\.resortMenu = data\.resortMenu \|\| \{ show_online_orders: 0 \};\n  applyBusinessFlags\(data\.business\);\n  applyNav\(\)/);
   assert.match(app, /POSRecurringUi\?\.load/);
   assert.match(read("js/biz-hub.js"), /view: "recurring"/);
   assert.doesNotMatch(read("js/biz-hub.js"), /desk: "recurring"/);

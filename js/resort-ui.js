@@ -295,6 +295,7 @@
       <label>Hold minutes <input name="hold_minutes" type="number" value="${escapeHtml(s.hold_minutes || 10)}" /></label>
       <label>Tax % <input name="tax_rate" type="number" value="${escapeHtml(s.tax_rate || 12)}" /></label>
       <label class="full"><input type="checkbox" name="pay_on_arrival" ${s.pay_on_arrival ? "checked" : ""} /> Allow payment on arrival</label>
+      <label class="full"><input type="checkbox" name="show_online_orders" ${s.show_online_orders ? "checked" : ""} /> Show Online orders in the menu</label>
       <label class="full">Booking policy <textarea name="booking_policy">${escapeHtml(s.booking_policy || "")}</textarea></label>
       <button class="btn primary" type="submit">Save property settings</button>
     </form>`;
@@ -313,9 +314,14 @@
           hold_minutes: form.hold_minutes.value,
           tax_rate: form.tax_rate.value,
           pay_on_arrival: form.pay_on_arrival.checked,
+          show_online_orders: form.show_online_orders.checked ? 1 : 0,
           booking_policy: form.booking_policy.value,
         },
       });
+      root.state = root.state || {};
+      root.state.resortMenu = { show_online_orders: form.show_online_orders.checked ? 1 : 0 };
+      root.applyNav?.();
+      if (!form.show_online_orders.checked && root.state.currentView === "online-orders") root.showView?.("dashboard");
     };
   }
 
