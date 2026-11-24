@@ -1,7 +1,20 @@
 /* Resort desk — room booking stays its own nav group, separate from the restaurant counter. */
 body.resort-mode .nav-btn.resort-only:not([hidden]) { display: flex; }
 body.resort-mode .resort-only:not(.nav-btn):not([hidden]) { display: block; }
-body.resort-mode #nav-room-group:not([hidden]) { display: grid; }
+body.resort-mode #nav-room-group:not([hidden]) {
+  display: grid;
+  margin: 2px 0 6px;
+  padding: 8px;
+  border: 1px solid rgba(45, 212, 191, 0.55);
+  border-radius: 12px;
+  background: rgba(15, 118, 110, 0.22);
+}
+body.resort-mode #nav-room-group .nav-group-label { color: #99f6e4; }
+body.resort-mode #nav-room-group .nav-btn {
+  background: #0f766e;
+  color: #f0fdfa;
+}
+body.resort-mode #nav-resort-group:not([hidden]) { display: grid; }
 body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none !important; }
 
 .resort-desk { display: grid; gap: 1rem; }

@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
-    <link rel="stylesheet" href="./css/resort.css?v=20261124room1" />
+    <link rel="stylesheet" href="./css/resort.css?v=20261124room2" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261118pwa2" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261103items1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
@@ -54,6 +54,10 @@
             <button class="nav-btn" type="button" data-view="ecommerce" hidden><span class="nav-icon" aria-hidden="true">▢</span>E-Commerce</button>
             <button class="nav-btn" type="button" data-view="counter"><span class="nav-icon" aria-hidden="true">⊞</span><span data-i18n="nav.counter">Counter</span></button>
             <button class="nav-btn" type="button" data-view="kot"><span class="nav-icon" aria-hidden="true">▣</span>Kitchen KOT <span class="nav-badge" id="kot-badge" hidden></span></button>
+          </div>
+          <div class="nav-group resort-only" id="nav-room-group" hidden>
+            <p class="nav-group-label">Room booking</p>
+            <button class="nav-btn resort-only" type="button" data-view="resort-bookings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▦</span>Room booking</button>
           </div>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.sales">Sales</p>
@@ -136,9 +140,8 @@
             <button class="nav-btn bar-only" type="button" data-view="bar-reports" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">▦</span>Bar reports</button>
             <button class="nav-btn bar-only" type="button" data-view="bar-settings" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">⚙</span>Bar settings</button>
           </div>
-          <div class="nav-group resort-only" id="nav-room-group" hidden>
-            <p class="nav-group-label">Room booking</p>
-            <button class="nav-btn resort-only" type="button" data-view="resort-bookings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▦</span>Room booking</button>
+          <div class="nav-group resort-only" id="nav-resort-group" hidden>
+            <p class="nav-group-label">Resort</p>
             <button class="nav-btn resort-only" type="button" data-view="resort-rooms" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▤</span>Rooms</button>
             <button class="nav-btn resort-only" type="button" data-view="resort-desk" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">◉</span>Front desk</button>
             <button class="nav-btn resort-only" type="button" data-view="resort-housekeeping" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">☰</span>Housekeeping</button>
@@ -4060,7 +4063,7 @@
     <script src="./js/sales-item-report.js?v=20261117sir1" defer></script>
     <script src="./js/item-oversell-report.js?v=20261117osr1" defer></script>
     <script src="./js/biz-hub.js?v=20261117ecom1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20261124room1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20261124room2" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20261016sales1" defer></script>
