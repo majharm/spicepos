@@ -1156,10 +1156,11 @@
       const any = [...group.querySelectorAll(".nav-btn")].some((b) => !b.hidden);
       group.hidden = !any;
     }
-    ["nav-room-group", "nav-resort-group"].forEach((id) => {
-      const box = $(id);
-      if (!box) return;
-      box.hidden = ![...box.querySelectorAll(".nav-btn")].some((b) => !b.hidden);
+    document.querySelectorAll("details.nav-sub").forEach((box) => {
+      const buttons = [...box.querySelectorAll(".nav-btn")];
+      const any = buttons.some((b) => !b.hidden);
+      box.hidden = !any;
+      if (any && buttons.some((b) => !b.hidden && b.classList.contains("active"))) box.open = true;
     });
     const label = $("nav-industry-label");
     if (label) {

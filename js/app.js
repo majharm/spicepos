@@ -3581,6 +3581,9 @@ function showView(name) {
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === name);
   });
+  document.querySelectorAll("details.nav-sub").forEach((box) => {
+    if (box.querySelector(".nav-btn.active:not([hidden])")) box.open = true;
+  });
   document.body.classList.toggle("counter-mode", name === "counter");
   document.body.classList.toggle("analytics-home", name === "dashboard");
   document.querySelector(".stage")?.classList.toggle("is-counter", name === "counter");
