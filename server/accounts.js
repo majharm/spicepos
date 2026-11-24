@@ -1349,7 +1349,8 @@ export function registerAccounts(app) {
   });
 
   app.post("/api/accounts/payments", requirePerm("accounts"), async (req, res) => {
-    const { supplier_id, amount, payment_method, notes, purchase_id } = req.body || {};
+    const { supplier_id, amount, payment_method, notes, purchase_id, payment_date } = req.body || {};
+    const paymentDate = clipPaymentDate(payment_date);
     const amt = round2(amount);
     if (!supplier_id || amt <= 0) {
       res.status(400).json({ error: "Supplier and amount are required" });
@@ -1389,9 +1390,10 @@ export function registerAccounts(app) {
           reference_type: purchase_id ? "purchase" : "manual",
           reference_id: purchase_id || null,
           notes: notes || null,
+          payment_date: paymentDate,
         });
         await postPaymentJournal(conn, { amount: amt, payment_method: method, entryNo, ledgerId });
-        return { entryNo, ledgerId, supplier: { ...supplier, payable_balance: next }, amount: amt, method };
+        return { entryNo, ledgerId, supplier: { ...supplier, payable_balance: next }, amount: amt, method, payment_date: paymentDate };
       });
       await audit("Supplier Payment", {
         module: "accounts",

@@ -13319,6 +13319,7 @@ function showPaymentModal(supplier) {
   $("modal-body").innerHTML = `<form class="settings" id="payment-modal-form">
     <p class="section-note">Payable: <strong>${money(Number(supplier.payable_balance) || 0)}</strong></p>
     <label>Amount <input id="pay-acc-amount" type="number" min="0.01" step="0.01" max="${Number(supplier.payable_balance) || 0}" required value="${Number(supplier.payable_balance) || 0}" /></label>
+    <label>Payment date <input id="pay-acc-date" type="date" required value="${escapeHtml(shopDateInputValue())}" /></label>
     <label>Method <select id="pay-acc-method">${globalThis.POSPay?.optionsHtml?.({ selected: "cash" }) || `<option value="cash">Cash</option><option value="upi">UPI</option>`}</select></label>
     <label>Notes <input id="pay-acc-notes" placeholder="Optional" /></label>
     <button class="btn primary" type="submit">Save payment</button>
@@ -13328,10 +13329,17 @@ function showPaymentModal(supplier) {
     e.preventDefault();
     const notes = $("pay-acc-notes").value;
     const method = $("pay-acc-method").value;
+    const paymentDate = shopDateInputValue($("pay-acc-date")?.value || shopDateInputValue());
     try {
       const data = await api("/api/accounts/payments", {
         method: "POST",
-        body: JSON.stringify({ supplier_id: supplier.id, amount: Number($("pay-acc-amount").value), payment_method: method, notes }),
+        body: JSON.stringify({
+          supplier_id: supplier.id,
+          amount: Number($("pay-acc-amount").value),
+          payment_method: method,
+          notes,
+          payment_date: paymentDate,
+        }),
       });
       await loadAccounts();
       await loadSuppliers();
@@ -13344,7 +13352,8 @@ function showPaymentModal(supplier) {
         amount: data.amount,
         payment_method: data.method || method,
         notes,
-        created_at: new Date().toISOString(),
+        payment_date: data.payment_date || paymentDate,
+        created_at: data.payment_date || paymentDate,
       });
     } catch (err) {
       $("pay-acc-hint").textContent = err.message;

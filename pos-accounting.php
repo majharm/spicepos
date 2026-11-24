@@ -1116,15 +1116,18 @@ function pos_accounts_dispatch($path, $method, $body, $bid, $auth, $branchId, $u
     pos_q("UPDATE suppliers SET payable_balance = ? WHERE id = ? AND business_id = ?", "dss", [$next, $supplier["id"], $bid]);
     $n = pos_next_seq("payment", $bid, 1001);
     $entryNo = "PAY-{$n}";
+    $payDate = function_exists("pos_clip_payment_date") ? pos_clip_payment_date($body["payment_date"] ?? null) : null;
     $ledgerId = pos_insert_ledger([
       "entry_no" => $entryNo, "entry_type" => "payment", "party_type" => "supplier",
       "party_id" => $supplier["id"], "party_name" => $supplier["name"],
       "amount" => $amt, "payment_method" => $methodPay,
       "reference_type" => !empty($body["purchase_id"]) ? "purchase" : "manual",
       "reference_id" => $body["purchase_id"] ?? null, "notes" => $body["notes"] ?? null,
+      "payment_date" => $payDate,
     ], $bid, $uid);
+    if (function_exists("pos_stamp_ledger_due")) pos_stamp_ledger_due($ledgerId, ["payment_date" => $payDate], $bid);
     pos_post_payment_journal($bid, $uid, $amt, $methodPay, $entryNo, $ledgerId);
-    pos_send(200, ["ok" => true, "entryNo" => $entryNo, "ledgerId" => $ledgerId, "supplier" => array_merge($supplier, ["payable_balance" => $next]), "amount" => $amt, "php" => true]);
+    pos_send(200, ["ok" => true, "entryNo" => $entryNo, "ledgerId" => $ledgerId, "supplier" => array_merge($supplier, ["payable_balance" => $next]), "amount" => $amt, "payment_date" => $payDate, "php" => true]);
   }
 
   if (preg_match("#^accounts/payments/([^/]+)$#", $path, $m) && ($method === "PUT" || $method === "PATCH")) {
