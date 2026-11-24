@@ -62,31 +62,117 @@
     }
   }
 
+  let roomCache = [];
+  let roomFilter = "all";
+
+  function roomStatus(room) {
+    return R()?.statusId?.(room?.physical_status) || room?.physical_status || "available";
+  }
+
+  function hkLabel(status) {
+    const id = R()?.statusId?.(status) || status || "ready";
+    const row = (R()?.HOUSEKEEPING_STATUSES || []).find((item) => item.id === id);
+    return row?.label || id;
+  }
+
+  function roomMatches(room, filter, query) {
+    const status = roomStatus(room);
+    const hk = R()?.statusId?.(room?.hk_status) || room?.hk_status || "";
+    if (filter === "available" && status !== "available") return false;
+    if (filter === "occupied" && status !== "occupied") return false;
+    if (filter === "reserved" && status !== "reserved") return false;
+    if (filter === "cleaning" && status !== "cleaning" && hk !== "dirty" && hk !== "cleaning" && hk !== "inspect") return false;
+    if (filter === "out" && !["maintenance", "blocked", "checkout_pending"].includes(status)) return false;
+    if (!query) return true;
+    const hay = `${room.number || ""} ${room.name || ""} ${R()?.categoryLabel?.(room.category) || ""}`.toLowerCase();
+    return hay.includes(query);
+  }
+
+  function paintRoomStats(rooms) {
+    const box = $("room-hero-stats");
+    if (!box) return;
+    const ready = rooms.filter((room) => roomStatus(room) === "available" && Number(room.active) !== 0).length;
+    const occupied = rooms.filter((room) => roomStatus(room) === "occupied").length;
+    const notReady = rooms.filter((room) => !["available", "occupied", "reserved"].includes(roomStatus(room))).length;
+    const stats = [
+      ["Rooms", rooms.length, ""],
+      ["Ready", ready, ""],
+      ["Occupied", occupied, occupied ? " is-warn" : ""],
+      ["Not ready", notReady, notReady ? " is-warn" : ""],
+    ];
+    box.innerHTML = stats
+      .map(([label, value, warn]) => `<div class="items-stat${warn}"><span>${label}</span><strong>${value}</strong></div>`)
+      .join("");
+  }
+
+  function roomCard(room) {
+    const status = roomStatus(room);
+    const inactive = Number(room.active) === 0;
+    const selected = $("rr-id")?.value === room.id ? " is-on" : "";
+    const title = room.name ? escapeHtml(room.name) : escapeHtml(R()?.categoryLabel?.(room.category) || "Room");
+    const category = escapeHtml(R()?.categoryLabel?.(room.category) || room.category || "Room");
+    const adults = Number(room.max_adults || 2);
+    const children = Number(room.max_children || 0);
+    const guestLine = `${adults} adult${adults === 1 ? "" : "s"} · ${children} child${children === 1 ? "" : "ren"}`;
+    return `<button type="button" class="room-card status-${escapeHtml(status)}${inactive ? " is-inactive" : ""}${selected}" data-room="${escapeHtml(room.id)}">
+      <div class="room-card-top">
+        <span class="room-no">${escapeHtml(room.number || "—")}</span>
+        ${badge(status)}
+      </div>
+      <strong>${title}</strong>
+      <span class="room-meta">${category}</span>
+      <span class="room-rate">${money(room.rate)} <small>/ night</small></span>
+      <span class="room-meta">${escapeHtml(guestLine)}</span>
+      <span class="room-meta">Housekeeping ${escapeHtml(hkLabel(room.hk_status || "ready"))}${inactive ? " · Inactive" : ""}</span>
+    </button>`;
+  }
+
+  function paintRooms() {
+    const el = $("resort-rooms-grid");
+    if (!el) return;
+    const query = ($("room-search")?.value || "").trim().toLowerCase();
+    document.querySelectorAll("[data-room-filter]").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.roomFilter === roomFilter);
+    });
+    paintRoomStats(roomCache);
+    const rows = roomCache.filter((room) => roomMatches(room, roomFilter, query));
+    if (!roomCache.length) {
+      el.innerHTML = `<p class="hint">Add the first room to start taking bookings.</p>`;
+      return;
+    }
+    el.innerHTML = rows.map(roomCard).join("") || `<p class="hint">No rooms match this view.</p>`;
+    el.querySelectorAll("[data-room]").forEach((btn) => {
+      btn.onclick = () => fillRoom(roomCache.find((room) => room.id === btn.dataset.room));
+    });
+  }
+
   async function loadRooms() {
     const el = $("resort-rooms-grid");
     if (!el || !isResort()) return;
     const d = await api("/api/resort/rooms");
+    roomCache = d.rooms || [];
     const roomSel = $("rb-room");
     if (roomSel) {
       const current = roomSel.value;
-      roomSel.innerHTML = `<option value="">Choose a room</option>${(d.rooms || [])
+      roomSel.innerHTML = `<option value="">Choose a room</option>${roomCache
         .map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} · ${escapeHtml(R().categoryLabel(r.category))}${r.name ? ` · ${escapeHtml(r.name)}` : ""}</option>`)
         .join("")}`;
       if (current) roomSel.value = current;
     }
-    el.innerHTML = (d.rooms || [])
-      .map(
-        (r) => `<button type="button" class="resort-card" data-room="${escapeHtml(r.id)}">
-          <span>${escapeHtml(r.number)}</span>
-          <strong>${escapeHtml(r.name || R().categoryLabel(r.category))}</strong>
-          ${badge(r.physical_status)} ${badge(r.hk_status || "ready")}
-          <span>${money(r.rate)}</span>
-        </button>`,
-      )
-      .join("") || `<p class="hint">Add rooms to start taking bookings.</p>`;
-    el.querySelectorAll("[data-room]").forEach((btn) => {
-      btn.onclick = () => fillRoom(d.rooms.find((r) => r.id === btn.dataset.room));
-    });
+    paintRooms();
+  }
+
+  function clearRoomForm() {
+    const form = $("resort-room-form");
+    if (!form) return;
+    form.reset();
+    if ($("rr-id")) $("rr-id").value = "";
+    if ($("rr-adults")) $("rr-adults").value = "2";
+    if ($("rr-children")) $("rr-children").value = "1";
+    if ($("rr-active")) $("rr-active").checked = true;
+    if ($("room-editor-title")) $("room-editor-title").textContent = "New room";
+    hint("resort-room-hint", "");
+    paintRooms();
   }
 
   function fillRoom(room) {
@@ -100,6 +186,9 @@
     $("rr-children").value = room.max_children || 1;
     $("rr-status").value = room.physical_status || "available";
     $("rr-active").checked = Number(room.active) !== 0;
+    if ($("room-editor-title")) $("room-editor-title").textContent = `Edit room ${room.number || ""}`.trim();
+    paintRooms();
+    $("resort-room-form").scrollIntoView({ block: "nearest" });
   }
 
   async function saveRoom(ev) {
@@ -116,9 +205,10 @@
       active: $("rr-active")?.checked ? 1 : 0,
     };
     try {
-      await api("/api/resort/rooms", { method: "POST", body });
+      const saved = await api("/api/resort/rooms", { method: "POST", body });
+      if ($("rr-id") && saved?.id) $("rr-id").value = saved.id;
+      if ($("room-editor-title")) $("room-editor-title").textContent = `Edit room ${$("rr-number")?.value || ""}`.trim();
       hint("resort-room-hint", "Room saved.");
-      $("rr-id").value = "";
       loadRooms();
       loadResortBoard();
     } catch (err) {
@@ -347,6 +437,14 @@
     if (report) loadReport(report.dataset.resortReport);
   });
   $("resort-room-form")?.addEventListener("submit", saveRoom);
+  $("room-editor-clear")?.addEventListener("click", clearRoomForm);
+  $("room-search")?.addEventListener("input", () => paintRooms());
+  document.addEventListener("click", (ev) => {
+    const chip = ev.target.closest?.("[data-room-filter]");
+    if (!chip || !$("view-resort-rooms") || $("view-resort-rooms").hidden) return;
+    roomFilter = chip.dataset.roomFilter || "all";
+    paintRooms();
+  });
   $("resort-walkin-form")?.addEventListener("submit", saveWalkIn);
   $("resort-book-filter")?.addEventListener("change", () => loadBookings());
   document.addEventListener("click", (ev) => {
