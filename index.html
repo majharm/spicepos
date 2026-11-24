@@ -12,14 +12,14 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261122cafe1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261124room1" />
     <link rel="stylesheet" href="./css/online-store.css?v=20261116storemenu1" />
     <link rel="stylesheet" href="./css/ecommerce.css?v=20261117ecom1" />
     <link rel="stylesheet" href="./css/crm.css?v=20261117crm6" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
-    <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
+    <link rel="stylesheet" href="./css/resort.css?v=20261124room1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261118pwa2" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261103items1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
@@ -135,11 +135,14 @@
             <button class="nav-btn bar-only" type="button" data-view="bar-stock" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">☰</span>Bar stock</button>
             <button class="nav-btn bar-only" type="button" data-view="bar-reports" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">▦</span>Bar reports</button>
             <button class="nav-btn bar-only" type="button" data-view="bar-settings" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">⚙</span>Bar settings</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-board" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▣</span>Resort desk</button>
+          </div>
+          <div class="nav-group resort-only" id="nav-room-group" hidden>
+            <p class="nav-group-label">Room booking</p>
+            <button class="nav-btn resort-only" type="button" data-view="resort-bookings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▦</span>Room booking</button>
             <button class="nav-btn resort-only" type="button" data-view="resort-rooms" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▤</span>Rooms</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-bookings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▦</span>Bookings</button>
             <button class="nav-btn resort-only" type="button" data-view="resort-desk" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">◉</span>Front desk</button>
             <button class="nav-btn resort-only" type="button" data-view="resort-housekeeping" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">☰</span>Housekeeping</button>
+            <button class="nav-btn resort-only" type="button" data-view="resort-board" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▣</span>Resort desk</button>
             <button class="nav-btn resort-only" type="button" data-view="resort-settings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">⚙</span>Resort settings</button>
           </div>
           <div class="nav-group">
@@ -1774,49 +1777,67 @@
           </div>
         </section>
         <section class="view view-finance resort-only" id="view-resort-bookings" hidden>
-          <div class="items-desk">
+          <div class="items-desk room-book-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
-                <p class="items-kicker">Reservations</p>
-                <h3>Bookings</h3>
-                <p class="lede">Walk-in, website, and pending reservations. Date changes re-check availability before they save.</p>
+                <p class="items-kicker">Room booking</p>
+                <h3>Room booking</h3>
+                <p class="lede">A stay desk for this resort, separate from the restaurant counter. Pick a room, guest, and dates. The list shows arrivals, in-house guests, and pending stays.</p>
               </div>
             </header>
-            <label>Filter
-              <select id="resort-book-filter">
-                <option value="all">All bookings</option>
-                <option value="arrivals">Today's arrivals</option>
-                <option value="departures">Today's departures</option>
-                <option value="in_house">In-house</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="pending">Pending confirmations</option>
-                <option value="pending_payment">Pending payments</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="no_show">No-show</option>
-              </select>
-            </label>
-            <form id="resort-walkin-form" class="resort-form">
-              <label>Room id <input id="rb-room" required /></label>
-              <label>Check-in <input id="rb-in" type="date" required /></label>
-              <label>Check-out <input id="rb-out" type="date" required /></label>
-              <label>Adults <input id="rb-adults" type="number" value="2" /></label>
-              <label>Children <input id="rb-children" type="number" value="0" /></label>
-              <label>Guest <input id="rb-guest" required /></label>
-              <label>Mobile <input id="rb-mobile" required /></label>
-              <label>Email <input id="rb-email" type="email" /></label>
-              <label>Advance <input id="rb-advance" type="number" min="0" value="0" /></label>
-              <label>Payment
-                <select id="rb-pay">
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                  <option value="card">Card</option>
-                  <option value="pay_on_arrival">Pay on arrival</option>
+            <div class="room-book-layout">
+              <form id="resort-walkin-form" class="resort-form room-book-form">
+                <h4 class="full">New stay</h4>
+                <label class="full">Room
+                  <select id="rb-room" required>
+                    <option value="">Choose a room</option>
+                  </select>
+                </label>
+                <label>Check-in <input id="rb-in" type="date" required /></label>
+                <label>Check-out <input id="rb-out" type="date" required /></label>
+                <label>Adults <input id="rb-adults" type="number" min="1" value="2" /></label>
+                <label>Children <input id="rb-children" type="number" min="0" value="0" /></label>
+                <label class="full">Guest <input id="rb-guest" required placeholder="Guest name" /></label>
+                <label>Mobile <input id="rb-mobile" required inputmode="tel" placeholder="10-digit mobile" /></label>
+                <label>Email <input id="rb-email" type="email" placeholder="Optional" /></label>
+                <label>Advance <input id="rb-advance" type="number" min="0" value="0" /></label>
+                <label>Payment
+                  <select id="rb-pay">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="card">Card</option>
+                    <option value="pay_on_arrival">Pay on arrival</option>
+                  </select>
+                </label>
+                <button class="btn primary full" type="submit">Save room booking</button>
+              </form>
+              <div class="room-book-list">
+                <div class="room-book-filters" id="resort-book-filters">
+                  <button type="button" class="is-on" data-book-filter="all">All</button>
+                  <button type="button" data-book-filter="arrivals">Arrivals</button>
+                  <button type="button" data-book-filter="departures">Departures</button>
+                  <button type="button" data-book-filter="in_house">In-house</button>
+                  <button type="button" data-book-filter="upcoming">Upcoming</button>
+                  <button type="button" data-book-filter="pending">Pending</button>
+                  <button type="button" data-book-filter="pending_payment">Payment due</button>
+                  <button type="button" data-book-filter="cancelled">Cancelled</button>
+                  <button type="button" data-book-filter="no_show">No-show</button>
+                </div>
+                <select id="resort-book-filter" class="room-book-filter-native" aria-label="Booking filter">
+                  <option value="all">All bookings</option>
+                  <option value="arrivals">Today's arrivals</option>
+                  <option value="departures">Today's departures</option>
+                  <option value="in_house">In-house</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="pending">Pending confirmations</option>
+                  <option value="pending_payment">Pending payments</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="no_show">No-show</option>
                 </select>
-              </label>
-              <button class="btn primary" type="submit">Create walk-in booking</button>
-            </form>
-            <p class="hint" id="resort-book-hint"></p>
-            <div class="table-wrap" id="resort-bookings-table"></div>
+                <p class="hint" id="resort-book-hint"></p>
+                <div id="resort-bookings-table"></div>
+              </div>
+            </div>
           </div>
         </section>
         <section class="view view-finance resort-only" id="view-resort-desk" hidden>
@@ -4039,7 +4060,7 @@
     <script src="./js/sales-item-report.js?v=20261117sir1" defer></script>
     <script src="./js/item-oversell-report.js?v=20261117osr1" defer></script>
     <script src="./js/biz-hub.js?v=20261117ecom1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20261116qrmod1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20261124room1" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20261016sales1" defer></script>
@@ -4049,7 +4070,7 @@
     <script src="./js/bar.js?v=20261011lounge1" defer></script>
     <script src="./js/bar-ui.js?v=20261012table1" defer></script>
     <script src="./js/resort.js?v=20261011resort1" defer></script>
-    <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
+    <script src="./js/resort-ui.js?v=20261124room1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
@@ -4058,7 +4079,7 @@
     <script src="./js/stock-desk.js?v=20261117stock0" defer></script>
     <script src="./js/crm.js?v=20261117crm6" defer></script>
     <script src="./js/security-login.js?v=20261118sec1" defer></script>
-    <script src="./js/app.js?v=20261120dock1" defer></script>
+    <script src="./js/app.js?v=20261124room1" defer></script>
     <script src="./js/online-store-desk.js?v=20261116store1" defer></script>
     <script src="./js/ecommerce-desk.js?v=20261117ecom1" defer></script>
     <script src="./js/automation-shop.js?v=20261123auto1" defer></script>

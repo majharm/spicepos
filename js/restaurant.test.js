@@ -366,7 +366,7 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(mobile, /display: block !important;/);
   assert.doesNotMatch(mobile, /max-height: 42vh/);
   assert.doesNotMatch(index, /20260925rm1/);
-  assert.match(index, /pos\.css\?v=20261122cafe1/);
+  assert.match(index, /pos\.css\?v=20261124room1/);
   assert.match(mobile, /restaurant-counter-paid/);
   assert.match(mobile, /body\.restaurant-mode\.counter-mode\.has-cart:not\(\.bill-collapsed\) \.stage\.is-counter \.bill-settle \{\n    display: grid !important;/);
   assert.match(mobile, /body\.restaurant-mode\.bill-collapsed \.stage\.is-counter \.bill-settle \{\n    display: none !important;/);

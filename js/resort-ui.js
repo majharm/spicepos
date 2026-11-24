@@ -68,7 +68,11 @@
     const d = await api("/api/resort/rooms");
     const roomSel = $("rb-room");
     if (roomSel) {
-      roomSel.innerHTML = (d.rooms || []).map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} · ${escapeHtml(r.name || r.category)}</option>`).join("");
+      const current = roomSel.value;
+      roomSel.innerHTML = `<option value="">Choose a room</option>${(d.rooms || [])
+        .map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} · ${escapeHtml(R().categoryLabel(r.category))}${r.name ? ` · ${escapeHtml(r.name)}` : ""}</option>`)
+        .join("")}`;
+      if (current) roomSel.value = current;
     }
     el.innerHTML = (d.rooms || [])
       .map(
@@ -122,12 +126,72 @@
     }
   }
 
+  function bookingLabel(status) {
+    const id = R()?.statusId?.(status) || String(status || "");
+    const row = (R()?.BOOKING_STATUSES || []).find((item) => item.id === id);
+    if (row?.label) return row.label;
+    return id.replace(/_/g, " ") || "Booking";
+  }
+
+  function stayBadge(status) {
+    const id = R()?.statusId?.(status) || status || "";
+    return `<span class="resort-badge status-${escapeHtml(id)}">${escapeHtml(bookingLabel(id))}</span>`;
+  }
+
+  function payLabel(status) {
+    const words = String(status || "pending").replace(/_/g, " ");
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+
+  function stayCard(booking) {
+    const nights = Number(R()?.nightsBetween?.(booking.check_in, booking.check_out) || 0);
+    const due = Number(booking.due);
+    const nightText = nights > 0 ? ` · ${nights} night${nights === 1 ? "" : "s"}` : "";
+    return `<article class="stay-card">
+      <div class="stay-card-top">
+        <strong>${escapeHtml(booking.guest_name || "Guest")}</strong>
+        ${stayBadge(booking.status)}
+      </div>
+      <span class="stay-meta">${escapeHtml(booking.booking_no || "Walk-in")} · Room ${escapeHtml(booking.room_no || "unassigned")}</span>
+      <span class="stay-meta">${escapeHtml(booking.check_in || "")} → ${escapeHtml(booking.check_out || "")}${nightText}</span>
+      <span class="stay-meta">${escapeHtml(payLabel(booking.payment_status))} · Due ${money(Number.isFinite(due) ? due : 0)}</span>
+    </article>`;
+  }
+
+  function seedStayDates() {
+    const inn = $("rb-in");
+    const out = $("rb-out");
+    if (!inn || !out || inn.value) return;
+    const today = R()?.ymdInZone?.(new Date(), "Asia/Kolkata") || "";
+    if (!today) return;
+    inn.value = today;
+    out.value = R()?.addDays?.(today, 1) || "";
+  }
+
+  function paintBookingFilter(q) {
+    document.querySelectorAll("[data-book-filter]").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.bookFilter === q);
+    });
+  }
+
   async function loadBookings(filter) {
     const el = $("resort-bookings-table");
     if (!el || !isResort()) return;
+    const roomSel = $("rb-room");
+    if (roomSel && roomSel.options.length < 2) {
+      try {
+        await loadRooms();
+      } catch {
+        /* the stay list can still open */
+      }
+    }
+    seedStayDates();
     const q = filter || $("resort-book-filter")?.value || "all";
+    if ($("resort-book-filter")) $("resort-book-filter").value = q;
+    paintBookingFilter(q);
     const d = await api(`/api/resort/bookings?filter=${encodeURIComponent(q)}`);
-    el.innerHTML = tableHtml(d.bookings || [], ["booking_no", "guest_name", "room_no", "check_in", "check_out", "status", "payment_status", "due"]);
+    const rows = d.bookings || [];
+    el.innerHTML = rows.length ? rows.map(stayCard).join("") : `<p class="hint">No stays in this list.</p>`;
     paintInhouseSelect(d.in_house || d.bookings || []);
   }
 
@@ -279,6 +343,11 @@
   $("resort-room-form")?.addEventListener("submit", saveRoom);
   $("resort-walkin-form")?.addEventListener("submit", saveWalkIn);
   $("resort-book-filter")?.addEventListener("change", () => loadBookings());
+  document.addEventListener("click", (ev) => {
+    const chip = ev.target.closest?.("[data-book-filter]");
+    if (!chip || !$("view-resort-bookings") || $("view-resort-bookings").hidden) return;
+    loadBookings(chip.dataset.bookFilter);
+  });
   $("counter-resort-folio")?.addEventListener("change", () => {
     root.state = root.state || {};
     root.state.activeResortStay = $("counter-resort-folio")?.value || "";

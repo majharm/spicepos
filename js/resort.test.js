@@ -309,8 +309,14 @@ test("Resort POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /id="view-resort-housekeeping"/);
   assert.match(index, /id="resort-settings-box"/);
   assert.match(index, /js\/resort\.js\?v=20261011resort1/);
-  assert.match(index, /js\/resort-ui\.js\?v=20261011resort1/);
-  assert.match(index, /css\/resort\.css\?v=20261011resort1/);
+  assert.match(index, /js\/resort-ui\.js\?v=20261124room1/);
+  assert.match(index, /css\/resort\.css\?v=20261124room1/);
+  assert.match(index, /id="nav-room-group"/);
+  assert.match(index, />Room booking</);
+  assert.match(index, /id="rb-room"/);
+  assert.match(index, /class="room-book-layout"/);
+  assert.match(read("js/resort-ui.js"), /function stayCard/);
+  assert.match(read("css/resort.css"), /body\.resort-mode \.nav-btn\.resort-only:not\(\[hidden\]\) \{ display: flex; \}/);
   assert.match(index, /receptionist/);
   assert.match(index, /housekeeping/);
   assert.match(app, /function isResortShop/);

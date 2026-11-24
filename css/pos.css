@@ -152,6 +152,7 @@ select {
   gap: 10px;
 }
 .nav-group { display: grid; gap: 2px; }
+.nav-group[hidden] { display: none !important; }
 .nav-group-label {
   margin: 0 8px 4px;
   font-size: 10px;

@@ -1142,6 +1142,11 @@
       const any = [...group.querySelectorAll(".nav-btn")].some((b) => !b.hidden);
       group.hidden = !any;
     }
+    const rooms = $("nav-room-group");
+    if (rooms) {
+      const anyRoom = [...rooms.querySelectorAll(".nav-btn")].some((b) => !b.hidden);
+      rooms.hidden = !anyRoom;
+    }
     const label = $("nav-industry-label");
     if (label) {
       const names = {

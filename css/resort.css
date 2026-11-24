@@ -1,6 +1,8 @@
-/* Resort desk — compact, mobile-first, keeps restaurant POS intact. */
-.resort-mode .resort-only { display: block; }
-body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none; }
+/* Resort desk — room booking stays its own nav group, separate from the restaurant counter. */
+body.resort-mode .nav-btn.resort-only:not([hidden]) { display: flex; }
+body.resort-mode .resort-only:not(.nav-btn):not([hidden]) { display: block; }
+body.resort-mode #nav-room-group:not([hidden]) { display: grid; }
+body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none !important; }
 
 .resort-desk { display: grid; gap: 1rem; }
 .resort-grid {
@@ -68,6 +70,68 @@ body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none; }
   border-radius: 10px;
   background: #fffaf3;
 }
-@media (max-width: 720px) {
+.room-book-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.room-book-form,
+.room-book-list {
+  background: #fffdf8;
+  border: 1px solid #e4d6c4;
+  border-radius: 16px;
+  padding: 14px;
+}
+.room-book-form h4,
+.room-book-list h4 { margin: 0 0 8px; }
+.room-book-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.room-book-filters button {
+  border: 1px solid #e4d6c4;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: #3f3a34;
+  cursor: pointer;
+}
+.room-book-filters button.is-on {
+  background: #14532d;
+  border-color: #14532d;
+  color: #fff;
+}
+.room-book-filter-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.stay-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #eadfce;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+.stay-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.stay-meta { color: #57534e; font-size: 13px; }
+@media (max-width: 860px) {
+  .room-book-layout { grid-template-columns: 1fr; }
   .resort-form { grid-template-columns: 1fr; }
+}
 }

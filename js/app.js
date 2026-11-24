@@ -1206,6 +1206,12 @@ const VIEW_META = {
   "bar-stock": { title: "Bar stock", subtitle: "Opening, purchase, wastage, breakage, and remaining ml" },
   "bar-reports": { title: "Bar reports", subtitle: "Sales, consumption, stock variance, and gross profit" },
   "bar-settings": { title: "Bar settings", subtitle: "License, hours, peg sizes, tax, and regulated sales" },
+  "resort-board": { title: "Resort desk", subtitle: "Arrivals, departures, occupancy, and room revenue" },
+  "resort-rooms": { title: "Rooms", subtitle: "Room numbers, categories, rates, and readiness" },
+  "resort-bookings": { title: "Room booking", subtitle: "Stays for this resort, separate from the restaurant counter" },
+  "resort-desk": { title: "Front desk", subtitle: "Check guests in and out" },
+  "resort-housekeeping": { title: "Housekeeping", subtitle: "Cleaning, inspection, and room readiness" },
+  "resort-settings": { title: "Resort settings", subtitle: "Property name, check-in times, and booking policy" },
 };
 
 function orderStatusClass(status) {
