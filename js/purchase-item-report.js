@@ -21,6 +21,15 @@
     return match ? match[1] : "";
   }
 
+  function clock(value) {
+    const match = String(value || "").trim().match(/(?:T|\s)(\d{2}:\d{2})/);
+    return match ? match[1] : "";
+  }
+
+  function batchId(row) {
+    return String(row?.batch_id || row?.batchId || row?.batch_no || row?.batchNo || "").trim();
+  }
+
   function esc(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -75,6 +84,8 @@
       gst,
       total,
       purchase_date: day(row.purchase_date),
+      purchase_time: String(row.purchase_time || row.purchaseTime || clock(row.purchase_at || row.created_at) || ""),
+      batch_id: batchId(row),
       invoice: invoice || purchaseNumber,
       purchase_number: purchaseNumber,
       purchase_id: String(row.purchase_id || ""),
@@ -122,6 +133,8 @@
         gst_amount: 0,
         total_amount: -value,
         purchase_date: row.purchase_date,
+        purchase_time: row.purchase_time || clock(row.created_at),
+        batch_id: row.batch_id || row.batch_no || "",
         purchase_number: "Return",
         supplier_invoice_number: "Return",
         kind: "return",
@@ -265,6 +278,8 @@
     "GST",
     "Total Amount",
     "Purchase Date",
+    "Time",
+    "Batch ID",
     "Invoice",
     "Branch",
   ];
@@ -283,6 +298,8 @@
       line.gst,
       line.total,
       line.purchase_date,
+      line.purchase_time,
+      line.batch_id,
       line.invoice,
       line.branch,
     ];
@@ -336,7 +353,7 @@
       "",
     ];
     for (const line of report?.lines || []) {
-      rows.push(`${line.purchase_date}  ${line.product_name}  ${line.supplier}  Qty ${line.purchase_qty}+${line.free_qty}  Rs ${line.total}  ${line.invoice}`);
+      rows.push(`${line.purchase_date} ${line.purchase_time}  ${line.product_name}  ${line.supplier}  Batch ${line.batch_id || "—"}  Qty ${line.purchase_qty}+${line.free_qty}  Rs ${line.total}  ${line.invoice}`);
     }
     return rows;
   }
@@ -450,11 +467,13 @@
           <td class="num">${esc(money(line.gst))}</td>
           <td class="num">${esc(money(line.total))}</td>
           <td>${esc(line.purchase_date)}</td>
+          <td>${esc(line.purchase_time || "—")}</td>
+          <td>${esc(line.batch_id || "—")}</td>
           <td><button type="button" class="link" data-pir-invoice="${esc(line.purchase_number || line.invoice)}">${esc(line.invoice || line.purchase_number)}</button></td>
           <td>${esc(line.branch)}</td>
         </tr>`;
       }).join("")
-      : `<tr><td colspan="14">No purchase lines in this range.</td></tr>`;
+      : `<tr><td colspan="16">No purchase lines in this range.</td></tr>`;
     const supplierRows = (data.suppliers || []).map((row) => `<tr><td>${esc(row.supplier)}</td><td class="num">${esc(row.items)}</td><td class="num">${esc(qtyText(row.purchaseQty))}</td><td class="num">${esc(qtyText(row.freeQty))}</td><td class="num">${esc(money(row.amount))}</td><td class="num">${esc(money(row.gst))}</td><td class="num">${esc(money(row.discount))}</td></tr>`).join("") || `<tr><td colspan="7">No supplier rows.</td></tr>`;
     const rateRows = (data.rates || []).map((row) => `<tr><td><button type="button" class="link" data-pir-product="${esc(row.product_name)}" data-pir-item="${esc(row.item_id)}">${esc(row.product_name)}</button></td><td>${esc(row.product_code)}</td><td class="num">${esc(row.bills)}</td><td class="num">${esc(money(row.min))}</td><td class="num">${esc(money(row.max))}</td><td class="num">${esc(money(row.avg))}</td><td class="num">${esc(qtyText(row.qty))}</td><td class="num">${esc(money(row.amount))}</td></tr>`).join("") || `<tr><td colspan="8">No purchase rates in this range.</td></tr>`;
     return `<section class="report-block" id="item-purchase-report" data-report-title="Item-Wise Purchase Report" data-report-group="books" data-report-sheet="Item-Wise Purchase">
@@ -490,12 +509,13 @@
         ${history ? `<button class="btn" type="button" data-pir-clear>All products</button>` : ""}
       </div>
       <label class="reports-search-label">Search this report
-        <input id="pir-search" type="search" value="${esc(view.q)}" placeholder="Product, supplier, invoice…" autocomplete="off" />
+        <input id="pir-search" type="search" value="${esc(view.q)}" placeholder="Product, supplier, invoice, batch…" autocomplete="off" />
       </label>
       <div class="table-wrap"><table><thead><tr>
         ${th("product_name", "Product Name")}${th("product_code", "Product Code")}${th("category", "Category")}${th("supplier", "Supplier")}
         ${th("purchase_qty", "Purchase Qty")}${th("free_qty", "Free Qty")}${th("total_qty", "Total Qty")}${th("rate", "Purchase Rate")}
         ${th("discount", "Discount")}${th("gst", "GST")}${th("total", "Total Amount")}${th("purchase_date", "Purchase Date")}
+        ${th("purchase_time", "Time")}${th("batch_id", "Batch ID")}
         <th>Invoice</th><th>Branch</th>
       </tr></thead><tbody>${body}</tbody></table></div>
       <div class="print-actions">

@@ -1330,7 +1330,11 @@ function pos_create_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $i
       $rows[] = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, 1, $rate, $codes[$i], $baseNo . "-" . str_pad((string) ($i + 1), 3, "0", STR_PAD_LEFT), $expiry, $mrp, "unit", $lineIn);
     }
     try {
-      pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$rows[0]["batch_no"], $rows[0]["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
+      try {
+        pos_q("UPDATE purchase_lines SET batch_no = ?, batch_id = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "ssssds", [$rows[0]["batch_no"], $rows[0]["id"], $rows[0]["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
+      } catch (Exception $batchCol) {
+        pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$rows[0]["batch_no"], $rows[0]["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
+      }
     } catch (Exception $e) { /* optional */ }
     $first = $rows[0];
     $first["barcodes"] = $rows;
@@ -1338,7 +1342,11 @@ function pos_create_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $i
   }
   $row = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, "", $baseNo, $expiry, $mrp, "batch", $lineIn);
   try {
-    pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$row["batch_no"], $row["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
+    try {
+      pos_q("UPDATE purchase_lines SET batch_no = ?, batch_id = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "ssssds", [$row["batch_no"], $row["id"], $row["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
+    } catch (Exception $batchCol) {
+      pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$row["batch_no"], $row["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
+    }
   } catch (Exception $e) { /* optional */ }
   return $row;
 }

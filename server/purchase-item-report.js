@@ -32,11 +32,15 @@ function lineSql(flags) {
   const brand = flags.brand ? "COALESCE(i.brand,'')" : "''";
   const branchJoin = flags.branch ? "LEFT JOIN branches br ON br.id = p.branch_id" : "";
   const branchName = flags.branch ? "br.name" : "''";
+  const batch = flags.batch
+    ? "COALESCE(pl.batch_id,'') AS batch_id, COALESCE(pl.batch_no,'') AS batch_no"
+    : "'' AS batch_id, '' AS batch_no";
   const statusWhere = flags.status
     ? "AND LOWER(COALESCE(p.status,'posted')) NOT IN ('cancelled','canceled','void','voided')"
     : "";
   return `SELECT pl.id, pl.item_id, pl.item_name, pl.quantity_gm, ${free} AS free_qty, pl.rate_per_kg,
             ${discount} AS discount, pl.gst_amount, pl.amount, pl.total_amount, pl.barcode AS line_barcode,
+            ${batch}, DATE_FORMAT(p.created_at, '%H:%i') AS purchase_time,
             p.id AS purchase_id, p.purchase_number, p.supplier_invoice_number, p.supplier_name,
             p.purchase_date, p.branch_id, ${status} AS status,
             i.code, i.barcode AS item_barcode, i.category, ${brand} AS brand, i.name AS catalog_name,
@@ -51,10 +55,10 @@ function lineSql(flags) {
 
 async function selectLines(businessId, from, to) {
   const plans = [
-    { discount: 1, free: 1, status: 1, brand: 1, branch: 1 },
-    { discount: 1, free: 1, status: 0, brand: 1, branch: 1 },
-    { discount: 0, free: 0, status: 0, brand: 1, branch: 1 },
-    { discount: 0, free: 0, status: 0, brand: 0, branch: 0 },
+    { discount: 1, free: 1, status: 1, brand: 1, branch: 1, batch: 1 },
+    { discount: 1, free: 1, status: 0, brand: 1, branch: 1, batch: 1 },
+    { discount: 0, free: 0, status: 0, brand: 1, branch: 1, batch: 0 },
+    { discount: 0, free: 0, status: 0, brand: 0, branch: 0, batch: 0 },
   ];
   let last = null;
   for (const flags of plans) {
@@ -72,6 +76,7 @@ async function selectReturns(businessId, from, to) {
     return await query(
       `SELECT m.item_id, i.name AS item_name, i.code, i.barcode, i.category, i.brand,
               DATE(m.created_at) AS purchase_date,
+              DATE_FORMAT(MIN(m.created_at), '%H:%i') AS purchase_time,
               SUM(ABS(m.quantity_gm)) AS qty,
               SUM(ABS(m.quantity_gm) * ABS(COALESCE(m.unit_cost,0))) AS value
        FROM stock_movements m

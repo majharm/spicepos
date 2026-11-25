@@ -974,17 +974,25 @@ export async function onPurchaseLineSaved(conn, ctx) {
       rows.push(await insertPurchaseBatch(conn, ctx, codes[i], `${baseNo}-${String(i + 1).padStart(3, "0")}`, 1, "unit"));
     }
     try {
-      await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [rows[0].batch_no, rows[0].barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
+      await conn.query("UPDATE purchase_lines SET batch_no=?, batch_id=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [rows[0].batch_no, rows[0].id, rows[0].barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
     } catch {
-      /* optional */
+      try {
+        await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [rows[0].batch_no, rows[0].barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
+      } catch {
+        /* optional */
+      }
     }
     return { id: rows[0].id, batch_no: rows[0].batch_no, barcode: rows[0].barcode, barcodes: rows };
   }
   const row = await insertPurchaseBatch(conn, ctx, "", baseNo, ctx.qty, "batch");
   try {
-    await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
+    await conn.query("UPDATE purchase_lines SET batch_no=?, batch_id=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.id, row.barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
   } catch {
-    /* optional */
+    try {
+      await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
+    } catch {
+      /* optional */
+    }
   }
   return row;
 }

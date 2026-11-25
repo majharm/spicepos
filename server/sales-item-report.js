@@ -32,8 +32,12 @@ function lineSql(flags) {
   const branchName = flags.branch ? "br.name" : "''";
   const held = flags.held ? "AND COALESCE(o.held,0) = 0" : "";
   const loyalty = flags.loyalty ? "o.loyalty_discount" : "0";
+  const batch = flags.batch
+    ? "COALESCE(l.batch_id,'') AS batch_id, COALESCE(l.batch_no,'') AS batch_no"
+    : "'' AS batch_id, '' AS batch_no";
   return `SELECT l.id, l.item_id, l.item_name, l.quantity_gm, l.rate_per_kg, COALESCE(l.discount,0) AS discount,
             l.amount, l.gst_rate, COALESCE(l.cancelled,0) AS cancelled, l.barcode AS line_barcode,
+            ${batch}, DATE_FORMAT(o.created_at, '%H:%i') AS sale_time,
             o.id AS order_id, o.order_number, o.customer_name, o.status, o.branch_id, o.created_at AS sale_date,
             o.subtotal AS order_subtotal, o.discount AS order_discount, ${loyalty} AS order_loyalty, o.gst AS order_gst,
             i.code, i.barcode AS item_barcode, i.category, ${brand} AS brand, i.name AS catalog_name,
@@ -49,10 +53,10 @@ function lineSql(flags) {
 
 async function selectLines(businessId, from, to) {
   const plans = [
-    { brand: 1, branch: 1, held: 1, loyalty: 1 },
-    { brand: 1, branch: 1, held: 0, loyalty: 1 },
-    { brand: 1, branch: 0, held: 0, loyalty: 0 },
-    { brand: 0, branch: 0, held: 0, loyalty: 0 },
+    { brand: 1, branch: 1, held: 1, loyalty: 1, batch: 1 },
+    { brand: 1, branch: 1, held: 0, loyalty: 1, batch: 1 },
+    { brand: 1, branch: 0, held: 0, loyalty: 0, batch: 0 },
+    { brand: 0, branch: 0, held: 0, loyalty: 0, batch: 0 },
   ];
   let last = null;
   for (const flags of plans) {
@@ -68,6 +72,7 @@ async function selectLines(businessId, from, to) {
 async function selectReturns(businessId, from, to) {
   const plans = [
     `SELECT rl.id, rl.item_id, rl.item_name, rl.item_code, rl.quantity_gm, rl.rate_per_kg, rl.amount, rl.gst_rate,
+            COALESCE(rl.batch_id,'') AS batch_id, COALESCE(rl.batch_no,'') AS batch_no, DATE_FORMAT(r.created_at, '%H:%i') AS sale_time,
             r.return_number, r.customer_name, r.created_at AS sale_date, r.order_id, r.status, r.branch_id,
             o.order_number, i.category, i.brand, i.code, i.barcode, br.name AS branch_name
      FROM sales_return_lines rl
@@ -78,6 +83,7 @@ async function selectReturns(businessId, from, to) {
      WHERE r.business_id = ? AND r.created_at >= ? AND r.created_at < DATE_ADD(?, INTERVAL 1 DAY)
        AND LOWER(COALESCE(r.status,'')) <> 'cancelled'`,
     `SELECT rl.id, rl.item_id, rl.item_name, rl.quantity_gm, rl.amount, rl.gst_rate,
+            DATE_FORMAT(r.created_at, '%H:%i') AS sale_time,
             r.return_number, r.customer_name, r.created_at AS sale_date, r.order_id, r.status
      FROM sales_return_lines rl
      JOIN sales_returns r ON r.id = rl.return_id
