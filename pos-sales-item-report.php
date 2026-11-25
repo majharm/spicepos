@@ -16,6 +16,19 @@ function pos_sir_day($value) {
   return "";
 }
 
+function pos_sir_clock($value) {
+  $text = trim((string) $value);
+  if (preg_match("/^(\d{2}:\d{2})/", $text, $m)) return $m[1];
+  if (preg_match("/(?:T|\s)(\d{2}:\d{2})/", $text, $m)) return $m[1];
+  return "";
+}
+
+function pos_sir_batch($row) {
+  $id = trim((string) ($row["batch_id"] ?? ""));
+  if ($id !== "") return $id;
+  return trim((string) ($row["batch_no"] ?? ""));
+}
+
 function pos_sir_cancelled($status) {
   return in_array(strtolower(trim((string) $status)), ["cancelled", "canceled", "void", "voided"], true);
 }
@@ -114,6 +127,8 @@ function pos_sir_line($row, $share) {
     "gst" => $gst,
     "total" => pos_sir_paise($net + $gst),
     "sale_date" => pos_sir_day($row["sale_date"] ?? ""),
+    "sale_time" => pos_sir_clock($row["sale_time"] ?? ($row["sale_date"] ?? "")),
+    "batch_id" => pos_sir_batch($row),
     "invoice" => $invoice,
     "order_number" => $invoice,
     "order_id" => (string) ($row["order_id"] ?? ""),
@@ -156,6 +171,8 @@ function pos_sir_returns($rows) {
       "gst" => -pos_sir_paise($gst),
       "total" => -pos_sir_paise($inclusive),
       "sale_date" => pos_sir_day($row["sale_date"] ?? ""),
+      "sale_time" => pos_sir_clock($row["sale_time"] ?? ($row["sale_date"] ?? "")),
+      "batch_id" => pos_sir_batch($row),
       "invoice" => $number,
       "order_number" => (string) ($row["order_number"] ?? $number),
       "order_id" => (string) ($row["order_id"] ?? ""),
@@ -264,6 +281,7 @@ function pos_sir_select_lines($bid, $from, $to) {
   $plans = [
     "SELECT l.id, l.item_id, l.item_name, l.quantity_gm, l.rate_per_kg, COALESCE(l.discount,0) AS discount,
             l.amount, l.gst_rate, COALESCE(l.cancelled,0) AS cancelled, l.barcode AS line_barcode,
+            COALESCE(l.batch_id,'') AS batch_id, COALESCE(l.batch_no,'') AS batch_no, DATE_FORMAT(o.created_at, '%H:%i') AS sale_time,
             o.id AS order_id, o.order_number, o.customer_name, o.status, o.branch_id, o.created_at AS sale_date,
             o.subtotal AS order_subtotal, o.discount AS order_discount, o.loyalty_discount AS order_loyalty, o.gst AS order_gst,
             COALESCE(o.held,0) AS held, i.code, i.barcode AS item_barcode, i.category, COALESCE(i.brand,'') AS brand, i.name AS catalog_name,
@@ -274,7 +292,7 @@ function pos_sir_select_lines($bid, $from, $to) {
      LEFT JOIN branches br ON br.id = o.branch_id
      WHERE o.business_id = ? AND $between AND $open AND COALESCE(l.cancelled,0) = 0 AND COALESCE(o.held,0) = 0",
     "SELECT l.id, l.item_id, l.item_name, l.quantity_gm, l.rate_per_kg, COALESCE(l.discount,0) AS discount,
-            l.amount, l.gst_rate, COALESCE(l.cancelled,0) AS cancelled,
+            l.amount, l.gst_rate, COALESCE(l.cancelled,0) AS cancelled, DATE_FORMAT(o.created_at, '%H:%i') AS sale_time,
             o.id AS order_id, o.order_number, o.customer_name, o.status, o.created_at AS sale_date,
             o.subtotal AS order_subtotal, o.discount AS order_discount, o.gst AS order_gst
      FROM sales_order_lines l
@@ -293,8 +311,9 @@ function pos_sir_select_lines($bid, $from, $to) {
 }
 
 function pos_sir_select_returns($bid, $from, $to) {
-  $rows = pos_sir_try(
+  $plans = [
     "SELECT rl.id, rl.item_id, rl.item_name, rl.item_code, rl.quantity_gm, rl.rate_per_kg, rl.amount, rl.gst_rate,
+            COALESCE(rl.batch_id,'') AS batch_id, COALESCE(rl.batch_no,'') AS batch_no, DATE_FORMAT(r.created_at, '%H:%i') AS sale_time,
             r.return_number, r.customer_name, r.created_at AS sale_date, r.order_id, r.status, r.branch_id,
             o.order_number, i.category, i.brand, i.code, br.name AS branch_name
      FROM sales_return_lines rl
@@ -304,10 +323,23 @@ function pos_sir_select_returns($bid, $from, $to) {
      LEFT JOIN branches br ON br.id = r.branch_id
      WHERE r.business_id = ? AND r.created_at >= ? AND r.created_at < DATE_ADD(?, INTERVAL 1 DAY)
        AND LOWER(COALESCE(r.status,'')) <> 'cancelled'",
-    "sss",
-    [$bid, $from, $to]
-  );
-  return is_array($rows) ? $rows : [];
+    "SELECT rl.id, rl.item_id, rl.item_name, rl.item_code, rl.quantity_gm, rl.rate_per_kg, rl.amount, rl.gst_rate,
+            DATE_FORMAT(r.created_at, '%H:%i') AS sale_time,
+            r.return_number, r.customer_name, r.created_at AS sale_date, r.order_id, r.status, r.branch_id,
+            o.order_number, i.category, i.brand, i.code, br.name AS branch_name
+     FROM sales_return_lines rl
+     JOIN sales_returns r ON r.id = rl.return_id AND r.business_id = rl.business_id
+     LEFT JOIN sales_orders o ON o.id = r.order_id
+     LEFT JOIN items i ON i.id = rl.item_id AND i.business_id = r.business_id
+     LEFT JOIN branches br ON br.id = r.branch_id
+     WHERE r.business_id = ? AND r.created_at >= ? AND r.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+       AND LOWER(COALESCE(r.status,'')) <> 'cancelled'",
+  ];
+  foreach ($plans as $sql) {
+    $rows = pos_sir_try($sql, "sss", [$bid, $from, $to]);
+    if (is_array($rows)) return $rows;
+  }
+  return [];
 }
 
 function pos_sir_build($bid, $from, $to, $filters) {
@@ -338,7 +370,7 @@ function pos_sir_cells($line) {
   return [
     $line["product_name"], $line["product_code"], $line["category"], $line["customer"],
     $line["sales_qty"], $line["free_qty"], $line["total_qty"], $line["rate"], $line["discount"],
-    $line["gst"], $line["total"], $line["sale_date"], $line["invoice"], $line["branch"],
+    $line["gst"], $line["total"], $line["sale_date"], $line["sale_time"], $line["batch_id"], $line["invoice"], $line["branch"],
   ];
 }
 
@@ -353,7 +385,7 @@ function pos_sir_send($path, $report) {
   if (substr($path, -6) === "/excel") {
     require_once __DIR__ . "/pos-reports.php";
     $sheets = [
-      ["name" => "Item-Wise Sales", "headers" => ["Product Name", "Product Code", "Category", "Customer", "Sales Qty", "Free Qty", "Total Qty", "Sale Rate", "Discount", "GST", "Total Amount", "Sale Date", "Invoice", "Branch"], "rows" => array_map("pos_sir_cells", $report["lines"])],
+      ["name" => "Item-Wise Sales", "headers" => ["Product Name", "Product Code", "Category", "Customer", "Sales Qty", "Free Qty", "Total Qty", "Sale Rate", "Discount", "GST", "Total Amount", "Sale Date", "Time", "Batch ID", "Invoice", "Branch"], "rows" => array_map("pos_sir_cells", $report["lines"])],
       ["name" => "Summary", "headers" => ["Total Items", "Sales Qty", "Free Qty", "Sales Amount", "GST", "Discount"], "rows" => [[$s["items"], $s["salesQty"], $s["freeQty"], $s["amount"], $s["gst"], $s["discount"]]]],
       ["name" => "Customer analysis", "headers" => ["Customer", "Items", "Sales Qty", "Free Qty", "Amount", "GST", "Discount"], "rows" => array_map(function ($row) {
         return [$row["customer"], $row["items"], $row["salesQty"], $row["freeQty"], $row["amount"], $row["gst"], $row["discount"]];
@@ -369,7 +401,7 @@ function pos_sir_send($path, $report) {
     exit;
   }
   if (substr($path, -4) === "/csv") {
-    $headers = ["Product Name", "Product Code", "Category", "Customer", "Sales Qty", "Free Qty", "Total Qty", "Sale Rate", "Discount", "GST", "Total Amount", "Sale Date", "Invoice", "Branch"];
+    $headers = ["Product Name", "Product Code", "Category", "Customer", "Sales Qty", "Free Qty", "Total Qty", "Sale Rate", "Discount", "GST", "Total Amount", "Sale Date", "Time", "Batch ID", "Invoice", "Branch"];
     $lines = [implode(",", $headers)];
     foreach ($report["lines"] as $line) {
       $cells = [];

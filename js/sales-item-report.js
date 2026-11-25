@@ -29,6 +29,16 @@
     return match ? match[1] : "";
   }
 
+  function clock(value) {
+    const text = String(value || "").trim();
+    const match = text.match(/(?:T|\s)(\d{2}:\d{2})/);
+    return match ? match[1] : "";
+  }
+
+  function batchId(row) {
+    return String(row?.batch_id || row?.batchId || row?.batch_no || row?.batchNo || "").trim();
+  }
+
   function esc(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -87,6 +97,8 @@
       gst,
       total: paise(net + gst),
       sale_date: day(row.sale_date || row.created_at || row.purchase_date),
+      sale_time: String(row.sale_time || row.saleTime || clock(row.sale_date || row.created_at) || ""),
+      batch_id: batchId(row),
       invoice,
       order_number: invoice,
       order_id: String(row.order_id || ""),
@@ -178,6 +190,8 @@
         gst: -paise(gst),
         total: -paise(inclusive),
         sale_date: day(row.sale_date || row.created_at),
+        sale_time: String(row.sale_time || row.saleTime || clock(row.sale_date || row.created_at) || ""),
+        batch_id: batchId(row),
         invoice: number,
         order_number: String(row.order_number || number),
         order_id: String(row.order_id || ""),
@@ -304,13 +318,13 @@
 
   const HEADERS = [
     "Product Name", "Product Code", "Category", "Customer", "Sales Qty", "Free Qty", "Total Qty",
-    "Sale Rate", "Discount", "GST", "Total Amount", "Sale Date", "Invoice", "Branch",
+    "Sale Rate", "Discount", "GST", "Total Amount", "Sale Date", "Time", "Batch ID", "Invoice", "Branch",
   ];
 
   function lineCells(line) {
     return [
       line.product_name, line.product_code, line.category, line.customer, line.sales_qty, line.free_qty,
-      line.total_qty, line.rate, line.discount, line.gst, line.total, line.sale_date, line.invoice, line.branch,
+      line.total_qty, line.rate, line.discount, line.gst, line.total, line.sale_date, line.sale_time, line.batch_id, line.invoice, line.branch,
     ];
   }
 
@@ -351,7 +365,7 @@
       "",
     ];
     for (const line of report?.lines || []) {
-      rows.push(`${line.sale_date}  ${line.product_name}  ${line.customer}  Qty ${line.sales_qty}+${line.free_qty}  Rs ${line.total}  ${line.invoice}`);
+      rows.push(`${line.sale_date} ${line.sale_time}  ${line.product_name}  ${line.customer}  Batch ${line.batch_id || "—"}  Qty ${line.sales_qty}+${line.free_qty}  Rs ${line.total}  ${line.invoice}`);
     }
     return rows;
   }
@@ -456,10 +470,12 @@
           <td class="num">${esc(money(line.gst))}</td>
           <td class="num">${esc(money(line.total))}</td>
           <td>${esc(line.sale_date)}</td>
+          <td>${esc(line.sale_time || "—")}</td>
+          <td>${esc(line.batch_id || "—")}</td>
           <td><button type="button" class="link" data-sir-invoice="${esc(line.order_number || line.invoice)}">${esc(line.invoice || line.order_number)}</button></td>
           <td>${esc(line.branch)}</td>
         </tr>`).join("")
-      : `<tr><td colspan="14">No sales lines in this range.</td></tr>`;
+      : `<tr><td colspan="16">No sales lines in this range.</td></tr>`;
     const customerRows = (data.customers || []).map((row) => `<tr><td>${esc(row.customer)}</td><td class="num">${esc(row.items)}</td><td class="num">${esc(qtyText(row.salesQty))}</td><td class="num">${esc(qtyText(row.freeQty))}</td><td class="num">${esc(money(row.amount))}</td><td class="num">${esc(money(row.gst))}</td><td class="num">${esc(money(row.discount))}</td></tr>`).join("") || `<tr><td colspan="7">No customer rows.</td></tr>`;
     const rateRows = (data.rates || []).map((row) => `<tr><td><button type="button" class="link" data-sir-product="${esc(row.product_name)}" data-sir-item="${esc(row.item_id)}">${esc(row.product_name)}</button></td><td>${esc(row.product_code)}</td><td class="num">${esc(row.bills)}</td><td class="num">${esc(money(row.min))}</td><td class="num">${esc(money(row.max))}</td><td class="num">${esc(money(row.avg))}</td><td class="num">${esc(qtyText(row.qty))}</td><td class="num">${esc(money(row.amount))}</td></tr>`).join("") || `<tr><td colspan="8">No sale rates in this range.</td></tr>`;
     return `<section class="report-block" id="item-sales-report" data-report-title="Item-Wise Sales Report" data-report-group="sales" data-report-sheet="Item-Wise Sales">
@@ -495,12 +511,13 @@
         ${history ? `<button class="btn" type="button" data-sir-clear>All products</button>` : ""}
       </div>
       <label class="reports-search-label">Search this report
-        <input id="sir-search" type="search" value="${esc(view.q)}" placeholder="Product, customer, invoice…" autocomplete="off" />
+        <input id="sir-search" type="search" value="${esc(view.q)}" placeholder="Product, customer, invoice, batch…" autocomplete="off" />
       </label>
       <div class="table-wrap"><table><thead><tr>
         ${th("product_name", "Product Name")}${th("product_code", "Product Code")}${th("category", "Category")}${th("customer", "Customer")}
         ${th("sales_qty", "Sales Qty")}${th("free_qty", "Free Qty")}${th("total_qty", "Total Qty")}${th("rate", "Sale Rate")}
         ${th("discount", "Discount")}${th("gst", "GST")}${th("total", "Total Amount")}${th("sale_date", "Sale Date")}
+        ${th("sale_time", "Time")}${th("batch_id", "Batch ID")}
         <th>Invoice</th><th>Branch</th>
       </tr></thead><tbody>${body}</tbody></table></div>
       <div class="print-actions">

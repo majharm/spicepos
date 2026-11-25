@@ -148,6 +148,25 @@ test("filters, customer analysis, and the sales report section", () => {
   assert.match(html, /data-sir-product="Assam Tea"/);
   assert.match(html, /item-sales\/excel/);
   assert.match(html, /Customer-wise item sales/);
+  assert.match(html, />Time</);
+  assert.match(html, />Batch ID</);
+  const timed = R.buildReport([{
+    ...tea,
+    id: "timed",
+    sale_date: "2026-11-01 14:35:00",
+    batch_id: "B-22",
+    batch_no: "LOT-1",
+  }], [], {});
+  assert.equal(timed.lines[0].sale_time, "14:35");
+  assert.equal(timed.lines[0].batch_id, "B-22");
+  const legacy = R.buildReport([{ ...tea, id: "legacy", batch_no: "LOT-9" }], [], {});
+  assert.equal(legacy.lines[0].batch_id, "LOT-9");
+  const shown = R.sectionHtml({ ...timed, branches: [], links: report.links || {} });
+  assert.match(shown, /B-22/);
+  assert.match(shown, /14:35/);
+  const csv = R.csvFromReport(timed);
+  assert.match(csv, /Time,Batch ID/);
+  assert.match(csv, /B-22/);
   const till = fs.readFileSync(new URL("../pos-php-till.php", import.meta.url), "utf8");
   const php = fs.readFileSync(new URL("../pos-sales-item-report.php", import.meta.url), "utf8");
   const hub = fs.readFileSync(new URL("./biz-hub.js", import.meta.url), "utf8");
@@ -155,6 +174,8 @@ test("filters, customer analysis, and the sales report section", () => {
   assert.match(till, /reports\/item-sales/);
   assert.match(till, /pos_sales_item_report_shop/);
   assert.match(php, /function pos_sales_item_report_shop/);
+  assert.match(php, /AS sale_time/);
+  assert.match(php, /l\.batch_id/);
   assert.match(php, /sales_return_lines/);
   assert.ok(till.indexOf("reports/item-sales") < till.indexOf('($path === "reports" || $path === "reports/excel")'));
 });

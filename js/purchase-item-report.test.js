@@ -111,7 +111,7 @@ test("the report section exposes the purchase columns, summary, and export links
       csv: "/api/reports/item-purchases/csv?from=2026-11-01&to=2026-11-16",
     },
   });
-  for (const label of ["Product Name", "Product Code", "Free Qty", "Total Qty", "Purchase Rate", "Discount", "GST", "Total Amount", "Purchase Date"]) {
+  for (const label of ["Product Name", "Product Code", "Free Qty", "Total Qty", "Purchase Rate", "Discount", "GST", "Total Amount", "Purchase Date", "Time", "Batch ID"]) {
     assert.match(html, new RegExp(label));
   }
   assert.match(html, /Total items purchased/);
@@ -124,6 +124,19 @@ test("the report section exposes the purchase columns, summary, and export links
   const csv = R.csvFromReport(built);
   assert.match(csv, /Assam Tea/);
   assert.match(csv, /566\.4/);
+  const timed = R.buildReport([{
+    ...tea,
+    id: "timed",
+    purchase_time: "09:15",
+    batch_id: "PB-4",
+    batch_no: "LOT-2",
+  }], [], {});
+  assert.equal(timed.lines[0].purchase_time, "09:15");
+  assert.equal(timed.lines[0].batch_id, "PB-4");
+  const legacy = R.buildReport([{ ...tea, id: "legacy", batch_no: "LOT-8" }], [], {});
+  assert.equal(legacy.lines[0].batch_id, "LOT-8");
+  assert.match(R.sectionHtml({ ...timed, from: "2026-11-01", to: "2026-11-16", branches: [], links: {} }), /PB-4/);
+  assert.match(R.csvFromReport(timed), /Time,Batch ID/);
 });
 
 test("purchase entry stores free quantity once and adds it to stock", () => {
@@ -146,6 +159,16 @@ test("purchase entry stores free quantity once and adds it to stock", () => {
   assert.match(till, /pos_item_purchases_shop/);
   assert.ok(till.indexOf("reports/item-purchases") < till.indexOf('($path === "reports" || $path === "reports/excel")'));
   assert.match(reportPhp, /function pos_item_purchases_shop/);
+  assert.match(reportPhp, /AS purchase_time/);
+  assert.match(reportPhp, /pl\.batch_id/);
+  const schema = fs.readFileSync(new URL("../server/schema.js", import.meta.url), "utf8");
+  const advanced = fs.readFileSync(new URL("../server/advanced.js", import.meta.url), "utf8");
+  const phpCore = fs.readFileSync(new URL("../pos-php-core.php", import.meta.url), "utf8");
+  const phpAdvanced = fs.readFileSync(new URL("../pos-advanced.php", import.meta.url), "utf8");
+  assert.match(schema, /purchase_lines", "batch_id"/);
+  assert.match(advanced, /SET batch_no=\?, batch_id=\?/);
+  assert.match(phpCore, /"batch_id" => "VARCHAR\(255\) NULL"/);
+  assert.match(phpAdvanced, /SET batch_no = \?, batch_id = \?/);
   assert.match(reportPhp, /NOT IN \('cancelled','canceled','void','voided'\)/);
   assert.match(reportPhp, /purchase_return/);
 });

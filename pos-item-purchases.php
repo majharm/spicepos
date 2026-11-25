@@ -16,6 +16,19 @@ function pos_pir_day($value) {
   return "";
 }
 
+function pos_pir_clock($value) {
+  $text = trim((string) $value);
+  if (preg_match("/^(\d{2}:\d{2})/", $text, $m)) return $m[1];
+  if (preg_match("/(?:T|\s)(\d{2}:\d{2})/", $text, $m)) return $m[1];
+  return "";
+}
+
+function pos_pir_batch($row) {
+  $id = trim((string) ($row["batch_id"] ?? ""));
+  if ($id !== "") return $id;
+  return trim((string) ($row["batch_no"] ?? ""));
+}
+
 function pos_pir_try($sql, $types, $params) {
   try {
     return pos_q($sql, $types, $params);
@@ -61,6 +74,8 @@ function pos_pir_line($row) {
     "gst" => $gst,
     "total" => $total,
     "purchase_date" => pos_pir_day($row["purchase_date"] ?? ""),
+    "purchase_time" => pos_pir_clock($row["purchase_time"] ?? ($row["created_at"] ?? "")),
+    "batch_id" => pos_pir_batch($row),
     "invoice" => $invoice !== "" ? $invoice : $number,
     "purchase_number" => $number,
     "purchase_id" => (string) ($row["purchase_id"] ?? ""),
@@ -247,11 +262,15 @@ function pos_pir_line_sql($flags) {
   $brand = $flags["brand"] ? "COALESCE(i.brand,'')" : "''";
   $branchJoin = $flags["branch"] ? "LEFT JOIN branches br ON br.id = p.branch_id" : "";
   $branchName = $flags["branch"] ? "br.name" : "''";
+  $batch = !empty($flags["batch"])
+    ? "COALESCE(pl.batch_id,'') AS batch_id, COALESCE(pl.batch_no,'') AS batch_no"
+    : "'' AS batch_id, '' AS batch_no";
   $statusWhere = $flags["status"]
     ? "AND LOWER(COALESCE(p.status,'posted')) NOT IN ('cancelled','canceled','void','voided')"
     : "";
   return "SELECT pl.id, pl.item_id, pl.item_name, pl.quantity_gm, $free AS free_qty, pl.rate_per_kg,
             $discount AS discount, pl.gst_amount, pl.amount, pl.total_amount, pl.barcode AS line_barcode,
+            $batch, DATE_FORMAT(p.created_at, '%H:%i') AS purchase_time,
             p.id AS purchase_id, p.purchase_number, p.supplier_invoice_number, p.supplier_name,
             p.purchase_date, p.branch_id, $status AS status,
             i.code, i.barcode AS item_barcode, i.category, $brand AS brand, i.name AS catalog_name,
@@ -266,10 +285,10 @@ function pos_pir_line_sql($flags) {
 
 function pos_pir_select_lines($bid, $from, $to) {
   $plans = [
-    ["discount" => 1, "free" => 1, "status" => 1, "brand" => 1, "branch" => 1],
-    ["discount" => 1, "free" => 1, "status" => 0, "brand" => 1, "branch" => 1],
-    ["discount" => 0, "free" => 0, "status" => 0, "brand" => 1, "branch" => 1],
-    ["discount" => 0, "free" => 0, "status" => 0, "brand" => 0, "branch" => 0],
+    ["discount" => 1, "free" => 1, "status" => 1, "brand" => 1, "branch" => 1, "batch" => 1],
+    ["discount" => 1, "free" => 1, "status" => 0, "brand" => 1, "branch" => 1, "batch" => 1],
+    ["discount" => 0, "free" => 0, "status" => 0, "brand" => 1, "branch" => 1, "batch" => 0],
+    ["discount" => 0, "free" => 0, "status" => 0, "brand" => 0, "branch" => 0, "batch" => 0],
   ];
   $last = "Purchase lines did not load";
   foreach ($plans as $flags) {
@@ -286,6 +305,7 @@ function pos_pir_select_returns($bid, $from, $to) {
   $rows = pos_pir_try(
     "SELECT m.item_id, i.name AS item_name, i.code, i.barcode, i.category, i.brand,
             DATE(m.created_at) AS purchase_date,
+            DATE_FORMAT(MIN(m.created_at), '%H:%i') AS purchase_time,
             SUM(ABS(m.quantity_gm)) AS qty,
             SUM(ABS(m.quantity_gm) * ABS(COALESCE(m.unit_cost,0))) AS value
      FROM stock_movements m
@@ -349,6 +369,7 @@ function pos_pir_cells($line) {
     $line["product_name"], $line["product_code"], $line["category"], $line["supplier"],
     $line["purchase_qty"], $line["free_qty"], $line["total_qty"], $line["rate"],
     $line["discount"], $line["gst"], $line["total"], $line["purchase_date"],
+    $line["purchase_time"], $line["batch_id"],
     $line["invoice"], $line["branch"],
   ];
 }
@@ -360,7 +381,7 @@ function pos_pir_csv_cell($value) {
 }
 
 function pos_pir_csv($report) {
-  $headers = ["Product Name", "Product Code", "Category", "Supplier", "Purchase Qty", "Free Qty", "Total Qty", "Purchase Rate", "Discount", "GST", "Total Amount", "Purchase Date", "Invoice", "Branch"];
+  $headers = ["Product Name", "Product Code", "Category", "Supplier", "Purchase Qty", "Free Qty", "Total Qty", "Purchase Rate", "Discount", "GST", "Total Amount", "Purchase Date", "Time", "Batch ID", "Invoice", "Branch"];
   $lines = [implode(",", $headers)];
   foreach ($report["lines"] as $line) {
     $cells = [];
@@ -425,7 +446,7 @@ function pos_pir_send($path, $report) {
     require_once __DIR__ . "/pos-reports.php";
     $s = $report["summary"];
     $sheets = [
-      ["name" => "Item-Wise Purchase", "headers" => ["Product Name", "Product Code", "Category", "Supplier", "Purchase Qty", "Free Qty", "Total Qty", "Purchase Rate", "Discount", "GST", "Total Amount", "Purchase Date", "Invoice", "Branch"], "rows" => array_map("pos_pir_cells", $report["lines"])],
+      ["name" => "Item-Wise Purchase", "headers" => ["Product Name", "Product Code", "Category", "Supplier", "Purchase Qty", "Free Qty", "Total Qty", "Purchase Rate", "Discount", "GST", "Total Amount", "Purchase Date", "Time", "Batch ID", "Invoice", "Branch"], "rows" => array_map("pos_pir_cells", $report["lines"])],
       ["name" => "Summary", "headers" => ["Total Items", "Purchase Qty", "Free Qty", "Purchase Amount", "GST", "Discount"], "rows" => [[$s["items"], $s["purchaseQty"], $s["freeQty"], $s["amount"], $s["gst"], $s["discount"]]]],
       ["name" => "Supplier analysis", "headers" => ["Supplier", "Items", "Purchase Qty", "Free Qty", "Amount", "GST", "Discount"], "rows" => array_map(function ($row) {
         return [$row["supplier"], $row["items"], $row["purchaseQty"], $row["freeQty"], $row["amount"], $row["gst"], $row["discount"]];

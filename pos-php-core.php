@@ -2406,6 +2406,7 @@ function pos_ensure_purchase_line_columns() {
   pos_ensure_columns("purchase_lines", [
     "discount" => "DECIMAL(20,8) NOT NULL DEFAULT 0",
     "free_qty" => "DECIMAL(14,3) NOT NULL DEFAULT 0",
+    "batch_id" => "VARCHAR(255) NULL",
   ]);
   pos_ensure_columns("purchases", [
     "status" => "VARCHAR(32) NOT NULL DEFAULT 'posted'",
