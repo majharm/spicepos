@@ -1,5 +1,6 @@
 import "../js/payment-methods.js";
 import "../js/units.js";
+import "../js/unit-convert.js";
 import "../js/footwear.js";
 import "../js/garment-purchase.js";
 import "../js/garment-counter.js";
@@ -19,6 +20,7 @@ import {
 } from "./item-import.js";
 
 const POSUnits = globalThis.POSUnits;
+const POSUnitConvert = globalThis.POSUnitConvert;
 const POSFootwear = globalThis.POSFootwear;
 const POSGarmentPurchase = globalThis.POSGarmentPurchase;
 const POSGarmentCounter = globalThis.POSGarmentCounter;
@@ -774,16 +776,22 @@ async function preparePurchaseLines(conn, lines) {
     );
     const item = itemRows[0];
     if (!item) throw new Error("Unknown item");
-    const qty = Number(line.quantity_gm);
+    const packed = POSUnitConvert?.resolvePurchase?.(line) || null;
+    const qty = packed ? packed.stockQty : Number(line.quantity_gm);
+    const billQty = packed ? packed.billQty : qty;
     const rate = rate4(line.rate_per_kg ?? item.purchase_rate);
-    const fig = POSUnits.purchaseLineFigures(lineAmount(qty, rate, item), item.gst_rate, line);
+    const fig = POSUnits.purchaseLineFigures(lineAmount(billQty, rate, item), item.gst_rate, line);
     built.push({
       item,
       qty,
+      billQty,
       rate,
       amount: fig.amount,
       discount: fig.discount,
-      freeQty: Math.max(0, Number(line.free_qty) || 0),
+      freeQty: packed ? packed.freeStock : Math.max(0, Number(line.free_qty) || 0),
+      purchaseUnit: packed?.purchaseUnit || "",
+      conversion: packed?.conversion || 1,
+      purchaseQty: packed?.purchaseQty ?? billQty,
       gstRate: fig.gstRate,
       gstAmount: fig.gstAmount,
       total: fig.total,
@@ -856,6 +864,24 @@ async function insertPurchaseStock(conn, { id, purchaseNumber, supplier, built, 
       "UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?",
       [line.qty + storedFree, line.item.id, bid()],
     );
+    try {
+      await conn.query(
+        "UPDATE purchase_lines SET purchase_unit=?, conversion=?, purchase_qty=? WHERE id=?",
+        [line.purchaseUnit || null, Number(line.conversion) || 1, Number(line.purchaseQty) || 0, lineId],
+      );
+    } catch {
+      /* conversion columns arrive with schema */
+    }
+    if (POSUnitConvert?.shouldRememberPack?.(line.item, line.purchaseUnit, line.conversion)) {
+      try {
+        await conn.query(
+          "UPDATE items SET pack_unit=?, units_per_pack=?, base_unit=? WHERE id=? AND business_id=? AND (units_per_pack IS NULL OR units_per_pack <= 1)",
+          [line.purchaseUnit, Math.max(1, Math.round(Number(line.conversion) || 1)), "PCS", line.item.id, bid()],
+        );
+      } catch {
+        /* optional pack columns */
+      }
+    }
     const batch = await onPurchaseLineSaved(conn, {
       businessId: bid(),
       branchId: null,
@@ -869,6 +895,7 @@ async function insertPurchaseStock(conn, { id, purchaseNumber, supplier, built, 
       rate: line.rate,
       barcode: src.barcode,
       barcodes: src.barcodes,
+      product_barcode: src.product_barcode || src.productBarcode,
       generate_barcodes: src.generate_barcodes || src.generateBarcodes,
       allow_empty_barcodes: src.allow_empty_barcodes || src.allowEmptyBarcodes,
       batchNo: src.batch_no || src.batchNo,

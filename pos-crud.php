@@ -553,6 +553,34 @@ function pos_purchase_query($sql, $types, $params) {
   }
 }
 
+function pos_resolve_purchase_line($line) {
+  $rawQty = $line["purchase_qty"] ?? null;
+  $hasPurchase = $rawQty !== null && $rawQty !== "" && is_numeric($rawQty);
+  $conv = (float) ($line["conversion"] ?? 0);
+  if ($conv <= 0) $conv = 1;
+  if ($hasPurchase) {
+    $bill = (float) $rawQty;
+    $freeBill = max(0, (float) ($line["free_qty"] ?? 0));
+    return [
+      "billQty" => $bill,
+      "stockQty" => round($bill * $conv, 3),
+      "freeStock" => round($freeBill * $conv, 3),
+      "conversion" => $conv,
+      "purchaseUnit" => substr(trim((string) ($line["purchase_unit"] ?? "")), 0, 32),
+      "purchaseQty" => $bill,
+    ];
+  }
+  $stock = (float) ($line["quantity_gm"] ?? 0);
+  return [
+    "billQty" => $stock,
+    "stockQty" => $stock,
+    "freeStock" => max(0, (float) ($line["free_qty"] ?? 0)),
+    "conversion" => 1,
+    "purchaseUnit" => "",
+    "purchaseQty" => $stock,
+  ];
+}
+
 function pos_prepare_purchase_lines($bid, $lines) {
   $bizRows = pos_q("SELECT category, business_type, name FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
   $expanded = pos_expand_garment_purchase_lines($bid, $lines, $bizRows[0] ?? []);
@@ -561,16 +589,22 @@ function pos_prepare_purchase_lines($bid, $lines) {
     $it = pos_q("SELECT * FROM items WHERE id = ? AND business_id = ? LIMIT 1", "ss", [$line["item_id"] ?? "", $bid]);
     $item = $it[0] ?? null;
     if (!$item) throw new Exception("Unknown item");
-    $qty = (float) ($line["quantity_gm"] ?? 0);
+    $packed = pos_resolve_purchase_line($line);
+    $qty = (float) $packed["stockQty"];
+    $billQty = (float) $packed["billQty"];
     $rate = pos_round8($line["rate_per_kg"] ?? $item["purchase_rate"]);
-    $fig = pos_purchase_line_figures(pos_line_amount_for_item($qty, $rate, $item), $item["gst_rate"] ?? 0, $line);
+    $fig = pos_purchase_line_figures(pos_line_amount_for_item($billQty, $rate, $item), $item["gst_rate"] ?? 0, $line);
     $built[] = [
       "item" => $item,
       "qty" => $qty,
+      "billQty" => $billQty,
       "rate" => $rate,
       "amount" => $fig["amount"],
       "discount" => $fig["discount"] ?? 0,
-      "freeQty" => max(0, (float) ($line["free_qty"] ?? 0)),
+      "freeQty" => (float) $packed["freeStock"],
+      "purchaseUnit" => $packed["purchaseUnit"],
+      "conversion" => $packed["conversion"],
+      "purchaseQty" => $packed["purchaseQty"],
       "gstRate" => $fig["gstRate"],
       "gstAmount" => $fig["gstAmount"],
       "total" => $fig["total"],
@@ -621,6 +655,31 @@ function pos_insert_purchase_stock($bid, $branchId, $uid, $purchaseId, $purchase
       );
     }
     pos_q("UPDATE items SET stock_gm = stock_gm + ? WHERE id = ? AND business_id = ?", "dss", [$line["qty"] + $storedFree, $line["item"]["id"], $bid]);
+    try {
+      pos_q(
+        "UPDATE purchase_lines SET purchase_unit = ?, conversion = ?, purchase_qty = ? WHERE id = ?",
+        "sdds",
+        [
+          ($line["purchaseUnit"] ?? "") !== "" ? $line["purchaseUnit"] : null,
+          (float) ($line["conversion"] ?? 1),
+          (float) ($line["purchaseQty"] ?? 0),
+          $lineId,
+        ]
+      );
+    } catch (Exception $e) { /* conversion columns arrive with schema */ }
+    $packCode = strtoupper(preg_replace("/[^A-Z0-9]/", "", (string) ($line["purchaseUnit"] ?? "")));
+    $packCodes = ["BOX", "CTN", "CARTON", "PKT", "PACKET", "PACK", "BAG", "CASE", "DOZ", "TIN", "JAR", "ROLL", "SET"];
+    $itemPack = strtoupper(trim((string) ($line["item"]["pack_unit"] ?? "")));
+    $upp = (int) ($line["item"]["units_per_pack"] ?? 0);
+    if ((float) ($line["conversion"] ?? 0) > 1 && in_array($packCode, $packCodes, true) && $itemPack !== "STRIP" && $upp <= 1) {
+      try {
+        pos_q(
+          "UPDATE items SET pack_unit = ?, units_per_pack = ?, base_unit = ? WHERE id = ? AND business_id = ? AND (units_per_pack IS NULL OR units_per_pack <= 1)",
+          "sisss",
+          [$line["purchaseUnit"], max(1, (int) round((float) $line["conversion"])), "PCS", $line["item"]["id"], $bid]
+        );
+      } catch (Exception $e) { /* optional pack columns */ }
+    }
     if (function_exists("pos_create_purchase_batch")) {
       $batch = pos_create_purchase_batch($bid, $branchId ?? null, $uid, [
         "id" => $purchaseId, "purchase_number" => $purchaseNumber, "supplier_id" => $supplier["id"],

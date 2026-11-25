@@ -711,13 +711,12 @@ function cafeBillLinesHtml() {
     .map((line) => {
       const item = state.items.find((i) => i.id === line.itemId);
       if (!item) return "";
-      const unitCode = itemUnit(item);
-      const step = POSUnits.counterStep(unitCode);
-      const unit = POSUnits.qtySuffix(unitCode);
-      const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
-      const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
       const calc = lineCalc(item, line);
       const key = cartLineKey(line);
+      const qtyView = cartQtyView(item, line);
+      const unit = qtyView.unit;
+      const qtyShow = qtyView.show;
+      const qtyStep = qtyView.step;
       const disc = canDiscount()
         ? `<div class="line-disc">
               <select data-line-disc-type="${escapeHtml(key)}" aria-label="Line discount type">
@@ -735,9 +734,10 @@ function cafeBillLinesHtml() {
           </td>
           <td class="cafe-qty">
             <div class="qty">
-              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
-              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
-              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-qtyView.delta}">−</button>
+              <input class="qty-input" type="number" inputmode="decimal" min="${escapeHtml(qtyView.min)}" max="${escapeHtml(qtyView.max)}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+              ${saleUnitSelectHtml(item, line, key)}
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${qtyView.delta}">+</button>
             </div>
           </td>
           <td class="cafe-n cafe-rate">${lineRateFieldHtml(item, line, key)}</td>
@@ -762,13 +762,12 @@ function cafeMobileOrderHtml() {
     .map((line) => {
       const item = state.items.find((i) => i.id === line.itemId);
       if (!item) return "";
-      const unitCode = itemUnit(item);
-      const step = POSUnits.counterStep(unitCode);
-      const unit = POSUnits.qtySuffix(unitCode);
-      const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
-      const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
       const calc = lineCalc(item, line);
       const key = cartLineKey(line);
+      const qtyView = cartQtyView(item, line);
+      const unit = qtyView.unit;
+      const qtyShow = qtyView.show;
+      const qtyStep = qtyView.step;
       return `<article class="cafe-order-card">
         <div class="cafe-order-top">
           <div class="who">${escapeHtml(cafeBillLineName(item))}</div>
@@ -776,9 +775,10 @@ function cafeMobileOrderHtml() {
         </div>
         <div class="cafe-order-ops">
           <div class="qty">
-            <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
-            <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
-            <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+            <button type="button" data-chg="${escapeHtml(key)}" data-d="${-qtyView.delta}">−</button>
+            <input class="qty-input" type="number" inputmode="decimal" min="${escapeHtml(qtyView.min)}" max="${escapeHtml(qtyView.max)}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+            ${saleUnitSelectHtml(item, line, key)}
+            <button type="button" data-chg="${escapeHtml(key)}" data-d="${qtyView.delta}">+</button>
           </div>
           <div class="cafe-rate">${lineRateFieldHtml(item, line, key)}</div>
           <div class="cafe-amt" data-line-amt="${escapeHtml(key)}">${escapeHtml(money(lineFaceAmount(calc)))}</div>
@@ -1138,6 +1138,8 @@ function refreshItemUnitLabels() {
   document.querySelectorAll(".pcs-barcode-only").forEach((el) => {
     el.hidden = !pcs;
   });
+  const convert = $("item-unit-convert");
+  if (convert) convert.hidden = !pcs || isPharmacyShop();
   paintPrintUomChips();
 }
 
@@ -3867,6 +3869,7 @@ function cartLineFromHold(line) {
     discountType: line.discountType || "amt",
     discountValue: Number(line.discountValue) || 0,
     barcode: line.barcode || "",
+    saleUnit: line.saleUnit || "",
     offerId: line.offerId || "",
     notes: String(line.notes || "").trim(),
     printWidth: line.printWidth ?? "",
@@ -5523,14 +5526,13 @@ function renderCart() {
       <tbody>${state.cart.map((line, idx) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
-        const unitCode = itemUnit(item);
-        const step = POSUnits.counterStep(unitCode);
         const F = globalThis.POSFootwear;
-        const unit = F?.isStripLooseItem?.(item) ? F.looseUnitLabel(item) : POSUnits.qtySuffix(unitCode);
-        const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
-        const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
         const calc = lineCalc(item, line);
         const key = cartLineKey(line);
+        const qtyView = cartQtyView(item, line);
+        const unit = qtyView.unit;
+        const qtyShow = qtyView.show;
+        const qtyStep = qtyView.step;
         const preview = F?.cartBatchPreview?.(item) || { batchNo: item.batch_no || "—", expiry: formatExpiryShort(item.default_expiry) || "—", pack: medicinePackLabel(item) || "—" };
         const alert = classicItemAlerts(item);
         const packBit = preview.pack && preview.pack !== "—" ? preview.pack : "";
@@ -5540,9 +5542,10 @@ function renderCart() {
           <td class="exp-cell">${escapeHtml(preview.batchNo || "—")}<small>${escapeHtml(preview.expiry || "—")}${alert.exp.expired ? " · EXP" : alert.exp.soon ? ` · ${escapeHtml(alert.exp.label)}` : ""}</small></td>
           <td>
             <div class="qty">
-              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
-              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
-              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-qtyView.delta}">−</button>
+              <input class="qty-input" type="number" inputmode="decimal" min="${escapeHtml(qtyView.min)}" max="${escapeHtml(qtyView.max)}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+              ${saleUnitSelectHtml(item, line, key)}
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${qtyView.delta}">+</button>
               ${isScaleEnabled() && isWeightItem(item) ? `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>` : ""}
             </div>
           </td>
@@ -5572,18 +5575,16 @@ function renderCart() {
       <tbody>${state.cart.map((line, idx) => {
         const item = state.items.find((i) => i.id === line.itemId);
         if (!item) return "";
-        const unitCode = itemUnit(item);
-        const step = POSUnits.counterStep(unitCode);
-        const unit = POSUnits.qtySuffix(unitCode);
-        const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
-        const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
         const calc = lineCalc(item, line);
         const key = cartLineKey(line);
+        const stockMax = maxBillQtyForItem(item, key);
+        const qtyView = cartQtyView(item, line, stockMax);
+        const unit = qtyView.unit;
+        const qtyShow = qtyView.show;
+        const qtyStep = qtyView.step;
         const variant = itemVariantText(item);
         const alert = classicItemAlerts(item);
         const barcode = lineBarcodeText(line, item);
-        const stockMax = maxBillQtyForItem(item, key);
-        const qtyMaxShow = POSUnits.displayQty(stockMax, unitCode);
         const atStockMax = shouldCapBillStock(item) && Number(line.qtyGm) >= stockMax;
         return `<tr class="tone-${alert.stock.tone} exp-${alert.exp.tone}">
           <td class="pharm-n">${idx + 1}</td>
@@ -5594,9 +5595,10 @@ function renderCart() {
           <td class="pharm-n pharm-rate">${lineRateFieldHtml(item, line, key)}</td>
           <td>
             <div class="qty">
-              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
-              <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${escapeHtml(qtyMaxShow)}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
-              <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}"${atStockMax ? " disabled" : ""}>+</button>
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${-qtyView.delta}">−</button>
+              <input class="qty-input" type="number" inputmode="decimal" min="${escapeHtml(qtyView.min)}" max="${escapeHtml(qtyView.max)}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+              ${saleUnitSelectHtml(item, line, key)}
+              <button type="button" data-chg="${escapeHtml(key)}" data-d="${qtyView.delta}"${atStockMax ? " disabled" : ""}>+</button>
               ${isScaleEnabled() && isWeightItem(item) ? `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>` : ""}
             </div>
           </td>
@@ -5619,10 +5621,10 @@ function renderCart() {
         const key = cartLineKey(line);
         if (isPrintAreaItem(item)) return printAreaLineHtml(item, line, key, calc);
         const unitCode = itemUnit(item);
-        const step = POSUnits.counterStep(unitCode);
-        const unit = POSUnits.qtySuffix(unitCode);
-        const qtyShow = POSUnits.displayQty(line.qtyGm, unitCode);
-        const qtyStep = POSUnits.displayQty(step, unitCode) || 1;
+        const qtyView = cartQtyView(item, line);
+        const unit = qtyView.unit;
+        const qtyShow = qtyView.show;
+        const qtyStep = qtyView.step;
         const bc = String(line.barcode || "").trim();
         const wait = (state.appliedOffers?.pending || []).find((o) => !o.itemIds?.length || o.itemIds.includes(String(line.itemId)));
         const giftNote = line.freeGiftOfferId ? "Free item" : "";
@@ -5634,10 +5636,10 @@ function renderCart() {
             </div>
             <div class="line-ops">
               <div class="qty">
-                <button type="button" data-chg="${escapeHtml(key)}" data-d="${-step}">−</button>
-                <input class="qty-input" type="number" inputmode="decimal" min="${POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001}" max="${POSUnits.qtyMax()}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
-                <span class="qty-unit">${escapeHtml(unit)}</span>
-                <button type="button" data-chg="${escapeHtml(key)}" data-d="${step}">+</button>
+                <button type="button" data-chg="${escapeHtml(key)}" data-d="${-qtyView.delta}">−</button>
+                <input class="qty-input" type="number" inputmode="decimal" min="${escapeHtml(qtyView.min)}" max="${escapeHtml(qtyView.max)}" step="${escapeHtml(qtyStep)}" value="${escapeHtml(qtyShow)}" data-qty="${escapeHtml(key)}" aria-label="Quantity in ${unit}" />
+                ${saleUnitSelectHtml(item, line, key) || `<span class="qty-unit">${escapeHtml(unit)}</span>`}
+                <button type="button" data-chg="${escapeHtml(key)}" data-d="${qtyView.delta}">+</button>
                 ${POSUnits.isCount(unitCode) || !isScaleEnabled() ? "" : `<button type="button" class="scale-line-btn" data-scale-line="${escapeHtml(key)}" title="Read scale">⚖</button>`}
               </div>
               <div class="line-rate">${lineRateFieldHtml(item, line, key)}</div>
@@ -6186,6 +6188,44 @@ function pieceBarcodeQty(item) {
   const F = globalThis.POSFootwear;
   if (F?.isStripLooseItem?.(item)) return F.unitsPerPack(item);
   return 1;
+}
+
+function lineSaleFactor(item, line) {
+  const C = globalThis.POSUnitConvert;
+  if (!C?.storesBasePieces?.(item)) return 1;
+  return C.factor(item, line?.saleUnit) || 1;
+}
+
+function cartQtyView(item, line, stockMax) {
+  const C = globalThis.POSUnitConvert;
+  const factor = lineSaleFactor(item, line);
+  const unitCode = itemUnit(item);
+  if (factor > 1) {
+    const show = Math.round(((Number(line.qtyGm) || 0) / factor) * 1000) / 1000;
+    const cap = Number.isFinite(Number(stockMax)) ? Math.round((Number(stockMax) / factor) * 1000) / 1000 : POSUnits.qtyMax();
+    const pack = (C?.saleUnits?.(item) || []).find((row) => row.code === String(line?.saleUnit || "").toUpperCase());
+    return { show, step: 1, unit: pack?.name || line.saleUnit || "Box", delta: factor, min: 1, max: cap || 1 };
+  }
+  const step = POSUnits.counterStep(unitCode);
+  const F = globalThis.POSFootwear;
+  const unit = F?.isStripLooseItem?.(item) ? F.looseUnitLabel(item) : POSUnits.qtySuffix(unitCode);
+  const max = Number.isFinite(Number(stockMax)) ? POSUnits.displayQty(stockMax, unitCode) : POSUnits.qtyMax();
+  return {
+    show: POSUnits.displayQty(line.qtyGm, unitCode),
+    step: POSUnits.displayQty(step, unitCode) || 1,
+    unit,
+    delta: step,
+    min: POSUnits.displayQty(POSUnits.qtyMin(), unitCode) || 0.001,
+    max,
+  };
+}
+
+function saleUnitSelectHtml(item, line, key) {
+  const units = globalThis.POSUnitConvert?.saleUnits?.(item) || [];
+  if (units.length < 2) return "";
+  const current = String(line?.saleUnit || units[units.length - 1]?.code || "").toUpperCase();
+  const opts = units.map((row) => `<option value="${escapeHtml(row.code)}"${row.code === current ? " selected" : ""}>${escapeHtml(row.name || row.code)}</option>`).join("");
+  return `<select class="sale-unit" data-sale-unit="${escapeHtml(key)}" aria-label="Sell ${escapeHtml(item?.name || "item")} by">${opts}</select>`;
 }
 
 function garmentCounterApi() {
@@ -7088,6 +7128,8 @@ function resetItemForm() {
     if ($("item-pack-unit")) $("item-pack-unit").value = "Strip";
     if ($("item-upp")) $("item-upp").value = "10";
   }
+  if ($("item-conv-unit")) $("item-conv-unit").value = "";
+  if ($("item-conv-factor")) $("item-conv-factor").value = "1";
   if ($("item-brand")) $("item-brand").value = "";
   if ($("item-brand-id")) $("item-brand-id").value = "";
   if ($("item-min-billing")) $("item-min-billing").value = "";
@@ -7113,6 +7155,12 @@ function fillItemForm(i) {
   if ($("item-pack-size")) $("item-pack-size").value = i.pack_size || "";
   if ($("item-pack-unit")) $("item-pack-unit").value = i.pack_unit || "Strip";
   if ($("item-upp")) $("item-upp").value = globalThis.POSFootwear?.unitsPerPack?.(i) || i.units_per_pack || 10;
+  if ($("item-conv-unit")) {
+    const pack = String(i.pack_unit || "");
+    const known = ["Box", "Packet", "Carton", "Pack", "Bag", "Case"];
+    $("item-conv-unit").value = known.find((name) => name.toLowerCase() === pack.toLowerCase()) || "";
+  }
+  if ($("item-conv-factor")) $("item-conv-factor").value = String(Math.max(1, Number(i.units_per_pack) || 1));
   if ($("item-batch-no")) $("item-batch-no").value = i.primary_batch_no || i.batch_no || "";
   if ($("item-expiry")) $("item-expiry").value = String(i.primary_expiry || i.default_expiry || "").slice(0, 10);
   if ($("item-reorder")) $("item-reorder").value = POSUnits.fromBase(i.reorder_level_gm, itemUnit(i));
@@ -7853,8 +7901,13 @@ function poItemHay(item) {
 }
 
 function classicDraftDirty(item, fields) {
+  if (fields.extra) return true;
   if (fields.checked) return true;
   if (String(fields.barcodes || "").trim()) return true;
+  if (String(fields.batch || "").trim()) return true;
+  if (String(fields.shareBc || "").trim()) return true;
+  if (Number(fields.conv) > 1) return true;
+  if (fields.unit && fields.unit !== "PCS" && POSUnits.isCount(itemUnit(item || {}))) return true;
   if (fields.expiry) return true;
   if (Number(fields.discount) > 0) return true;
   if (Number(fields.free) > 0) return true;
@@ -7881,9 +7934,12 @@ function capturePoDraft() {
   document.querySelectorAll("tr[data-po-row]").forEach((tr) => {
     const id = tr.dataset.poRow;
     if (!id) return;
-    const item = (state.items || []).find((row) => row.id === id);
+    const itemId = tr.dataset.poItemId || id;
+    const item = (state.items || []).find((row) => row.id === itemId);
     const fields = {
       kind: "classic",
+      extra: id !== itemId,
+      itemId,
       checked: Boolean(tr.querySelector("[data-po-item]")?.checked),
       qty: tr.querySelector("[data-po-qty]")?.value ?? "",
       rate: document.querySelector(`[data-po-rate="${CSS.escape(id)}"]`)?.value ?? "",
@@ -7891,8 +7947,12 @@ function capturePoDraft() {
       discount: document.querySelector(`[data-po-discount="${CSS.escape(id)}"]`)?.value ?? "",
       free: document.querySelector(`[data-po-free="${CSS.escape(id)}"]`)?.value ?? "",
       expiry: document.querySelector(`[data-po-expiry="${CSS.escape(id)}"]`)?.value ?? "",
-      barcodes: document.querySelector(`[data-po-barcodes="${CSS.escape(id)}"]`)?.value ?? "",
-      bcOpen: document.querySelector(`[data-po-bc-editor="${CSS.escape(id)}"]`)?.hidden === false,
+      barcodes: document.querySelector(`[data-po-barcodes="${CSS.escape(itemId)}"]`)?.value ?? "",
+      unit: document.querySelector(`[data-po-unit-pick="${CSS.escape(id)}"]`)?.value ?? "",
+      conv: document.querySelector(`[data-po-conv="${CSS.escape(id)}"]`)?.value ?? "",
+      batch: document.querySelector(`[data-po-batch="${CSS.escape(id)}"]`)?.value ?? "",
+      shareBc: document.querySelector(`[data-po-share-bc="${CSS.escape(id)}"]`)?.value ?? "",
+      bcOpen: document.querySelector(`[data-po-bc-editor="${CSS.escape(itemId)}"]`)?.hidden === false,
     };
     if (classicDraftDirty(item, fields)) poLineDraft.set(id, fields);
     else poLineDraft.delete(id);
@@ -7942,7 +8002,7 @@ function poDraftWantsItem(item) {
 function restoreClassicDraft() {
   for (const [id, fields] of poLineDraft) {
     if (fields.kind !== "classic") continue;
-    const box = document.querySelector(`[data-po-item="${CSS.escape(id)}"]`);
+    const box = document.querySelector(`[data-po-line="${CSS.escape(id)}"]`);
     if (!box) continue;
     box.checked = Boolean(fields.checked);
     const set = (sel, value) => {
@@ -7955,7 +8015,11 @@ function restoreClassicDraft() {
     set(`[data-po-discount="${CSS.escape(id)}"]`, fields.discount);
     set(`[data-po-free="${CSS.escape(id)}"]`, fields.free);
     set(`[data-po-expiry="${CSS.escape(id)}"]`, fields.expiry);
-    set(`[data-po-barcodes="${CSS.escape(id)}"]`, fields.barcodes);
+    set(`[data-po-unit-pick="${CSS.escape(id)}"]`, fields.unit);
+    set(`[data-po-conv="${CSS.escape(id)}"]`, fields.conv);
+    set(`[data-po-batch="${CSS.escape(id)}"]`, fields.batch);
+    set(`[data-po-share-bc="${CSS.escape(id)}"]`, fields.shareBc);
+    set(`[data-po-barcodes="${CSS.escape(fields.itemId || id)}"]`, fields.barcodes);
     const editor = document.querySelector(`[data-po-bc-editor="${CSS.escape(id)}"]`);
     if (editor && (fields.bcOpen || String(fields.barcodes || "").trim())) {
       editor.hidden = false;
@@ -8184,7 +8248,7 @@ function paintPurchaseLede() {
   if (!el) return;
   const base = isApparelShop()
     ? "Find a garment and add it. Enter colour and size quantity on the bill. Free quantity adds stock and is not billed. Stock updates when the purchase is saved. Edit a saved bill from the list."
-    : "Find an item and add it, then set the quantity. Rate, tax, discount, and free quantity stay editable. Free quantity adds stock and is not billed. Stock updates when the purchase is saved. Edit a saved bill from the list.";
+    : "Find an item and add it, then set the quantity. Buy a box, packet, or carton and loose pieces on the same bill. Stock is saved in pieces (10 boxes × 20 = 200 pcs). Rate, tax, discount, and free quantity stay editable. Free quantity adds stock and is not billed. Stock updates when the purchase is saved. Edit a saved bill from the list.";
   el.textContent = purchaseBarcodeOn()
     ? `${base} Piece items show Add Item Barcodes with camera. Scan or type one code per piece.`
     : base;
@@ -8216,13 +8280,22 @@ function renderPoLines(opts = {}) {
   paintPoTotals();
 }
 
+function poExtraKeys(itemId) {
+  const keys = [];
+  for (const [key, fields] of poLineDraft) {
+    if (fields?.kind === "classic" && fields.extra && (fields.itemId === itemId || key.startsWith(`${itemId}::`))) keys.push(key);
+  }
+  return keys;
+}
+
+let poExtraN = 1;
+
 function renderClassicPoLines(el, shown, moreHint) {
   const rows = [];
   const panels = [];
   for (const i of shown) {
     const unit = itemUnit(i);
     const qty = POSUnits.isCount(unit) ? 1 : 1000;
-    const search = poItemHay(i);
     if (purchaseBarcodeEntryOn(i)) {
       panels.push(`<div class="po-bc-panel" data-po-bc-row="${escapeHtml(i.id)}">
         <button type="button" class="btn" data-po-add-barcodes="${escapeHtml(i.id)}">Add Item Barcodes with camera</button>
@@ -8237,19 +8310,8 @@ function renderClassicPoLines(el, shown, moreHint) {
         </div>
       </div>`);
     }
-    rows.push(`<tr data-po-row="${escapeHtml(i.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
-        <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(i.id)}" checked hidden /><button type="button" class="po-remove" data-po-remove="${escapeHtml(i.id)}" aria-label="Remove ${escapeHtml(i.name)}">Remove</button></td>
-        <td class="po-name">${escapeHtml(i.name)}</td>
-        <td class="po-hsn">${escapeHtml(i.hsn || "—")}</td>
-        <td class="po-qty"><div class="po-qty-cell"><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${qty}" data-po-qty="${escapeHtml(i.id)}" aria-label="Quantity for ${escapeHtml(i.name)}" /></div></td>
-        <td class="po-qty"><input type="number" min="0" step="1" value="0" data-po-free="${escapeHtml(i.id)}" aria-label="Free quantity for ${escapeHtml(i.name)}" /></td>
-        <td class="po-unit">${escapeHtml(poUnitLabel(i))}</td>
-        <td><div class="po-rate-cell"><input type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(POSUnits.rateInputValue?.(i.purchase_rate) ?? i.purchase_rate)}" data-po-rate="${escapeHtml(i.id)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
-        <td><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(String(Number(i.gst_rate) || 0))}" data-po-gst="${escapeHtml(i.id)}" aria-label="GST percent for ${escapeHtml(i.name)}" /></td>
-        <td><input type="number" min="0" step="0.01" inputmode="decimal" value="0" data-po-discount="${escapeHtml(i.id)}" aria-label="Discount amount for ${escapeHtml(i.name)}" /></td>
-        <td><input type="date" data-po-expiry="${escapeHtml(i.id)}" /></td>
-        <td class="num" data-po-amt="${escapeHtml(i.id)}">${money(POSUnits.lineAmount(qty, i.purchase_rate, unit))}</td>
-      </tr>`);
+    rows.push(classicPoRowHtml(i, i.id));
+    for (const key of poExtraKeys(i.id)) rows.push(classicPoRowHtml(i, key));
   }
   el.innerHTML = `${moreHint}<div class="po-table-wrap"><table class="po-table"><thead><tr>
     <th class="po-check"></th><th>Item</th><th>${taxCodeLabel()}</th><th>Qty</th><th>Free</th><th>Unit</th><th>Rate</th><th>GST %</th><th>Disc</th><th>Expiry</th><th class="num">Amount</th>
@@ -8257,6 +8319,83 @@ function renderClassicPoLines(el, shown, moreHint) {
     <div id="po-barcode-panels">${panels.join("")}</div>`;
   paintPoTotals();
   refreshPoBarcodeRows();
+}
+
+function addPoUnitLine(itemId) {
+  const item = (state.items || []).find((row) => row.id === itemId);
+  if (!item) return;
+  capturePoDraft();
+  const key = `${itemId}::${poExtraN++}`;
+  poLineDraft.set(key, {
+    kind: "classic",
+    extra: true,
+    itemId,
+    checked: true,
+    qty: "1",
+    rate: String(POSUnits.rateInputValue?.(item.purchase_rate) ?? item.purchase_rate ?? ""),
+    gst: String(Number(item.gst_rate) || 0),
+    discount: "0",
+    free: "0",
+    expiry: "",
+    barcodes: "",
+    unit: "PCS",
+    conv: "1",
+    batch: "",
+    shareBc: item.barcode || "",
+  });
+  renderPoLines({ capture: false });
+  focusPoQty(`[data-po-qty="${CSS.escape(key)}"]`);
+}
+
+function poPackCellHtml(item, key) {
+  const units = globalThis.POSUnitConvert?.purchaseUnits?.(item) || [];
+  if (!units.length || !POSUnits.isCount(itemUnit(item))) return `<td class="po-unit">${escapeHtml(poUnitLabel(item))}</td>`;
+  const draft = poLineDraft.get(key) || {};
+  const selected = String(draft.unit || (units.length > 1 && Number(units[1].factor) > 1 ? units[1].code : units[0].code));
+  const picked = units.find((row) => row.code === selected) || units[0];
+  const conv = draft.conv != null && draft.conv !== "" ? draft.conv : (picked.factor > 1 ? picked.factor : 1);
+  const opts = units.map((row) => `<option value="${escapeHtml(row.code)}" data-factor="${escapeHtml(row.factor)}"${row.code === picked.code ? " selected" : ""}>${escapeHtml(row.name)}</option>`).join("");
+  return `<td class="po-unit po-pack">
+      <div class="po-pack-cell">
+        <select data-po-unit-pick="${escapeHtml(key)}" aria-label="Purchase unit for ${escapeHtml(item.name)}">${opts}</select>
+        <label class="po-conv">1 = <input type="number" min="1" step="1" value="${escapeHtml(conv)}" data-po-conv="${escapeHtml(key)}" data-prev="${escapeHtml(conv)}" aria-label="Pieces per unit for ${escapeHtml(item.name)}" /> pcs</label>
+        <small data-po-base="${escapeHtml(key)}">0 PCS</small>
+        <input data-po-batch="${escapeHtml(key)}" maxlength="64" placeholder="Batch no." value="${escapeHtml(draft.batch || "")}" aria-label="Batch for ${escapeHtml(item.name)}" />
+        <input data-po-share-bc="${escapeHtml(key)}" maxlength="64" placeholder="Barcode" value="${escapeHtml(draft.shareBc || item.barcode || "")}" aria-label="Barcode for ${escapeHtml(item.name)}" />
+        ${key === item.id ? `<button type="button" class="btn po-add-unit" data-po-add-unit="${escapeHtml(item.id)}">+ unit</button>` : ""}
+      </div>
+    </td>`;
+}
+
+function classicPoRowHtml(item, key) {
+  const unit = itemUnit(item);
+  const count = POSUnits.isCount(unit);
+  const draft = poLineDraft.get(key) || {};
+  const qty = draft.qty != null && draft.qty !== "" ? draft.qty : (count ? 1 : 1000);
+  const pieceRate = Number(item.purchase_rate) || 0;
+  const packChoices = globalThis.POSUnitConvert?.purchaseUnits?.(item) || [];
+  const pickedPack = packChoices.find((row) => row.code === String(draft.unit || "")) || packChoices.find((row) => row.factor > 1) || packChoices[0];
+  let rate = draft.rate != null && draft.rate !== "" ? draft.rate : (POSUnits.rateInputValue?.(item.purchase_rate) ?? item.purchase_rate);
+  if (!draft.unit && pickedPack && pickedPack.factor > 1 && Math.abs(Number(rate) - pieceRate) < 0.009) {
+    rate = POSUnits.rateInputValue?.(pieceRate * pickedPack.factor) ?? pieceRate * pickedPack.factor;
+  }
+  const gst = draft.gst != null && draft.gst !== "" ? draft.gst : String(Number(item.gst_rate) || 0);
+  const discount = draft.discount != null ? draft.discount : 0;
+  const free = draft.free != null ? draft.free : 0;
+  const search = poItemHay(item);
+  return `<tr data-po-row="${escapeHtml(key)}" data-po-item-id="${escapeHtml(item.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
+        <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(item.id)}" data-po-line="${escapeHtml(key)}" checked hidden /><button type="button" class="po-remove" data-po-remove="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">Remove</button></td>
+        <td class="po-name">${escapeHtml(item.name)}</td>
+        <td class="po-hsn">${escapeHtml(item.hsn || "—")}</td>
+        <td class="po-qty"><div class="po-qty-cell"><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(qty)}" data-po-qty="${escapeHtml(key)}" aria-label="Quantity for ${escapeHtml(item.name)}" /></div></td>
+        <td class="po-qty"><input type="number" min="0" step="1" value="${escapeHtml(free)}" data-po-free="${escapeHtml(key)}" aria-label="Free quantity for ${escapeHtml(item.name)}" /></td>
+        ${poPackCellHtml(item, key)}
+        <td><div class="po-rate-cell"><input type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(rate)}" data-po-rate="${escapeHtml(key)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
+        <td><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(gst)}" data-po-gst="${escapeHtml(key)}" aria-label="GST percent for ${escapeHtml(item.name)}" /></td>
+        <td><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(discount)}" data-po-discount="${escapeHtml(key)}" aria-label="Discount amount for ${escapeHtml(item.name)}" /></td>
+        <td><input type="date" data-po-expiry="${escapeHtml(key)}" value="${escapeHtml(draft.expiry || "")}" /></td>
+        <td class="num" data-po-amt="${escapeHtml(key)}">${money(POSUnits.lineAmount(qty, rate, unit))}</td>
+      </tr>`;
 }
 
 function apparelPoGroupSearch(group) {
@@ -8685,7 +8824,8 @@ function refreshPoBarcodeRows() {
     const id = row.dataset.poBcRow;
     const box = document.querySelector(`[data-po-item="${id}"]`);
     const item = (state.items || []).find((entry) => entry.id === id);
-    const qty = Math.max(0, Math.round(Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0));
+    const conv = Number(document.querySelector(`[data-po-conv="${CSS.escape(id)}"]`)?.value) || 1;
+    const qty = Math.max(0, Math.round((Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0) * conv));
     row.hidden = !purchaseBarcodeEntryOn(item) || !box?.checked;
     const ta = row.querySelector("[data-po-barcodes]");
     let codes = [];
@@ -8733,12 +8873,20 @@ function paintPoLineAmount(itemId) {
   }
   const qty = Number(document.querySelector(`[data-po-qty="${itemId}"]`)?.value) || 0;
   const rate = Number(document.querySelector(`[data-po-rate="${itemId}"]`)?.value) || 0;
-  const unit = document.querySelector(`[data-po-row="${itemId}"]`)?.dataset.poUnit || "GM";
+  const rowEl = document.querySelector(`[data-po-row="${itemId}"]`);
+  const unit = rowEl?.dataset.poUnit || "GM";
+  const itemKey = rowEl?.dataset.poItemId || itemId;
+  const conv = Number(document.querySelector(`[data-po-conv="${itemId}"]`)?.value) || 1;
+  const baseEl = document.querySelector(`[data-po-base="${itemId}"]`);
+  if (baseEl) {
+    const baseQty = globalThis.POSUnitConvert?.toBase?.(qty, conv) ?? qty;
+    baseEl.textContent = `${baseQty} PCS`;
+  }
   const fig = poFigures(
     POSUnits.lineAmount(qty, rate, unit),
     document.querySelector(`[data-po-gst="${itemId}"]`)?.value,
     document.querySelector(`[data-po-discount="${itemId}"]`)?.value,
-    (state.items || []).find((row) => row.id === itemId)?.gst_rate,
+    (state.items || []).find((row) => row.id === itemKey)?.gst_rate,
   );
   const cell = document.querySelector(`[data-po-amt="${itemId}"]`);
   if (cell) cell.textContent = money(fig.amount);
@@ -8776,15 +8924,19 @@ function paintPoTotals() {
   let total = 0;
   let gst = 0;
   checked.forEach((box) => {
-    const id = box.dataset.poItem;
+    const id = box.dataset.poLine || box.dataset.poItem;
     const qty = Number(document.querySelector(`[data-po-qty="${id}"]`)?.value) || 0;
     const rate = Number(document.querySelector(`[data-po-rate="${id}"]`)?.value) || 0;
-    const unit = document.querySelector(`[data-po-row="${id}"]`)?.dataset.poUnit || "GM";
+    const rowEl = document.querySelector(`[data-po-row="${id}"]`);
+    const unit = rowEl?.dataset.poUnit || "GM";
+    const conv = Number(document.querySelector(`[data-po-conv="${id}"]`)?.value) || 1;
+    const baseEl = document.querySelector(`[data-po-base="${id}"]`);
+    if (baseEl) baseEl.textContent = `${globalThis.POSUnitConvert?.toBase?.(qty, conv) ?? qty} PCS`;
     const fig = poFigures(
       POSUnits.lineAmount(qty, rate, unit),
       document.querySelector(`[data-po-gst="${id}"]`)?.value,
       document.querySelector(`[data-po-discount="${id}"]`)?.value,
-      (state.items || []).find((row) => row.id === id)?.gst_rate,
+      (state.items || []).find((row) => row.id === (box.dataset.poItem || id))?.gst_rate,
     );
     total += fig.amount;
     gst += fig.gstAmount;
@@ -13674,11 +13826,28 @@ $("lines").addEventListener("change", (e) => {
     }
     return;
   }
+  const saleUnit = e.target.closest("[data-sale-unit]");
+  if (saleUnit) {
+    const line = findCartLine(saleUnit.dataset.saleUnit);
+    const item = line ? state.items.find((i) => i.id === line.itemId) : null;
+    if (line && item) {
+      const shown = lineSaleFactor(item, line) > 1
+        ? (Number(line.qtyGm) || 0) / lineSaleFactor(item, line)
+        : POSUnits.displayQty(line.qtyGm, itemUnit(item));
+      line.saleUnit = saleUnit.value;
+      const nextFactor = lineSaleFactor(item, line);
+      setLineQty(saleUnit.dataset.saleUnit, (Number(shown) || 0) * (nextFactor > 1 ? nextFactor : 1));
+    }
+    return;
+  }
   const input = e.target.closest("[data-qty]");
   if (input) {
     const line = findCartLine(input.dataset.qty);
     const item = line ? state.items.find((i) => i.id === line.itemId) : null;
-    const base = item ? POSUnits.toBase(input.value, itemUnit(item)) : Number(input.value);
+    const factor = item ? lineSaleFactor(item, line) : 1;
+    const base = factor > 1
+      ? (Number(input.value) || 0) * factor
+      : (item ? POSUnits.toBase(input.value, itemUnit(item)) : Number(input.value));
     setLineQty(input.dataset.qty, base);
     return;
   }
@@ -15354,6 +15523,12 @@ $("item-form").addEventListener("submit", async (e) => {
     body.default_expiry = $("item-expiry")?.value || "";
     body.expiry_date = $("item-expiry")?.value || "";
     body.reorder_level_gm = POSUnits.toBase($("item-reorder")?.value || 0, unit);
+  } else if (POSUnits.isCount(unit)) {
+    const pack = String($("item-conv-unit")?.value || "").trim();
+    const pieces = Math.max(1, Number($("item-conv-factor")?.value) || 1);
+    body.pack_unit = pack && pieces > 1 ? pack : "";
+    body.units_per_pack = pack && pieces > 1 ? pieces : 1;
+    body.base_unit = unit || "PCS";
   }
   try {
     let savedId = $("item-id").value;
@@ -15880,23 +16055,54 @@ $("purchase-form").addEventListener("input", (e) => {
     renderPoSearchResults();
     return;
   }
-  if (e.target.matches("[data-po-size-qty],[data-po-extra-qty],[data-po-extra-name],[data-po-rate],[data-po-qty],[data-po-gst],[data-po-discount],[data-po-barcodes],[data-po-size-barcodes]")) {
+  if (e.target.matches("[data-po-size-qty],[data-po-extra-qty],[data-po-extra-name],[data-po-rate],[data-po-qty],[data-po-gst],[data-po-discount],[data-po-barcodes],[data-po-size-barcodes],[data-po-conv],[data-po-batch],[data-po-share-bc]")) {
     const card = e.target.closest("[data-po-product-row]");
     if (card) {
       paintPoLineAmount(card.dataset.poProductRow);
       paintPoTotals();
       return;
     }
-    const id = e.target.dataset.poQty || e.target.dataset.poRate || e.target.dataset.poGst || e.target.dataset.poDiscount || e.target.dataset.poBarcodes;
+    const id = e.target.dataset.poQty || e.target.dataset.poRate || e.target.dataset.poGst || e.target.dataset.poDiscount || e.target.dataset.poBarcodes || e.target.dataset.poConv || e.target.dataset.poBatch || e.target.dataset.poShareBc;
     if (id && (e.target.dataset.poQty || e.target.dataset.poRate || e.target.dataset.poGst || e.target.dataset.poDiscount)) paintPoLineAmount(id);
     paintPoTotals();
   }
 });
 $("purchase-form").addEventListener("change", (e) => {
   if (e.target.id === "po-supplier") fillPurchaseSupplierName();
+  const unitPick = e.target.closest("[data-po-unit-pick]");
+  if (unitPick) {
+    const key = unitPick.dataset.poUnitPick;
+    const row = unitPick.closest("[data-po-row]");
+    const item = (state.items || []).find((entry) => entry.id === row?.dataset.poItemId);
+    const opt = unitPick.selectedOptions?.[0];
+    const next = Math.max(1, Number(opt?.dataset.factor) || 1);
+    const conv = document.querySelector(`[data-po-conv="${CSS.escape(key)}"]`);
+    const prev = Math.max(1, Number(conv?.dataset.prev) || Number(conv?.value) || 1);
+    if (conv) {
+      conv.value = String(next);
+      conv.dataset.prev = String(next);
+    }
+    const rate = document.querySelector(`[data-po-rate="${CSS.escape(key)}"]`);
+    const piece = Number(item?.purchase_rate) || 0;
+    if (rate && piece > 0 && prev > 0) {
+      const cur = Number(rate.value) || 0;
+      if (!cur || Math.abs(cur - piece * prev) < 0.009) {
+        rate.value = String(POSUnits.rateInputValue?.(piece * next) ?? piece * next);
+      }
+    }
+    paintPoLineAmount(key);
+    paintPoTotals();
+    return;
+  }
   if (e.target.matches("[data-po-item],[data-po-product]")) paintPoTotals();
 });
 $("po-lines")?.addEventListener("click", (e) => {
+  const addUnit = e.target.closest("[data-po-add-unit]");
+  if (addUnit) {
+    e.preventDefault();
+    addPoUnitLine(addUnit.dataset.poAddUnit);
+    return;
+  }
   const addBarcodes = e.target.closest("[data-po-add-barcodes]");
   if (addBarcodes) {
     e.preventDefault();
@@ -15972,30 +16178,48 @@ $("purchase-form").addEventListener("submit", async (e) => {
     if (isApparelShop() && document.querySelector("[data-po-product-row]")) {
       lines.push(...collectApparelPoLines());
     } else for (const box of document.querySelectorAll("[data-po-item]:checked")) {
+      const key = box.dataset.poLine || box.dataset.poItem;
       const item = state.items.find((i) => i.id === box.dataset.poItem);
       const unit = itemUnit(item || {});
-      const qtyInput = Number(document.querySelector(`[data-po-qty="${box.dataset.poItem}"]`)?.value);
-      const quantity_gm = POSUnits.toBase(qtyInput, unit);
+      const qtyInput = Number(document.querySelector(`[data-po-qty="${key}"]`)?.value);
+      const convEl = document.querySelector(`[data-po-conv="${key}"]`);
+      const conversion = convEl ? Math.max(1, Number(convEl.value) || 1) : 1;
+      const purchaseUnit = document.querySelector(`[data-po-unit-pick="${key}"]`)?.value || "";
+      const usePack = Boolean(convEl);
+      const quantity_gm = usePack ? qtyInput : POSUnits.toBase(qtyInput, unit);
+      const basePieces = usePack ? (globalThis.POSUnitConvert?.toBase?.(qtyInput, conversion) ?? qtyInput * conversion) : quantity_gm;
       let barcodes = [];
       let allowEmpty = true;
       if (purchaseBarcodeEntryOn(item)) {
-        const pieces = Math.round(quantity_gm);
-        barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
-        if (itemBarcodeTracked(item) || barcodes.length) {
-          allowEmpty = false;
-          if (barcodes.length !== pieces) {
-            throw new Error(`${item?.name || "Item"}: scan ${pieces} unique barcodes (entered ${barcodes.length})`);
+        if (key !== box.dataset.poItem) {
+          barcodes = [];
+          allowEmpty = true;
+        } else {
+          const pieces = Math.round(basePieces);
+          barcodes = parsePoBarcodes(document.querySelector(`[data-po-barcodes="${box.dataset.poItem}"]`)?.value);
+          if (itemBarcodeTracked(item) || barcodes.length) {
+            allowEmpty = false;
+            if (barcodes.length !== pieces) {
+              throw new Error(`${item?.name || "Item"}: scan ${pieces} unique barcodes (entered ${barcodes.length})`);
+            }
           }
         }
       }
+      if (!(qtyInput > 0)) continue;
+      const freeInput = Number(document.querySelector(`[data-po-free="${key}"]`)?.value) || 0;
       lines.push({
         item_id: box.dataset.poItem,
         quantity_gm,
-        rate_per_kg: POSUnits.roundRate8?.(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value) ?? Number(document.querySelector(`[data-po-rate="${box.dataset.poItem}"]`)?.value),
-        gst_rate: document.querySelector(`[data-po-gst="${box.dataset.poItem}"]`)?.value,
-        discount: document.querySelector(`[data-po-discount="${box.dataset.poItem}"]`)?.value,
-        free_qty: POSUnits.toBase(Number(document.querySelector(`[data-po-free="${box.dataset.poItem}"]`)?.value) || 0, unit),
-        expiry_date: document.querySelector(`[data-po-expiry="${box.dataset.poItem}"]`)?.value || "",
+        purchase_qty: usePack ? qtyInput : undefined,
+        purchase_unit: purchaseUnit,
+        conversion: usePack ? conversion : undefined,
+        rate_per_kg: POSUnits.roundRate8?.(document.querySelector(`[data-po-rate="${key}"]`)?.value) ?? Number(document.querySelector(`[data-po-rate="${key}"]`)?.value),
+        gst_rate: document.querySelector(`[data-po-gst="${key}"]`)?.value,
+        discount: document.querySelector(`[data-po-discount="${key}"]`)?.value,
+        free_qty: usePack ? freeInput : POSUnits.toBase(freeInput, unit),
+        expiry_date: document.querySelector(`[data-po-expiry="${key}"]`)?.value || "",
+        batch_no: document.querySelector(`[data-po-batch="${key}"]`)?.value || "",
+        product_barcode: document.querySelector(`[data-po-share-bc="${key}"]`)?.value || "",
         barcodes,
         generate_barcodes: false,
         allow_empty_barcodes: allowEmpty,

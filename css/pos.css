@@ -6109,6 +6109,12 @@ body.apparel-mode #item-size-wrap { display: none; }
   color: var(--muted);
   white-space: nowrap;
 }
+.po-table .po-unit.po-pack { white-space: normal; }
+.po-pack-cell { display: grid; gap: 4px; min-width: 148px; }
+.po-pack-cell input, .po-pack-cell select { width: 100%; }
+.po-conv { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.po-conv input { width: 64px; }
+.sale-unit { max-width: 92px; margin-left: 4px; }
 .po-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .po-table tbody tr { cursor: default; }
 .po-table tbody tr.is-checked td { background: #ecfdf5; }

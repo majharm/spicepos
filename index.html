@@ -12,7 +12,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261124room1" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261125unit1" />
     <link rel="stylesheet" href="./css/online-store.css?v=20261116storemenu1" />
     <link rel="stylesheet" href="./css/ecommerce.css?v=20261117ecom1" />
     <link rel="stylesheet" href="./css/crm.css?v=20261117crm6" />
@@ -775,6 +775,22 @@
                 <fieldset class="item-block printing-only" id="item-print-meta" hidden>
                   <legend>Printing</legend>
                   <p class="hint">Counter bills Width × Height using this item’s unit and rate. Choose Sq. Ft., Sq. Meter, Inch, or a custom unit. GST applies on the calculated amount after discount.</p>
+                </fieldset>
+                <fieldset class="item-block" id="item-unit-convert" hidden>
+                  <legend>Box and piece</legend>
+                  <p class="hint">Stock is kept in pieces. 1 Box = 20 Pieces means a purchase or sale of 1 box moves 20 pieces. Retail and purchase rates stay per piece.</p>
+                  <label>Pack unit
+                    <select id="item-conv-unit">
+                      <option value="">Piece only</option>
+                      <option value="Box">Box</option>
+                      <option value="Packet">Packet</option>
+                      <option value="Carton">Carton</option>
+                      <option value="Pack">Pack</option>
+                      <option value="Bag">Bag</option>
+                      <option value="Case">Case</option>
+                    </select>
+                  </label>
+                  <label>Pieces in one pack <input id="item-conv-factor" type="number" min="1" step="1" value="1" /></label>
                 </fieldset>
                 <fieldset class="item-block pharmacy-only" id="item-pharmacy-pack" hidden>
                   <legend>Pack, batch &amp; expiry</legend>
@@ -4041,6 +4057,7 @@
     <script src="./js/session-pulse.js?v=20261030live1" defer></script>
     <script src="./js/admin-heartbeat.js?v=20261118pwa1" defer></script>
     <script src="./js/units.js?v=20261026poscam1" defer></script>
+    <script src="./js/unit-convert.js?v=20261118unit1" defer></script>
     <script src="./js/footwear.js?v=20261012print1" defer></script>
     <script src="./js/garment-purchase.js?v=20261023stk1" defer></script>
     <script src="./js/garment-counter.js?v=20261023col1" defer></script>
@@ -4086,7 +4103,7 @@
     <script src="./js/stock-desk.js?v=20261117stock0" defer></script>
     <script src="./js/crm.js?v=20261117crm6" defer></script>
     <script src="./js/security-login.js?v=20261118sec1" defer></script>
-    <script src="./js/app.js?v=20261124pay1" defer></script>
+    <script src="./js/app.js?v=20261125unit1" defer></script>
     <script src="./js/online-store-desk.js?v=20261116store1" defer></script>
     <script src="./js/ecommerce-desk.js?v=20261117ecom1" defer></script>
     <script src="./js/automation-shop.js?v=20261123auto1" defer></script>
