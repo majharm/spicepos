@@ -8349,13 +8349,13 @@ function addPoUnitLine(itemId) {
 
 function poPackCellHtml(item, key) {
   const units = globalThis.POSUnitConvert?.purchaseUnits?.(item) || [];
-  if (!units.length || !POSUnits.isCount(itemUnit(item))) return `<td class="po-unit">${escapeHtml(poUnitLabel(item))}</td>`;
+  if (!units.length || !POSUnits.isCount(itemUnit(item))) return `<td class="po-unit" data-label="Unit">${escapeHtml(poUnitLabel(item))}</td>`;
   const draft = poLineDraft.get(key) || {};
   const selected = String(draft.unit || (units.length > 1 && Number(units[1].factor) > 1 ? units[1].code : units[0].code));
   const picked = units.find((row) => row.code === selected) || units[0];
   const conv = draft.conv != null && draft.conv !== "" ? draft.conv : (picked.factor > 1 ? picked.factor : 1);
   const opts = units.map((row) => `<option value="${escapeHtml(row.code)}" data-factor="${escapeHtml(row.factor)}"${row.code === picked.code ? " selected" : ""}>${escapeHtml(row.name)}</option>`).join("");
-  return `<td class="po-unit po-pack">
+  return `<td class="po-unit po-pack" data-label="Unit">
       <div class="po-pack-cell">
         <select data-po-unit-pick="${escapeHtml(key)}" aria-label="Purchase unit for ${escapeHtml(item.name)}">${opts}</select>
         <label class="po-conv">1 = <input type="number" min="1" step="1" value="${escapeHtml(conv)}" data-po-conv="${escapeHtml(key)}" data-prev="${escapeHtml(conv)}" aria-label="Pieces per unit for ${escapeHtml(item.name)}" /> pcs</label>
@@ -8385,16 +8385,16 @@ function classicPoRowHtml(item, key) {
   const search = poItemHay(item);
   return `<tr data-po-row="${escapeHtml(key)}" data-po-item-id="${escapeHtml(item.id)}" data-po-search="${escapeHtml(search)}" data-po-unit="${escapeHtml(unit)}">
         <td class="po-check"><input type="checkbox" data-po-item="${escapeHtml(item.id)}" data-po-line="${escapeHtml(key)}" checked hidden /><button type="button" class="po-remove" data-po-remove="${escapeHtml(key)}" aria-label="Remove ${escapeHtml(item.name)}">Remove</button></td>
-        <td class="po-name">${escapeHtml(item.name)}</td>
-        <td class="po-hsn">${escapeHtml(item.hsn || "—")}</td>
-        <td class="po-qty"><div class="po-qty-cell"><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(qty)}" data-po-qty="${escapeHtml(key)}" aria-label="Quantity for ${escapeHtml(item.name)}" /></div></td>
-        <td class="po-qty"><input type="number" min="0" step="1" value="${escapeHtml(free)}" data-po-free="${escapeHtml(key)}" aria-label="Free quantity for ${escapeHtml(item.name)}" /></td>
+        <td class="po-name" data-label="Item">${escapeHtml(item.name)}</td>
+        <td class="po-hsn" data-label="${escapeHtml(taxCodeLabel())}">${escapeHtml(item.hsn || "—")}</td>
+        <td class="po-qty" data-label="Qty"><div class="po-qty-cell"><input type="number" min="${POSUnits.qtyMin()}" max="${POSUnits.qtyMax()}" step="1" value="${escapeHtml(qty)}" data-po-qty="${escapeHtml(key)}" aria-label="Quantity for ${escapeHtml(item.name)}" /></div></td>
+        <td class="po-qty po-free" data-label="Free"><input type="number" min="0" step="1" value="${escapeHtml(free)}" data-po-free="${escapeHtml(key)}" aria-label="Free quantity for ${escapeHtml(item.name)}" /></td>
         ${poPackCellHtml(item, key)}
-        <td><div class="po-rate-cell"><input type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(rate)}" data-po-rate="${escapeHtml(key)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
-        <td><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(gst)}" data-po-gst="${escapeHtml(key)}" aria-label="GST percent for ${escapeHtml(item.name)}" /></td>
-        <td><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(discount)}" data-po-discount="${escapeHtml(key)}" aria-label="Discount amount for ${escapeHtml(item.name)}" /></td>
-        <td><input type="date" data-po-expiry="${escapeHtml(key)}" value="${escapeHtml(draft.expiry || "")}" /></td>
-        <td class="num" data-po-amt="${escapeHtml(key)}">${money(POSUnits.lineAmount(qty, rate, unit))}</td>
+        <td class="po-rate" data-label="Rate"><div class="po-rate-cell"><input type="number" min="0" step="0.00000001" inputmode="decimal" value="${escapeHtml(rate)}" data-po-rate="${escapeHtml(key)}" /><span class="po-suffix">₹${escapeHtml(POSUnits.rateSuffix(unit))}</span></div></td>
+        <td class="po-gst" data-label="GST %"><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(gst)}" data-po-gst="${escapeHtml(key)}" aria-label="GST percent for ${escapeHtml(item.name)}" /></td>
+        <td class="po-disc" data-label="Discount"><input type="number" min="0" step="0.01" inputmode="decimal" value="${escapeHtml(discount)}" data-po-discount="${escapeHtml(key)}" aria-label="Discount amount for ${escapeHtml(item.name)}" /></td>
+        <td class="po-exp" data-label="Expiry"><input type="date" data-po-expiry="${escapeHtml(key)}" value="${escapeHtml(draft.expiry || "")}" /></td>
+        <td class="num po-amt" data-label="Amount" data-po-amt="${escapeHtml(key)}">${money(POSUnits.lineAmount(qty, rate, unit))}</td>
       </tr>`;
 }
 

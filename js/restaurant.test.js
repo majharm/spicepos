@@ -372,8 +372,8 @@ test("Restaurant mobile billing box keeps dish cards visible", () => {
   assert.match(mobile, /body\.restaurant-mode\.bill-collapsed \.stage\.is-counter \.bill-settle \{\n    display: none !important;/);
   assert.match(css, /restaurant-counter-chat/);
   assert.match(css, /body\.restaurant-mode\.counter-mode \.support-dock/);
-  assert.match(index, /app\.js\?v=20261120pl1/);
-  assert.match(index, /app\.js\?v=20261120pl1/);
+  assert.match(index, /app\.js\?v=20261126mob1/);
+  assert.match(index, /app\.js\?v=20261126mob1/);
 });
 
 test("Restaurant mobile Counter uses readable type and a tight bill sheet", () => {
