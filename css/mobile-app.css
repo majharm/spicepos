@@ -253,8 +253,16 @@
     transform: none;
     opacity: 1;
     pointer-events: auto;
-    z-index: 30;
+    z-index: 60;
+    padding-bottom: calc(var(--m-tab-h) + env(safe-area-inset-bottom));
     box-shadow: 16px 0 48px rgba(0, 0, 0, 0.35);
+  }
+  body.m-app .nav-foot {
+    margin-top: auto;
+    background: inherit;
+  }
+  body.m-app .nav-foot .btn-logout[hidden] {
+    display: none;
   }
   body.m-app .app.nav-collapsed .nav {
     transform: translateX(-100%);
@@ -555,6 +563,23 @@
 }
 .m-home-mark svg { width: 20px; height: 20px; display: block; }
 .m-home-kicker { display: none; }
+.m-home-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.m-logout {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
 .m-icon-btn {
   width: 40px;
   height: 40px;
