@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
-    <link rel="stylesheet" href="./css/resort.css?v=20261127room3" />
+    <link rel="stylesheet" href="./css/resort.css?v=20261127floor1" />
     <link rel="stylesheet" href="./css/mobile-app.css?v=20261127out1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261103items1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
@@ -1763,7 +1763,7 @@
               <div class="items-hero-copy">
                 <p class="items-kicker">Inventory</p>
                 <h3>Rooms</h3>
-                <p class="lede">Room numbers, categories, rates, and readiness. Tap a room to change it. Turning a room off keeps past bookings.</p>
+                <p class="lede">Room numbers, floors, categories, rates, and readiness. Tap a room to change it. Turning a room off keeps past bookings.</p>
               </div>
               <button class="btn primary" type="button" id="resort-room-new">New room</button>
             </header>
@@ -1773,6 +1773,7 @@
             <form id="resort-room-form" class="resort-form">
               <input type="hidden" id="rr-id" />
               <label>Room no <input id="rr-number" required /></label>
+              <label>Floor <input id="rr-floor" maxlength="32" placeholder="1 or Ground" /></label>
               <label>Name <input id="rr-name" /></label>
               <label>Category
                 <select id="rr-category">
@@ -4101,8 +4102,8 @@
     <script src="./js/gym-ui.js?v=20261008gym5" defer></script>
     <script src="./js/bar.js?v=20261011lounge1" defer></script>
     <script src="./js/bar-ui.js?v=20261012table1" defer></script>
-    <script src="./js/resort.js?v=20261124room4" defer></script>
-    <script src="./js/resort-ui.js?v=20261127room3" defer></script>
+    <script src="./js/resort.js?v=20261127floor1" defer></script>
+    <script src="./js/resort-ui.js?v=20261127floor1" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>

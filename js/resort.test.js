@@ -289,6 +289,23 @@ test("14 unauthorized roles cannot read guest PII or financial controls", () => 
   assert.equal(R.canAccess("housekeeping", "bookings.guest_pii"), false);
 });
 
+test("rooms sort ground, then numbered floors, then room number", () => {
+  const rows = [
+    { number: "10", floor: "2" },
+    { number: "2", floor: "1" },
+    { number: "1", floor: "" },
+    { number: "11", floor: "1" },
+    { number: "G1", floor: "Ground" },
+  ].sort(R.compareRooms);
+  assert.deepEqual(
+    rows.map((row) => `${row.floor}:${row.number}`),
+    ["Ground:G1", "1:2", "1:11", "2:10", ":1"],
+  );
+  assert.equal(R.floorLabel("1"), "Floor 1");
+  assert.equal(R.floorLabel("Ground"), "Ground");
+  assert.equal(R.floorLabel(""), "");
+});
+
 test("dates use exclusive checkout and stay pricing is date-aware", () => {
   assert.equal(R.datesOverlap("2026-10-11", "2026-10-13", "2026-10-13", "2026-10-15"), false);
   assert.equal(R.nightsBetween("2026-10-11", "2026-10-13"), 2);
@@ -308,13 +325,18 @@ test("Resort POS, PHP, signup, Master Admin toggle, and hub are wired", () => {
   assert.match(index, /id="view-resort-desk"/);
   assert.match(index, /id="view-resort-housekeeping"/);
   assert.match(index, /id="resort-settings-box"/);
-  assert.match(index, /js\/resort\.js\?v=20261124room4/);
-  assert.match(index, /js\/resort-ui\.js\?v=20261127room3/);
-  assert.match(index, /css\/resort\.css\?v=20261127room3/);
+  assert.match(index, /js\/resort\.js\?v=20261127floor1/);
+  assert.match(index, /js\/resort-ui\.js\?v=20261127floor1/);
+  assert.match(index, /css\/resort\.css\?v=20261127floor1/);
+  assert.match(index, /id="rr-floor"/);
   assert.match(index, /id="resort-room-new"/);
   assert.match(read("js/resort-ui.js"), /function roomCard/);
   assert.match(read("js/resort-ui.js"), /Readiness/);
   assert.match(read("js/resort-ui.js"), /function roomHead/);
+  assert.match(read("js/resort-ui.js"), />Floor</);
+  assert.match(read("js/resort-ui.js"), /floor: \$\("rr-floor"\)/);
+  assert.match(read("server/resort.js"), /ADD COLUMN floor VARCHAR\(32\) NULL/);
+  assert.match(read("pos-resort.php"), /ADD COLUMN floor VARCHAR\(32\) NULL/);
   assert.match(read("css/resort.css"), /\.room-row/);
   assert.match(index, /id="nav-restaurant-sub"/);
   assert.match(index, /id="nav-resort-group"/);

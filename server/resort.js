@@ -67,6 +67,7 @@ export async function ensureResortSchema() {
     id VARCHAR(255) PRIMARY KEY,
     property_id VARCHAR(255) NULL,
     number VARCHAR(32) NOT NULL,
+    floor VARCHAR(32) NULL,
     name VARCHAR(180) NULL,
     category VARCHAR(64) NOT NULL DEFAULT 'standard',
     description TEXT NULL,
@@ -191,6 +192,11 @@ export async function ensureResortSchema() {
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     INDEX (business_id)
   )`);
+  const floorCol = await query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'resort_rooms' AND COLUMN_NAME = 'floor'`,
+  );
+  if (!floorCol.length) await query("ALTER TABLE resort_rooms ADD COLUMN floor VARCHAR(32) NULL");
 }
 
 async function settingsOf(shopId) {
@@ -242,7 +248,10 @@ function mapRoom(row) {
 }
 
 async function listRooms(shopId) {
-  const rows = await query("SELECT * FROM resort_rooms WHERE business_id=? ORDER BY number", [shopId]);
+  const rows = await query(
+    "SELECT * FROM resort_rooms WHERE business_id=? ORDER BY (floor IS NULL OR floor=''), floor, number",
+    [shopId],
+  );
   return rows.map(mapRoom);
 }
 
@@ -421,7 +430,7 @@ async function confirmHoldRow(shopId, holdId, payment, settingsOverride) {
 
 function decorateBooking(row, rooms) {
   const room = (rooms || []).find((r) => String(r.id) === String(row.room_id));
-  return { ...row, room_no: room?.number || row.room_id, room_name: room?.name || "" };
+  return { ...row, room_no: room?.number || row.room_id, room_name: room?.name || "", room_floor: room?.floor || "" };
 }
 
 async function board(shopId) {
@@ -589,6 +598,7 @@ export function registerResortStaff(app) {
       const existing = await query("SELECT id FROM resort_rooms WHERE id=? AND business_id=?", [id, bid()]);
       const payload = [
         clip(body.number, 32),
+        clip(body.floor, 32) || null,
         clip(body.name, 180),
         clip(body.category, 64) || "standard",
         clip(body.description, 2000),
@@ -613,13 +623,13 @@ export function registerResortStaff(app) {
       ];
       if (existing[0]) {
         await query(
-          `UPDATE resort_rooms SET number=?, name=?, category=?, description=?, photos_json=?, amenities_json=?, max_adults=?, max_children=?, bed_type=?, beds=?, rate=?, weekday_rate=?, weekend_rate=?, extra_adult_rate=?, extra_child_rate=?, extra_bed_rate=?, tax_rate=?, service_rate=?, physical_status=?, hk_status=?, active=?, rates_json=? WHERE id=? AND business_id=?`,
+          `UPDATE resort_rooms SET number=?, floor=?, name=?, category=?, description=?, photos_json=?, amenities_json=?, max_adults=?, max_children=?, bed_type=?, beds=?, rate=?, weekday_rate=?, weekend_rate=?, extra_adult_rate=?, extra_child_rate=?, extra_bed_rate=?, tax_rate=?, service_rate=?, physical_status=?, hk_status=?, active=?, rates_json=? WHERE id=? AND business_id=?`,
           [...payload, id, bid()],
         );
       } else {
         await query(
-          `INSERT INTO resort_rooms (id, property_id, number, name, category, description, photos_json, amenities_json, max_adults, max_children, bed_type, beds, rate, weekday_rate, weekend_rate, extra_adult_rate, extra_child_rate, extra_bed_rate, tax_rate, service_rate, physical_status, hk_status, active, rates_json, business_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO resort_rooms (id, property_id, number, floor, name, category, description, photos_json, amenities_json, max_adults, max_children, bed_type, beds, rate, weekday_rate, weekend_rate, extra_adult_rate, extra_child_rate, extra_bed_rate, tax_rate, service_rate, physical_status, hk_status, active, rates_json, business_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [id, body.property_id || null, ...payload, bid()],
         );
       }

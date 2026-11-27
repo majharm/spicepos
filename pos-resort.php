@@ -2,12 +2,13 @@
 function pos_resort_ensure() {
   $db = pos_db();
   $db->query("CREATE TABLE IF NOT EXISTS resort_settings (business_id VARCHAR(255) PRIMARY KEY, settings_json MEDIUMTEXT NULL, updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))");
-  $db->query("CREATE TABLE IF NOT EXISTS resort_rooms (id VARCHAR(255) PRIMARY KEY, property_id VARCHAR(255) NULL, number VARCHAR(32) NOT NULL, name VARCHAR(180) NULL, category VARCHAR(64) NOT NULL DEFAULT 'standard', description TEXT NULL, photos_json MEDIUMTEXT NULL, amenities_json MEDIUMTEXT NULL, max_adults INT NOT NULL DEFAULT 2, max_children INT NOT NULL DEFAULT 1, bed_type VARCHAR(64) NULL, beds INT NOT NULL DEFAULT 1, rate DECIMAL(12,2) NOT NULL DEFAULT 0, weekday_rate DECIMAL(12,2) NOT NULL DEFAULT 0, weekend_rate DECIMAL(12,2) NOT NULL DEFAULT 0, extra_adult_rate DECIMAL(12,2) NOT NULL DEFAULT 0, extra_child_rate DECIMAL(12,2) NOT NULL DEFAULT 0, extra_bed_rate DECIMAL(12,2) NOT NULL DEFAULT 0, tax_rate DECIMAL(8,2) NOT NULL DEFAULT 12, service_rate DECIMAL(8,2) NOT NULL DEFAULT 0, physical_status VARCHAR(32) NOT NULL DEFAULT 'available', hk_status VARCHAR(32) NOT NULL DEFAULT 'ready', active TINYINT(1) NOT NULL DEFAULT 1, rates_json MEDIUMTEXT NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), INDEX (business_id), INDEX (number), INDEX (physical_status))");
+  $db->query("CREATE TABLE IF NOT EXISTS resort_rooms (id VARCHAR(255) PRIMARY KEY, property_id VARCHAR(255) NULL, number VARCHAR(32) NOT NULL, floor VARCHAR(32) NULL, name VARCHAR(180) NULL, category VARCHAR(64) NOT NULL DEFAULT 'standard', description TEXT NULL, photos_json MEDIUMTEXT NULL, amenities_json MEDIUMTEXT NULL, max_adults INT NOT NULL DEFAULT 2, max_children INT NOT NULL DEFAULT 1, bed_type VARCHAR(64) NULL, beds INT NOT NULL DEFAULT 1, rate DECIMAL(12,2) NOT NULL DEFAULT 0, weekday_rate DECIMAL(12,2) NOT NULL DEFAULT 0, weekend_rate DECIMAL(12,2) NOT NULL DEFAULT 0, extra_adult_rate DECIMAL(12,2) NOT NULL DEFAULT 0, extra_child_rate DECIMAL(12,2) NOT NULL DEFAULT 0, extra_bed_rate DECIMAL(12,2) NOT NULL DEFAULT 0, tax_rate DECIMAL(8,2) NOT NULL DEFAULT 12, service_rate DECIMAL(8,2) NOT NULL DEFAULT 0, physical_status VARCHAR(32) NOT NULL DEFAULT 'available', hk_status VARCHAR(32) NOT NULL DEFAULT 'ready', active TINYINT(1) NOT NULL DEFAULT 1, rates_json MEDIUMTEXT NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), INDEX (business_id), INDEX (number), INDEX (physical_status))");
   $db->query("CREATE TABLE IF NOT EXISTS resort_bookings (id VARCHAR(255) PRIMARY KEY, booking_no VARCHAR(32) NOT NULL, property_id VARCHAR(255) NULL, room_id VARCHAR(255) NOT NULL, category VARCHAR(64) NULL, status VARCHAR(32) NOT NULL DEFAULT 'hold', payment_status VARCHAR(32) NOT NULL DEFAULT 'pending', check_in DATE NOT NULL, check_out DATE NOT NULL, nights INT NOT NULL DEFAULT 1, adults INT NOT NULL DEFAULT 1, children INT NOT NULL DEFAULT 0, guest_name VARCHAR(180) NULL, guest_mobile VARCHAR(32) NULL, guest_email VARCHAR(160) NULL, id_type VARCHAR(32) NULL, id_number VARCHAR(64) NULL, source VARCHAR(32) NOT NULL DEFAULT 'website', expires_at TIMESTAMP(3) NULL, total DECIMAL(12,2) NOT NULL DEFAULT 0, paid DECIMAL(12,2) NOT NULL DEFAULT 0, due DECIMAL(12,2) NOT NULL DEFAULT 0, price_json MEDIUMTEXT NULL, checked_in_at TIMESTAMP(3) NULL, checked_out_at TIMESTAMP(3) NULL, cancelled_at TIMESTAMP(3) NULL, cancel_reason VARCHAR(255) NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3), INDEX (business_id), INDEX (room_id), INDEX (status), INDEX (booking_no), INDEX (check_in), INDEX (expires_at))");
   $db->query("CREATE TABLE IF NOT EXISTS resort_blocks (id VARCHAR(255) PRIMARY KEY, room_id VARCHAR(255) NOT NULL, kind VARCHAR(32) NOT NULL DEFAULT 'blocked', start_date DATE NOT NULL, end_date DATE NOT NULL, note VARCHAR(255) NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (business_id), INDEX (room_id))");
   $db->query("CREATE TABLE IF NOT EXISTS resort_folio (id VARCHAR(255) PRIMARY KEY, booking_id VARCHAR(255) NOT NULL, room_id VARCHAR(255) NULL, kind VARCHAR(32) NOT NULL DEFAULT 'service', amount DECIMAL(12,2) NOT NULL DEFAULT 0, note VARCHAR(255) NULL, ref_id VARCHAR(255) NULL, user_id VARCHAR(255) NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (booking_id), INDEX (business_id))");
   $db->query("CREATE TABLE IF NOT EXISTS resort_payments (id VARCHAR(255) PRIMARY KEY, booking_id VARCHAR(255) NOT NULL, method VARCHAR(32) NOT NULL DEFAULT 'cash', status VARCHAR(32) NOT NULL DEFAULT 'pending', amount DECIMAL(12,2) NOT NULL DEFAULT 0, gateway_ref VARCHAR(120) NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (booking_id), INDEX (business_id))");
   $db->query("CREATE TABLE IF NOT EXISTS resort_audit (id VARCHAR(255) PRIMARY KEY, action VARCHAR(64) NOT NULL, detail VARCHAR(500) NULL, user_id VARCHAR(255) NULL, user_name VARCHAR(180) NULL, business_id VARCHAR(255) NOT NULL, created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), INDEX (business_id))");
+  @$db->query("ALTER TABLE resort_rooms ADD COLUMN floor VARCHAR(32) NULL");
 }
 
 function pos_resort_clip($v, $n) {
@@ -171,7 +172,7 @@ function pos_resort_price($room, $stay, $settings) {
 }
 
 function pos_resort_rooms($bid) {
-  return pos_q("SELECT * FROM resort_rooms WHERE business_id=? ORDER BY number", "s", [$bid]);
+  return pos_q("SELECT * FROM resort_rooms WHERE business_id=? ORDER BY (floor IS NULL OR floor=''), floor, number", "s", [$bid]);
 }
 
 function pos_resort_bookings($bid) {
@@ -346,6 +347,7 @@ function pos_resort_decorate($rows, $rooms) {
   foreach ($rows as &$row) {
     $room = $map[$row["room_id"]] ?? null;
     $row["room_no"] = $room["number"] ?? $row["room_id"];
+    $row["room_floor"] = $room["floor"] ?? "";
   }
   return $rows;
 }
@@ -450,6 +452,7 @@ function pos_resort_staff_dispatch($path, $method, $body, $bid, $auth) {
     $existing = pos_q("SELECT id FROM resort_rooms WHERE id=? AND business_id=?", "ss", [$id, $bid]);
     $vals = [
       pos_resort_clip($body["number"] ?? "", 32),
+      pos_resort_clip($body["floor"] ?? "", 32),
       pos_resort_clip($body["name"] ?? "", 180),
       pos_resort_clip($body["category"] ?? "standard", 64),
       pos_resort_num($body["max_adults"] ?? 2, 2),
@@ -463,14 +466,14 @@ function pos_resort_staff_dispatch($path, $method, $body, $bid, $auth) {
     ];
     if ($existing) {
       pos_q(
-        "UPDATE resort_rooms SET number=?, name=?, category=?, max_adults=?, max_children=?, rate=?, weekday_rate=?, weekend_rate=?, physical_status=?, hk_status=?, active=? WHERE id=? AND business_id=?",
-        "sssdddddssiss",
+        "UPDATE resort_rooms SET number=?, floor=?, name=?, category=?, max_adults=?, max_children=?, rate=?, weekday_rate=?, weekend_rate=?, physical_status=?, hk_status=?, active=? WHERE id=? AND business_id=?",
+        "ssssdddddssiss",
         array_merge($vals, [$id, $bid])
       );
     } else {
       pos_q(
-        "INSERT INTO resort_rooms (id, number, name, category, max_adults, max_children, rate, weekday_rate, weekend_rate, physical_status, hk_status, active, business_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        "ssssdddddssis",
+        "INSERT INTO resort_rooms (id, number, floor, name, category, max_adults, max_children, rate, weekday_rate, weekend_rate, physical_status, hk_status, active, business_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "sssssdddddssis",
         array_merge([$id], $vals, [$bid])
       );
     }
