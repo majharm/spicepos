@@ -52,7 +52,7 @@
       <span class="room-no">${escapeHtml(room.number || "—")}</span>
       <span class="room-cat"><strong>${escapeHtml(category)}</strong>${extra}${badge(room.physical_status)}</span>
       <span class="room-rate">${rateText(room.rate)}</span>
-      <span class="room-ready">${escapeHtml(readinessLabel(room.hk_status))}${inactive ? `<em>Off</em>` : ""}</span>
+      <span class="room-ready is-${escapeHtml(R()?.statusId?.(room.hk_status) || "ready")}">${escapeHtml(readinessLabel(room.hk_status))}${inactive ? `<em>Off</em>` : ""}</span>
     </button>`;
   }
   function tableHtml(rows, keys) {
