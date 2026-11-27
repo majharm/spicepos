@@ -74,7 +74,7 @@ body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none !important; }
 .room-head,
 .room-row {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto auto;
+  grid-template-columns: 48px minmax(36px, 72px) minmax(0, 1fr) auto auto;
   gap: 8px 10px;
   align-items: center;
 }
@@ -97,6 +97,15 @@ body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none !important; }
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
+.room-floor-no {
+  font-size: 13px;
+  font-weight: 800;
+  color: #44403c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-floor-no.is-empty { color: #a8a29e; font-weight: 700; }
 .room-cat { min-width: 0; }
 .room-cat strong,
 .room-cat span {
@@ -189,7 +198,7 @@ body:not(.resort-mode) .resort-only:not(.nav-btn) { display: none !important; }
     color: #fff;
   }
   .room-head,
-  .room-row { grid-template-columns: 44px minmax(0, 1fr) auto auto; }
+  .room-row { grid-template-columns: 40px minmax(44px, 68px) minmax(0, 1fr) auto auto; }
 }
 .resort-card.is-on,
 .resort-card:hover { border-color: #1f4d3a; background: #eef6f1; }

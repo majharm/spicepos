@@ -325,6 +325,7 @@
     return {
       id: room.id,
       number: room.number || room.room_no,
+      floor: String(room.floor || "").trim(),
       name: room.name || room.room_name || room.number,
       category: room.category,
       category_label: categoryLabel(room.category),
@@ -813,6 +814,42 @@
     return nights >= min && nights <= max;
   }
 
+  function floorLabel(floor) {
+    const raw = String(floor ?? "").trim();
+    if (!raw) return "";
+    if (/^\d+$/.test(raw)) return `Floor ${raw}`;
+    return raw;
+  }
+
+  function compareTuple(a, b) {
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] < b[i]) return -1;
+      if (a[i] > b[i]) return 1;
+    }
+    return 0;
+  }
+
+  function floorRank(floor) {
+    const key = String(floor ?? "").trim().toLowerCase();
+    if (!key) return [3, 0, ""];
+    if (/^(g|gf|ground|ground floor)$/.test(key)) return [0, 0, key];
+    if (/^\d+$/.test(key)) return [1, Number(key), ""];
+    return [2, 0, key];
+  }
+
+  function compareRooms(a, b) {
+    const byFloor = compareTuple(floorRank(a?.floor), floorRank(b?.floor));
+    if (byFloor) return byFloor;
+    const left = String(a?.number ?? "");
+    const right = String(b?.number ?? "");
+    const leftNo = left.match(/\d+/);
+    const rightNo = right.match(/\d+/);
+    return compareTuple(
+      [leftNo ? Number(leftNo[0]) : Number.MAX_SAFE_INTEGER, left.toLowerCase()],
+      [rightNo ? Number(rightNo[0]) : Number.MAX_SAFE_INTEGER, right.toLowerCase()],
+    );
+  }
+
   return {
     ROOM_CATEGORIES,
     PHYSICAL_STATUSES,
@@ -872,5 +909,7 @@
     bookingRef,
     holdMinutes,
     minStayOk,
+    floorLabel,
+    compareRooms,
   };
 });

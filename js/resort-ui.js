@@ -41,15 +41,27 @@
     return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: whole ? 0 : 2, minimumFractionDigits: whole ? 0 : 2 })}`;
   }
   function roomHead() {
-    return `<div class="room-head" aria-hidden="true"><span>Room</span><span>Category</span><span>Rate</span><span>Readiness</span></div>`;
+    return `<div class="room-head" aria-hidden="true"><span>Room</span><span>Floor</span><span>Category</span><span>Rate</span><span>Readiness</span></div>`;
+  }
+  function floorCell(floor) {
+    const raw = String(floor || "").trim();
+    return raw || "—";
+  }
+  function roomWhere(row) {
+    const no = row?.room_no || row?.number || "";
+    const floor = R()?.floorLabel?.(row?.room_floor || row?.floor) || "";
+    if (!no && !floor) return "";
+    return floor ? `${no || "Room"} · ${floor}` : String(no);
   }
   function roomCard(room) {
     const category = R()?.categoryLabel?.(room.category) || room.category || "Room";
     const name = String(room.name || "").trim();
     const inactive = Number(room.active) === 0;
+    const floor = String(room.floor || "").trim();
     const extra = name && name.toLowerCase() !== String(category).toLowerCase() ? `<span>${escapeHtml(name)}</span>` : "";
     return `<button type="button" class="resort-card room-row${inactive ? " is-off" : ""}" data-room="${escapeHtml(room.id)}">
       <span class="room-no">${escapeHtml(room.number || "—")}</span>
+      <span class="room-floor-no${floor ? "" : " is-empty"}">${escapeHtml(floorCell(floor))}</span>
       <span class="room-cat"><strong>${escapeHtml(category)}</strong>${extra}${badge(room.physical_status)}</span>
       <span class="room-rate">${rateText(room.rate)}</span>
       <span class="room-ready is-${escapeHtml(R()?.statusId?.(room.hk_status) || "ready")}">${escapeHtml(readinessLabel(room.hk_status))}${inactive ? `<em>Off</em>` : ""}</span>
@@ -91,15 +103,16 @@
     const el = $("resort-rooms-grid");
     if (!el || !isResort()) return;
     const d = await api("/api/resort/rooms");
+    const rooms = [...(d.rooms || [])].sort((a, b) => R()?.compareRooms?.(a, b) || 0);
     const roomSel = $("rb-room");
     if (roomSel) {
       const current = roomSel.value;
-      roomSel.innerHTML = `<option value="">Choose a room</option>${(d.rooms || [])
-        .map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} · ${escapeHtml(R().categoryLabel(r.category))}${r.name ? ` · ${escapeHtml(r.name)}` : ""}</option>`)
+      roomSel.innerHTML = `<option value="">Choose a room</option>${rooms
+        .map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(roomWhere(r) || r.number)} · ${escapeHtml(R().categoryLabel(r.category))}${r.name ? ` · ${escapeHtml(r.name)}` : ""}</option>`)
         .join("")}`;
       if (current) roomSel.value = current;
     }
-    el.innerHTML = (d.rooms || []).length ? `${roomHead()}${(d.rooms || []).map(roomCard).join("")}` : `<p class="hint">Add rooms to start taking bookings.</p>`;
+    el.innerHTML = rooms.length ? `${roomHead()}${rooms.map(roomCard).join("")}` : `<p class="hint">Add rooms to start taking bookings.</p>`;
     el.querySelectorAll("[data-room]").forEach((btn) => {
       btn.onclick = () => fillRoom(d.rooms.find((r) => r.id === btn.dataset.room));
     });
@@ -131,6 +144,7 @@
     if (!room || !$("resort-room-form")) return;
     $("rr-id").value = room.id;
     $("rr-number").value = room.number || "";
+    if ($("rr-floor")) $("rr-floor").value = room.floor || "";
     $("rr-name").value = room.name || "";
     $("rr-category").value = room.category || "standard";
     $("rr-rate").value = room.rate || 0;
@@ -147,6 +161,7 @@
     const body = {
       id: $("rr-id")?.value,
       number: $("rr-number")?.value,
+      floor: $("rr-floor")?.value,
       name: $("rr-name")?.value,
       category: $("rr-category")?.value,
       rate: $("rr-rate")?.value,
@@ -192,7 +207,7 @@
         <strong>${escapeHtml(booking.guest_name || "Guest")}</strong>
         ${stayBadge(booking.status)}
       </div>
-      <span class="stay-meta">${escapeHtml(booking.booking_no || "Walk-in")} · Room ${escapeHtml(booking.room_no || "unassigned")}</span>
+      <span class="stay-meta">${escapeHtml(booking.booking_no || "Walk-in")} · Room ${escapeHtml(roomWhere(booking) || "unassigned")}</span>
       <span class="stay-meta">${escapeHtml(booking.check_in || "")} → ${escapeHtml(booking.check_out || "")}${nightText}</span>
       <span class="stay-meta">${escapeHtml(payLabel(booking.payment_status))} · Due ${money(Number.isFinite(due) ? due : 0)}</span>
     </article>`;
@@ -274,7 +289,7 @@
     if (!isResort()) return;
     const d = await api("/api/resort/bookings?filter=desk");
     if ($("resort-desk-arrivals")) $("resort-desk-arrivals").innerHTML = (d.arrivals || [])
-      .map((b) => `<button type="button" class="resort-card" data-checkin="${escapeHtml(b.id)}"><span>${escapeHtml(b.booking_no)}</span><strong>${escapeHtml(b.guest_name)}</strong><span>${escapeHtml(b.room_no || "")} · ${escapeHtml(b.check_in)}</span></button>`)
+      .map((b) => `<button type="button" class="resort-card" data-checkin="${escapeHtml(b.id)}"><span>${escapeHtml(b.booking_no)}</span><strong>${escapeHtml(b.guest_name)}</strong><span>${escapeHtml(roomWhere(b))} · ${escapeHtml(b.check_in)}</span></button>`)
       .join("") || `<p class="hint">No arrivals today.</p>`;
     if ($("resort-desk-house")) $("resort-desk-house").innerHTML = (d.in_house || [])
       .map((b) => `<button type="button" class="resort-card" data-checkout="${escapeHtml(b.id)}"><span>${escapeHtml(b.booking_no)}</span><strong>${escapeHtml(b.guest_name)}</strong><span>Due ${money(b.due)}</span></button>`)
@@ -303,10 +318,11 @@
     const el = $("resort-hk-grid");
     if (!el || !isResort()) return;
     const d = await api("/api/resort/housekeeping");
-    el.innerHTML = (d.rooms || [])
+    const rooms = [...(d.rooms || [])].sort((a, b) => R()?.compareRooms?.(a, b) || 0);
+    el.innerHTML = rooms
       .map(
         (r) => `<button type="button" class="resort-card" data-hk="${escapeHtml(r.id)}" data-status="${escapeHtml(r.hk_status || "dirty")}">
-          <span>${escapeHtml(r.number)}</span>${badge(r.physical_status)}${badge(r.hk_status || "dirty")}
+          <span>${escapeHtml(roomWhere(r) || r.number)}</span>${badge(r.physical_status)}${badge(r.hk_status || "dirty")}
         </button>`,
       )
       .join("");
