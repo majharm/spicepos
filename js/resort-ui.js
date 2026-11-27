@@ -30,6 +30,27 @@
     const label = R()?.physicalLabel?.(id) || R()?.categoryLabel?.(id) || id;
     return `<span class="resort-badge status-${escapeHtml(id)}">${escapeHtml(label)}</span>`;
   }
+  function readinessLabel(status) {
+    const id = R()?.statusId?.(status) || "ready";
+    const row = (R()?.HOUSEKEEPING_STATUSES || []).find((item) => item.id === id);
+    return row?.label || "Ready";
+  }
+  function roomCard(room) {
+    const category = R()?.categoryLabel?.(room.category) || room.category || "Room";
+    const name = String(room.name || "").trim();
+    const title = name || category;
+    const inactive = Number(room.active) === 0;
+    return `<button type="button" class="resort-card room-card${inactive ? " is-off" : ""}" data-room="${escapeHtml(room.id)}">
+      <span class="room-no">${escapeHtml(room.number || "—")}</span>
+      <span class="room-title">${escapeHtml(title)}</span>
+      <span class="room-facts">
+        <span class="room-fact"><span>Category</span><strong>${escapeHtml(category)}</strong></span>
+        <span class="room-fact"><span>Rate</span><strong>${money(room.rate)}</strong></span>
+        <span class="room-fact"><span>Readiness</span><strong>${escapeHtml(readinessLabel(room.hk_status))}</strong></span>
+      </span>
+      <span class="room-status">${badge(room.physical_status)}${inactive ? `<span class="resort-badge">Inactive</span>` : ""}</span>
+    </button>`;
+  }
   function tableHtml(rows, keys) {
     if (!rows?.length) return `<p class="hint">No rows yet.</p>`;
     const cols = keys || Object.keys(rows[0]).filter((k) => !/json|password|id_number/.test(k)).slice(0, 8);
@@ -74,21 +95,34 @@
         .join("")}`;
       if (current) roomSel.value = current;
     }
-    el.innerHTML = (d.rooms || [])
-      .map(
-        (r) => `<button type="button" class="resort-card" data-room="${escapeHtml(r.id)}">
-          <span>${escapeHtml(r.number)}</span>
-          <strong>${escapeHtml(r.name || R().categoryLabel(r.category))}</strong>
-          ${badge(r.physical_status)} ${badge(r.hk_status || "ready")}
-          <span>${money(r.rate)}</span>
-        </button>`,
-      )
-      .join("") || `<p class="hint">Add rooms to start taking bookings.</p>`;
+    el.innerHTML = (d.rooms || []).map(roomCard).join("") || `<p class="hint">Add rooms to start taking bookings.</p>`;
     el.querySelectorAll("[data-room]").forEach((btn) => {
       btn.onclick = () => fillRoom(d.rooms.find((r) => r.id === btn.dataset.room));
     });
   }
 
+  function openRoomEditor() {
+    const editor = $("resort-room-editor");
+    if (editor) editor.open = true;
+    editor?.scrollIntoView?.({ block: "nearest" });
+  }
+  function markRoom(id) {
+    document.querySelectorAll("#resort-rooms-grid [data-room]").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.room === id);
+    });
+  }
+  function blankRoom() {
+    const form = $("resort-room-form");
+    form?.reset();
+    if ($("rr-id")) $("rr-id").value = "";
+    if ($("rr-adults")) $("rr-adults").value = "2";
+    if ($("rr-children")) $("rr-children").value = "1";
+    if ($("rr-active")) $("rr-active").checked = true;
+    markRoom("");
+    hint("resort-room-hint", "");
+    openRoomEditor();
+    $("rr-number")?.focus();
+  }
   function fillRoom(room) {
     if (!room || !$("resort-room-form")) return;
     $("rr-id").value = room.id;
@@ -100,6 +134,8 @@
     $("rr-children").value = room.max_children || 1;
     $("rr-status").value = room.physical_status || "available";
     $("rr-active").checked = Number(room.active) !== 0;
+    markRoom(room.id);
+    openRoomEditor();
   }
 
   async function saveRoom(ev) {
@@ -347,6 +383,7 @@
     if (report) loadReport(report.dataset.resortReport);
   });
   $("resort-room-form")?.addEventListener("submit", saveRoom);
+  $("resort-room-new")?.addEventListener("click", blankRoom);
   $("resort-walkin-form")?.addEventListener("submit", saveWalkIn);
   $("resort-book-filter")?.addEventListener("change", () => loadBookings());
   document.addEventListener("click", (ev) => {
