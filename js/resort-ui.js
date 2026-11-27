@@ -35,20 +35,24 @@
     const row = (R()?.HOUSEKEEPING_STATUSES || []).find((item) => item.id === id);
     return row?.label || "Ready";
   }
+  function rateText(amount) {
+    const value = Number(amount) || 0;
+    const whole = Math.abs(value - Math.round(value)) < 0.001;
+    return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: whole ? 0 : 2, minimumFractionDigits: whole ? 0 : 2 })}`;
+  }
+  function roomHead() {
+    return `<div class="room-head" aria-hidden="true"><span>Room</span><span>Category</span><span>Rate</span><span>Readiness</span></div>`;
+  }
   function roomCard(room) {
     const category = R()?.categoryLabel?.(room.category) || room.category || "Room";
     const name = String(room.name || "").trim();
-    const title = name || category;
     const inactive = Number(room.active) === 0;
-    return `<button type="button" class="resort-card room-card${inactive ? " is-off" : ""}" data-room="${escapeHtml(room.id)}">
+    const extra = name && name.toLowerCase() !== String(category).toLowerCase() ? `<span>${escapeHtml(name)}</span>` : "";
+    return `<button type="button" class="resort-card room-row${inactive ? " is-off" : ""}" data-room="${escapeHtml(room.id)}">
       <span class="room-no">${escapeHtml(room.number || "—")}</span>
-      <span class="room-title">${escapeHtml(title)}</span>
-      <span class="room-facts">
-        <span class="room-fact"><span>Category</span><strong>${escapeHtml(category)}</strong></span>
-        <span class="room-fact"><span>Rate</span><strong>${money(room.rate)}</strong></span>
-        <span class="room-fact"><span>Readiness</span><strong>${escapeHtml(readinessLabel(room.hk_status))}</strong></span>
-      </span>
-      <span class="room-status">${badge(room.physical_status)}${inactive ? `<span class="resort-badge">Inactive</span>` : ""}</span>
+      <span class="room-cat"><strong>${escapeHtml(category)}</strong>${extra}${badge(room.physical_status)}</span>
+      <span class="room-rate">${rateText(room.rate)}</span>
+      <span class="room-ready">${escapeHtml(readinessLabel(room.hk_status))}${inactive ? `<em>Off</em>` : ""}</span>
     </button>`;
   }
   function tableHtml(rows, keys) {
@@ -95,7 +99,7 @@
         .join("")}`;
       if (current) roomSel.value = current;
     }
-    el.innerHTML = (d.rooms || []).map(roomCard).join("") || `<p class="hint">Add rooms to start taking bookings.</p>`;
+    el.innerHTML = (d.rooms || []).length ? `${roomHead()}${(d.rooms || []).map(roomCard).join("")}` : `<p class="hint">Add rooms to start taking bookings.</p>`;
     el.querySelectorAll("[data-room]").forEach((btn) => {
       btn.onclick = () => fillRoom(d.rooms.find((r) => r.id === btn.dataset.room));
     });
