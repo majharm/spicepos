@@ -1590,7 +1590,7 @@ const ALERT_DEFS = [
     key: "closing",
     flag: "alert_closing",
     title: "Closing sales summary",
-    blurb: "Once per shop per day after the closing hour (shop timezone).",
+    blurb: "Once per shop per day after the closing hour. Hour 0 sends at 00:01 for the day that just ended.",
     channels: "WhatsApp · Email",
     placeholders: "{{shop}} {{day}} {{bills}} {{takings}} {{cash}} {{upi}} {{card}} {{credit}} {{gst}} {{lowStock}}",
   },
@@ -2074,8 +2074,8 @@ function alertsFormHtml(alerts = {}) {
               d.key === "closing"
                 ? `<fieldset class="item-block">
                     <legend>Schedule</legend>
-                    <label>Closing hour (0–23)
-                      <input name="alert_closing_hour" type="number" min="0" max="23" value="${attr(alerts.alert_closing_hour || "22")}" />
+                    <label>Closing hour (0 sends at 00:01)
+                      <input name="alert_closing_hour" type="number" min="0" max="23" value="${attr(alerts.alert_closing_hour == null || alerts.alert_closing_hour === "" ? "22" : alerts.alert_closing_hour)}" />
                     </label>
                   </fieldset>`
                 : ""

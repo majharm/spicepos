@@ -612,12 +612,27 @@ export function addYmd(ymd, days) {
   return `${y}-${m}-${dd}`;
 }
 
-export function closingAlertDay(hour, closeHour, todayYmd) {
+export function closingHour(value, fallback = 22) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  const hour = Math.trunc(n);
+  if (hour < 0 || hour > 23) return fallback;
+  return hour;
+}
+
+/** Day the closing summary covers. Hour 0 waits until 00:01 and covers the day that just ended. */
+export function closingAlertDay(hour, closeHour, todayYmd, minute = 0) {
   const today = expiryYmd(todayYmd);
   const h = Number(hour);
   const close = Number(closeHour);
-  if (!today) return "";
-  if (Number.isFinite(h) && Number.isFinite(close) && h < close) return addYmd(today, -1);
+  const min = Number(minute);
+  if (!today || !Number.isFinite(h) || !Number.isFinite(close)) return "";
+  if (close === 0) {
+    if (h === 0 && (!Number.isFinite(min) || min < 1)) return "";
+    return addYmd(today, -1);
+  }
+  if (h < close) return addYmd(today, -1);
   return today;
 }
 
@@ -866,7 +881,7 @@ export async function loadAlertSettings() {
     alert_renewal_before: flagOn(map.alert_renewal_before, true) ? "1" : "0",
     alert_renewal_expired: flagOn(map.alert_renewal_expired, true) ? "1" : "0",
     alert_backup_email: flagOn(map.alert_backup_email, true) ? "1" : "0",
-    alert_closing_hour: String(Math.min(23, Math.max(0, Number(map.alert_closing_hour ?? 22) || 22))),
+    alert_closing_hour: String(closingHour(map.alert_closing_hour, 22)),
     smtp_enabled: flagOn(map.smtp_enabled, true) ? "1" : "0",
     smtp_host: map.smtp_host || DEFAULT_SMTP_HOST,
     smtp_port: String(Number(map.smtp_port || 465) || 465),
@@ -937,7 +952,7 @@ export async function saveAlertSettings(body = {}) {
   ]) {
     next[key] = flagOn(next[key], true) ? "1" : "0";
   }
-  next.alert_closing_hour = String(Math.min(23, Math.max(0, Number(next.alert_closing_hour) || 22)));
+  next.alert_closing_hour = String(closingHour(next.alert_closing_hour, 22));
   next.wa_country_code = (next.wa_country_code || WA_DEFAULT_COUNTRY).replace(/\D/g, "").slice(0, 3) || WA_DEFAULT_COUNTRY;
   next.smtp_enabled = flagOn(next.smtp_enabled, true) ? "1" : "0";
   next.smtp_secure = flagOn(next.smtp_secure, Number(next.smtp_port) === 465) ? "1" : "0";
@@ -1318,6 +1333,13 @@ async function markSent(businessId, kind, day, itemId = "") {
     if (/duplicate/i.test(String(err.message || err))) return false;
     throw err;
   }
+}
+
+async function unmarkSent(businessId, kind, day, itemId = "") {
+  await query(
+    "DELETE FROM alert_sends WHERE business_id = ? AND kind = ? AND item_id = ? AND send_day = ?",
+    [businessId, kind, itemId || "", day],
+  );
 }
 
 async function alreadySent(businessId, kind, day, itemId = "") {
@@ -1753,6 +1775,14 @@ function hourInZone(timeZone) {
   return Number(hour);
 }
 
+function minuteInZone(timeZone) {
+  const minute = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timeZone || "Asia/Kolkata",
+    minute: "numeric",
+  }).format(new Date());
+  return Number(minute);
+}
+
 async function businessAdminPhones(businessId) {
   const phones = [];
   const push = (raw) => {
@@ -1786,11 +1816,12 @@ export async function sendClosingAlerts(businessId, { force = false } = {}) {
   if (!shop.businessId) return { skipped: true };
   if (!shop.phones.length && !shop.emails.length) return { skipped: true, reason: "no-number" };
   const hour = hourInZone(shop.timezone);
-  const closeHour = Number(settings.alert_closing_hour) || 22;
+  const minute = minuteInZone(shop.timezone);
+  const closeHour = closingHour(settings.alert_closing_hour, 22);
   const today = ymdInZone(shop.timezone);
-  const day = force ? today : closingAlertDay(hour, closeHour, today);
-  if (!day) return { skipped: true };
-  if (!force && (await alreadySent(shop.businessId, "closing", day, ""))) return { skipped: true, reason: "already-sent" };
+  const day = force ? today : closingAlertDay(hour, closeHour, today, minute);
+  if (!day) return { skipped: true, reason: "not-due" };
+  if (!force && !(await markSent(shop.businessId, "closing", day, ""))) return { skipped: true, reason: "already-sent" };
   const [sum] = await query(
     `SELECT COUNT(*) AS bills,
             COALESCE(SUM(total),0) AS takings,
@@ -1826,16 +1857,22 @@ export async function sendClosingAlerts(businessId, { force = false } = {}) {
     },
     settings,
   );
-  const out = await dispatchAlert({
-    phones: shop.phones,
-    emails: shop.emails,
-    subject: `Closing sales · ${shop.shopName} · ${day}`,
-    text,
-    kind: "closing",
-    businessId: shop.businessId,
-    shopName: shop.shopName,
-  });
-  if (!force && alertDelivered(out)) await markSent(shop.businessId, "closing", day, "");
+  let out;
+  try {
+    out = await dispatchAlert({
+      phones: shop.phones,
+      emails: shop.emails,
+      subject: `Closing sales · ${shop.shopName} · ${day}`,
+      text,
+      kind: "closing",
+      businessId: shop.businessId,
+      shopName: shop.shopName,
+    });
+  } catch (err) {
+    if (!force) await unmarkSent(shop.businessId, "closing", day, "").catch(() => {});
+    throw err;
+  }
+  if (!force && !alertDelivered(out)) await unmarkSent(shop.businessId, "closing", day, "");
   return out;
 }
 
@@ -2219,6 +2256,7 @@ export function startAlertScheduler() {
     try {
       // PHP health and /api/cron drive scheduled reports. This process asks PHP to run them.
       kickPhpCron();
+      await tickAllClosingAlerts();
       await runBackupEmailTick();
     } catch (err) {
       console.error("alert scheduler:", err.message);

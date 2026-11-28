@@ -1392,11 +1392,37 @@ function pos_add_ymd($ymd, $days) {
   return gmdate("Y-m-d", $ts);
 }
 
-function pos_closing_alert_day($hour, $closeHour, $todayYmd) {
+function pos_closing_hour($value, $fallback = 22) {
+  if ($value === null || trim((string) $value) === "" || !is_numeric($value)) return $fallback;
+  $hour = (int) $value;
+  if ($hour < 0 || $hour > 23) return $fallback;
+  return $hour;
+}
+
+function pos_closing_alert_day($hour, $closeHour, $todayYmd, $minute = 0) {
   $today = pos_expiry_ymd($todayYmd);
   if ($today === "") return "";
-  if ((int) $hour < (int) $closeHour) return pos_add_ymd($today, -1);
+  $h = (int) $hour;
+  $close = (int) $closeHour;
+  $min = (int) $minute;
+  if ($close === 0) {
+    if ($h === 0 && $min < 1) return "";
+    return pos_add_ymd($today, -1);
+  }
+  if ($h < $close) return pos_add_ymd($today, -1);
   return $today;
+}
+
+function pos_alert_unmark($bid, $kind, $day, $itemId = "") {
+  try {
+    pos_q(
+      "DELETE FROM alert_sends WHERE business_id = ? AND kind = ? AND item_id = ? AND send_day = ?",
+      "ssss",
+      [$bid, $kind, $itemId, $day]
+    );
+  } catch (Throwable $e) {
+    /* a failed send can retry on the next tick */
+  }
 }
 
 function pos_send_closing_alert($bid, $force = false) {
@@ -1420,11 +1446,12 @@ function pos_send_closing_alert($bid, $force = false) {
   }
   $now = new DateTime("now", $tz);
   $hour = (int) $now->format("G");
-  $close = (int) $cfg["alert_closing_hour"];
+  $minute = (int) $now->format("i");
+  $close = pos_closing_hour($cfg["alert_closing_hour"], 22);
   $today = $now->format("Y-m-d");
-  $day = $force ? $today : pos_closing_alert_day($hour, $close, $today);
-  if ($day === "") return ["skipped" => true];
-  if (!$force && pos_alert_sent($shop["businessId"], "closing", $day, "")) return ["skipped" => true, "reason" => "already-sent"];
+  $day = $force ? $today : pos_closing_alert_day($hour, $close, $today, $minute);
+  if ($day === "") return ["skipped" => true, "reason" => "not-due"];
+  if (!$force && !pos_alert_mark($shop["businessId"], "closing", $day, "")) return ["skipped" => true, "reason" => "already-sent"];
   $sum = pos_q(
     "SELECT COUNT(*) AS bills,
             COALESCE(SUM(total),0) AS takings,
@@ -1460,7 +1487,7 @@ function pos_send_closing_alert($bid, $force = false) {
     "lowStock" => $low,
   ], $cfg);
   $out = pos_alert_dispatch($shop["phones"], $shop["emails"], "Closing sales · {$shop["shopName"]} · {$day}", $text, "", "", pos_alert_log_meta("closing", $shop));
-  if (!$force && pos_alert_delivered($out)) pos_alert_mark($shop["businessId"], "closing", $day, "");
+  if (!$force && !pos_alert_delivered($out)) pos_alert_unmark($shop["businessId"], "closing", $day, "");
   return $out;
 }
 
@@ -1701,6 +1728,18 @@ function pos_send_one_manual_alert($kind, $biz, $shop, $admin, $cfg, $support, $
     return pos_alert_dispatch($shop["phones"], $shop["emails"], $subject, $text, "", "", pos_alert_log_meta($kind, $shop, ["shopName" => $name]));
   }
   return ["skipped" => true, "reason" => "unknown-kind"];
+}
+
+function pos_tick_closing_alerts() {
+  foreach (pos_q("SELECT id FROM businesses WHERE COALESCE(status,'active') = 'active'") as $s) {
+    try {
+      if (function_exists("pos_apply_business_timezone")) pos_apply_business_timezone($s["id"]);
+      pos_send_closing_alert($s["id"]);
+    } catch (Throwable $e) {
+      error_log("closing alert tick failed: " . $e->getMessage());
+    }
+  }
+  return ["ok" => true];
 }
 
 function pos_tick_shop_alerts($bid = null) {
