@@ -208,7 +208,7 @@ export function attachAuth(req, res, next) {
   const token = cookies(req).pos_sid;
   const masterToken = cookies(req).pos_master;
   const path = canonApiUrl(req.originalUrl || "", req.headers["x-pos-path"]).split("?")[0];
-  const wantMaster = path.startsWith("/api/master");
+  const wantMaster = path.startsWith("/api/master") || path.startsWith("/api/v1");
   Promise.resolve()
     .then(async () => {
       req.auth = null;

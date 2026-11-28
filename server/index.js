@@ -64,6 +64,7 @@ import { registerOnlineStorePublic, registerOnlineStoreStaff, registerOnlineStor
 import { registerEcommercePublic, registerEcommerceStaff, registerEcommerceMaster, ensureEcommerceSchema } from "./ecommerce.js";
 import { registerAggregatorPublic, registerAggregatorStaff } from "./aggregator.js";
 import { registerAutomationSettings } from "./automation-settings.js";
+import { registerApiV1 } from "./api-v1.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -246,6 +247,7 @@ app.use((req, res, next) => {
     url.startsWith("/api/quotations/public") ||
     url.startsWith("/api/health") ||
     url.startsWith("/api/master") ||
+    url.startsWith("/api/v1") ||
     url.startsWith("/api/analytics") ||
     url.startsWith("/api/seo") ||
     url.startsWith("/api/login-page") ||
@@ -256,6 +258,7 @@ app.use((req, res, next) => {
   return requireStaff(req, res, next);
 });
 registerMaster(app);
+registerApiV1(app);
 registerSyncEngine(app);
 registerOnlineStoreMaster(app);
 registerEcommerceMaster(app);

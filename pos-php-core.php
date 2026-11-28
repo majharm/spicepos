@@ -4432,6 +4432,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
       pos_send(200, pos_sync_batch($staff, is_array($body) ? $body : []));
     }
 
+    if ($path === "v1" || strpos($path, "v1/") === 0) {
+      require_once __DIR__ . "/pos-api-v1.php";
+      pos_api_v1_dispatch($path, $method);
+      return;
+    }
+
     $auth = pos_require_master($path);
 
     if ((strpos($path, "master/support-tickets") === 0 || strpos($path, "master/support-chat") === 0) && is_file(__DIR__ . "/pos-support-tickets.php")) {
