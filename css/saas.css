@@ -2303,6 +2303,27 @@ body.dev-mode .session-bar::after {
 .master-main table.data tbody tr:last-child td {
   border-bottom: 0;
 }
+.api-doc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 14px;
+}
+.api-doc-base,
+.api-doc-url {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+.api-doc-base {
+  flex: 1 1 220px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  background: #f8fafc;
+}
 .master-embed-desk .settings-tabs,
 .master-embed-desk .ga-tabs,
 .master-embed-desk .seo-tabs {

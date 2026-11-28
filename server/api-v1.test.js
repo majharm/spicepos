@@ -44,4 +44,8 @@ test("Node and PHP publish the same v1 paths behind master auth", () => {
   assert.match(core, /pos_api_v1_dispatch\(\$path, \$method\)/);
   assert.match(php, /Master admin sign in required/);
   assert.match(node, /requireMaster/);
+  assert.match(read("master.html"), /data-tab="api-doc"/);
+  assert.match(read("js/master.js"), /tab === "api-doc"/);
+  assert.match(read("js/master.js"), /\/dashboard\/overview/);
+  assert.match(read("css/saas.css"), /\.api-doc-base/);
 });

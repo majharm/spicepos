@@ -217,7 +217,7 @@ function showLogin(on) {
 }
 
 const NAV_FAMILIES = {
-  main: ["dash", "live", "ipmap", "bizmap", "sync", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health"],
+  main: ["dash", "live", "ipmap", "bizmap", "sync", "profile", "biz", "users", "plans", "fees", "dsa-sales", "offer-profit", "health", "api-doc"],
   alerts: ["expiry", "alert-log"],
   people: ["managers", "staff", "support", "tickets", "chat"],
   advance: ["advance", "backup", "languages", "notes", "automation", "branches", "devices", "audit", "customers"],
@@ -230,6 +230,7 @@ const PAGE_HINTS = {
   dash: "Shops, sales, and who is signed in",
   fees: "Yearly plan fees stored on each shop",
   health: "Database and process status from this server",
+  "api-doc": "Read-only JSON endpoints for Master Admin",
   live: "Online only after a real click or keypress",
   ipmap: "Website visitors plotted by address",
   bizmap: "Business admins plotted by approximate IP location",
@@ -306,6 +307,7 @@ const MASTER_PAGES = [
   { tab: "dash", title: "Overview", keywords: "home shops overview sales revenue dashboard" },
   { tab: "fees", title: "Payments", keywords: "fees yearly plan billing" },
   { tab: "health", title: "System monitoring", keywords: "health database status" },
+  { tab: "api-doc", title: "API", keywords: "json api endpoint v1 documentation" },
   { tab: "live", title: "Live active users", keywords: "online offline session heartbeat" },
   { tab: "ipmap", title: "Website traffic map", keywords: "ip geolocation map website traffic visitors country city globe" },
   { tab: "bizmap", title: "Business admin map", keywords: "business admin online offline heartbeat map country state city" },
@@ -2487,6 +2489,59 @@ async function renderMasterChat(body) {
   startSupportChatPoll();
 }
 
+const API_DOC_ROUTES = [
+  ["Overview", "/dashboard/overview"],
+  ["Live Users", "/users/live"],
+  ["Traffic Map", "/analytics/traffic-map"],
+  ["Business Map", "/businesses/map"],
+  ["Offline Sync", "/sync/status"],
+  ["Business", "/businesses"],
+  ["Users", "/users"],
+  ["Subscription", "/subscriptions"],
+  ["Plans", "/plans"],
+  ["Payments", "/payments"],
+  ["Revenue", "/analytics/revenue"],
+  ["Offers", "/offers"],
+  ["Profit", "/analytics/profit"],
+  ["Reports", "/reports"],
+  ["Monitoring", "/system/health"],
+  ["Activity Logs", "/logs/activity"],
+];
+
+function apiDocCatalog(payload) {
+  const data = payload?.data && Array.isArray(payload.data.routes) ? payload.data : payload;
+  if (data && Array.isArray(data.routes) && data.routes.length) return data;
+  const origin = typeof location !== "undefined" && location.origin ? location.origin : "https://pos.atavtelecom.in";
+  return {
+    public_base: `${origin}/api/v1`,
+    auth: "Master admin session (pos_master cookie)",
+    routes: API_DOC_ROUTES.map(([module, path]) => ({
+      module,
+      method: "GET",
+      path,
+      url: `${origin}/api/v1${path}`,
+    })),
+  };
+}
+
+function bindApiDocCopy(root) {
+  root.querySelectorAll("[data-copy-api]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const text = button.getAttribute("data-copy-api") || "";
+      const previous = button.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy blocked";
+      }
+      setTimeout(() => {
+        button.textContent = previous;
+      }, 1200);
+    });
+  });
+}
+
 async function render() {
   stopLivePoll();
   stopSupportChatPoll();
@@ -2502,6 +2557,7 @@ async function render() {
     biz: "Business management",
     fees: "Plan fees",
     health: "System monitoring",
+    "api-doc": "API",
     managers: "Account managers",
     users: "User management",
     staff: "Staff master",
@@ -2919,6 +2975,47 @@ async function render() {
         if (tab !== "sync" || document.hidden) return;
         api("/api/master/sync-status").then(paintSync).catch(() => {});
       }, 30000);
+    } else if (tab === "api-doc") {
+      let payload = null;
+      try {
+        payload = await api("/api/v1");
+      } catch {
+        payload = null;
+      }
+      if (tab !== "api-doc") return;
+      const catalog = apiDocCatalog(payload);
+      const base = catalog.public_base || `${location.origin}/api/v1`;
+      const rows = catalog.routes
+        .map((route) => {
+          const url = route.url || `${base}${route.path}`;
+          return `<tr>
+            <td>${attr(route.module)}</td>
+            <td>${attr(route.method || "GET")}</td>
+            <td class="api-doc-url">${attr(route.path)}</td>
+            <td class="api-doc-url">${attr(url)}</td>
+            <td><button type="button" class="btn" data-copy-api="${attr(url)}">Copy</button></td>
+          </tr>`;
+        })
+        .join("");
+      body.innerHTML = masterDesk(
+        "Platform",
+        "JSON API",
+        "Read-only endpoints for the modules on this desk. Stay signed in as Master Admin, then open any URL.",
+        [
+          { label: "Version", value: "v1" },
+          { label: "Endpoints", value: catalog.routes.length },
+        ],
+        `<p class="hint">${attr(catalog.auth || "Master admin session")}. Every call is GET.</p>
+        <div class="api-doc-bar">
+          <code class="api-doc-base" id="api-doc-base">${attr(base)}</code>
+          <button type="button" class="btn primary" data-copy-api="${attr(base)}">Copy base URL</button>
+        </div>
+        <div class="table-wrap"><table class="master-data data">
+          <thead><tr><th>Module</th><th>Method</th><th>Endpoint</th><th>URL</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>`,
+      );
+      bindApiDocCopy(body);
     } else if (tab === "health") {
       const [health, auditRows] = await Promise.all([
         api("/api/master/health"),
