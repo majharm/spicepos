@@ -214,7 +214,7 @@ test("recurring invoices stay behind the business switch and post through sales"
   assert.doesNotMatch(index, /id="set-recurring-invoices" checked/);
   assert.match(index, /js\/recurring\.js\?v=20261027rec1/);
   assert.match(index, /js\/recurring-ui\.js\?v=20261027rec3/);
-  assert.match(index, /pos\.css\?v=20261117stk3/);
+  assert.match(index, /pos\.css\?v=20261125unit1/);
   assert.match(index, /id="recur-filters"/);
   assert.match(index, /class="recur-stat-row"/);
   assert.match(ui, /settings-section/);
@@ -222,7 +222,7 @@ test("recurring invoices stay behind the business switch and post through sales"
   assert.match(read("css/pos.css"), /\.recur-stat-row/);
   assert.match(read("css/pos.css"), /\.recurring-desk \[hidden\]/);
   assert.match(app, /view === "recurring"\) btn\.hidden = !can\("orders"\)/);
-  assert.match(app, /state\.company = data\.company;\n  applyBusinessFlags\(data\.business\);\n  applyNav\(\)/);
+  assert.match(app, /state\.company = data\.company;\n  state\.resortMenu = data\.resortMenu \|\| \{ show_online_orders: 0 \};\n  applyBusinessFlags\(data\.business\);\n  applyNav\(\)/);
   assert.match(app, /POSRecurringUi\?\.load/);
   assert.match(read("js/biz-hub.js"), /view: "recurring"/);
   assert.doesNotMatch(read("js/biz-hub.js"), /desk: "recurring"/);

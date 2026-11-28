@@ -1644,7 +1644,7 @@ async function businessAdminAlertContacts(businessId) {
   try {
     admins = businessId
       ? await query(
-          "SELECT mobile, email, first_name FROM staff_users WHERE business_id = ? AND role = 'business_admin'",
+          "SELECT mobile, email, first_name FROM staff_users WHERE business_id = ? AND role = 'business_admin' AND COALESCE(status,'active') <> 'deleted'",
           [businessId],
         )
       : [];
@@ -1657,10 +1657,7 @@ async function businessAdminAlertContacts(businessId) {
     if (n && !phones.includes(n)) phones.push(n);
   };
   for (const row of admins) pushPhone(row.mobile);
-  if (!phones.length) {
-    pushPhone(biz?.mobile);
-    pushPhone(co?.phone);
-  }
+  if (!phones.length) pushPhone(biz?.mobile);
   const emails = [];
   const pushEmail = (raw) => {
     const email = String(raw || "").trim().toLowerCase();
@@ -1786,10 +1783,36 @@ function minuteInZone(timeZone) {
   return Number(minute);
 }
 
+async function businessAdminPhones(businessId) {
+  const phones = [];
+  const push = (raw) => {
+    const n = normalizeInMobile(raw);
+    if (n && !phones.includes(n)) phones.push(n);
+  };
+  let admins = [];
+  try {
+    admins = businessId
+      ? await query(
+          "SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin' AND COALESCE(status,'active') <> 'deleted' ORDER BY created_at",
+          [businessId],
+        )
+      : [];
+  } catch {
+    admins = [];
+  }
+  for (const row of admins) push(row.mobile);
+  if (!phones.length && businessId) {
+    const [biz] = await query("SELECT mobile FROM businesses WHERE id = ? LIMIT 1", [businessId]);
+    push(biz?.mobile);
+  }
+  return phones;
+}
+
 export async function sendClosingAlerts(businessId, { force = false } = {}) {
   const settings = await loadAlertSettings();
   if (!force && !flagOn(settings.alert_closing, true)) return { skipped: true };
   const shop = await shopContacts(businessId);
+  shop.phones = await businessAdminPhones(businessId);
   if (!shop.businessId) return { skipped: true };
   if (!shop.phones.length && !shop.emails.length) return { skipped: true, reason: "no-number" };
   const hour = hourInZone(shop.timezone);

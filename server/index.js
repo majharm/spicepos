@@ -41,6 +41,7 @@ import { sendLowStockAlerts, tickShopAlerts, startAlertScheduler, scheduleAlertT
 import { registerRecurring, startRecurringScheduler, ensureRecurringSchema } from "./recurring.js";
 import { registerQuotations, ensureQuotationSchema } from "./quotations.js";
 import { registerCrm, ensureCrmSchema } from "./crm.js";
+import { registerSupportTickets } from "./support-tickets.js";
 import { registerMailbox, ensureMailboxSchema, deliverInvoiceCopy } from "./mail-box.js";
 import { deliverInvoiceWhatsApp } from "./invoice-whatsapp.js";
 import { registerAdvanced, computeSaleLine, billedPrintQty, applySaleStock, applyLoyaltyOnSale, pharmacyLineSnapshot, enrichCatalogPharmacy, enrichCatalogBarcodes, saleStockQty, persistSaleLineNote, persistPrintSaleLine, assertApparelSaleStock } from "./advanced.js";
@@ -53,7 +54,7 @@ import { registerSalonPublic, registerSalonStaff, ensureSalonSchema } from "./sa
 import { registerPrintPublic, registerPrintStaff, ensurePrintSchema, attachPrintInvoiceLines } from "./print.js";
 import { registerGymPublic, registerGymStaff, ensureGymSchema } from "./gym.js";
 import { registerBarStaff, ensureBarSchema } from "./bar.js";
-import { registerResortPublic, registerResortStaff, ensureResortSchema } from "./resort.js";
+import { registerResortPublic, registerResortStaff, ensureResortSchema, resortMenuFlags } from "./resort.js";
 import { registerBrandStaff, ensureBrandSchema, listBrands } from "./brands.js";
 import { registerCustomerDedupeStaff, registerCustomerDedupeMaster, ensureCustomerDedupeSchema } from "./customers-dedupe.js";
 import "../js/discount.js";
@@ -62,6 +63,7 @@ import { registerQrPublic, registerQrStaff, ensureQrOrderSchema, linkQrOrderSale
 import { registerOnlineStorePublic, registerOnlineStoreStaff, registerOnlineStoreMaster, ensureOnlineStoreSchema } from "./online-store.js";
 import { registerEcommercePublic, registerEcommerceStaff, registerEcommerceMaster, ensureEcommerceSchema } from "./ecommerce.js";
 import { registerAggregatorPublic, registerAggregatorStaff } from "./aggregator.js";
+import { registerAutomationSettings } from "./automation-settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -438,6 +440,7 @@ app.get("/api/bootstrap", requireStaff, async (_req, res) => {
       combos,
       offers,
       offerSettings,
+      resortMenu: await resortMenuFlags(businessId, business).catch(() => ({ show_online_orders: 0 })),
     });
     scheduleShopAlerts(businessId);
   } catch (err) {
@@ -995,7 +998,9 @@ registerDueReminders(app);
 registerRecurring(app);
 registerQuotations(app);
 registerCrm(app);
+registerSupportTickets(app);
 registerMailbox(app);
+registerAutomationSettings(app);
 
 app.post("/api/checkout", requireStaff, requirePerm("counter"), async (req, res) => {
   const { customerId, paymentMethod, lines, packId, packCount, discount, discountType, discountValue, loyaltyPoints, offerIds } = req.body || {};

@@ -4,6 +4,7 @@ import { query } from "./db.js";
 import { bid, authUser } from "./context.js";
 import { nextSeq, round2 } from "./crud.js";
 import { isInterStateSupply, splitGstAmount } from "./gst-supply.js";
+import { normalizeRange, shopToday } from "./date-range.js";
 
 export const EXPENSE_COA = [
   { code: "5102", name: "Rent", account_group: "expense" },
@@ -42,13 +43,21 @@ export const DEFAULT_COA = [
 const CASH_CODES = new Set(["1001", "1002", "1003"]);
 
 function isoDate(value) {
-  if (!value) return new Date().toISOString().slice(0, 10);
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  const s = String(value).trim();
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return shopToday(value);
+  const s = String(value || "").trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  const d = new Date(s);
-  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  return new Date().toISOString().slice(0, 10);
+  return shopToday();
+}
+
+export const CASH_BOOKS = {
+  cash: ["1001"],
+  bank: ["1002", "1003"],
+  all: ["1001", "1002", "1003"],
+};
+
+export function cashBookCodes(book) {
+  const key = String(book || "all").trim().toLowerCase();
+  return CASH_BOOKS[key] || CASH_BOOKS.all;
 }
 
 function assetCodeForMethod(method) {
@@ -126,7 +135,7 @@ export async function postJournal(conn, opts) {
       journalId,
       businessId,
       voucherNo,
-      opts.voucherDate ? isoDate(opts.voucherDate) : new Date().toISOString().slice(0, 10),
+      isoDate(opts.voucherDate),
       opts.voucherType || "journal",
       opts.narration || null,
       opts.referenceType || null,
@@ -328,20 +337,47 @@ export async function replaceLedgerJournal(conn, { kind, amount, payment_method,
   return postReceiptJournal(conn, { amount, payment_method, entryNo, ledgerId });
 }
 
+function journalEventJoins() {
+  return `
+    LEFT JOIN sales_orders so ON j.reference_type = 'sales_order' AND so.id = j.reference_id AND so.business_id = j.business_id
+    LEFT JOIN purchases pu ON j.reference_type = 'purchase' AND pu.id = j.reference_id AND pu.business_id = j.business_id
+    LEFT JOIN expenses ex ON j.reference_type = 'expense' AND ex.id = j.reference_id AND ex.business_id = j.business_id`;
+}
+
+/** Bill, purchase, or expense date. Falls back to the voucher date for manual journals. */
+export function journalEventDateSql() {
+  return `CASE
+    WHEN j.reference_type = 'sales_order' AND so.created_at IS NOT NULL THEN DATE(so.created_at)
+    WHEN j.reference_type = 'purchase' AND pu.purchase_date IS NOT NULL THEN DATE(pu.purchase_date)
+    WHEN j.reference_type = 'expense' AND ex.expense_date IS NOT NULL THEN DATE(ex.expense_date)
+    ELSE j.voucher_date
+  END`;
+}
+
+function journalInForceSql() {
+  return `(j.reference_type <> 'sales_order' OR so.id IS NULL OR LOWER(COALESCE(so.status,'')) NOT IN ('cancelled','void'))`;
+}
+
 async function linesForPeriod(from, to, businessId = bid()) {
+  const span = normalizeRange(from, to);
+  const eventDate = journalEventDateSql();
   return query(
     `SELECT a.code, a.name, a.account_group,
-            COALESCE(SUM(l.debit),0) AS debit,
-            COALESCE(SUM(l.credit),0) AS credit
+            COALESCE(SUM(x.debit),0) AS debit,
+            COALESCE(SUM(x.credit),0) AS credit
      FROM chart_of_accounts a
-     LEFT JOIN journal_lines l ON l.account_id = a.id AND l.business_id = a.business_id
-     LEFT JOIN journal_entries j ON j.id = l.journal_id
-       AND j.business_id = a.business_id
-       AND j.voucher_date BETWEEN ? AND ?
+     LEFT JOIN (
+       SELECT l.account_id, l.business_id, l.debit, l.credit
+       FROM journal_lines l
+       JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+       ${journalEventJoins()}
+       WHERE ${eventDate} >= ? AND ${eventDate} < DATE_ADD(?, INTERVAL 1 DAY)
+         AND ${journalInForceSql()}
+     ) x ON x.account_id = a.id AND x.business_id = a.business_id
      WHERE a.business_id = ? AND a.active = 1
      GROUP BY a.id, a.code, a.name, a.account_group
      ORDER BY a.code`,
-    [from, to, businessId],
+    [span.from, span.to, businessId],
   );
 }
 
@@ -355,7 +391,8 @@ export async function getCoa(businessId = bid()) {
 }
 
 export async function trialBalance(from, to, businessId = bid()) {
-  const rows = await linesForPeriod(from, to, businessId);
+  const span = normalizeRange(from, to);
+  const rows = await linesForPeriod(span.from, span.to, businessId);
   const mapped = rows.map((r) => {
     const debit = round2(r.debit);
     const credit = round2(r.credit);
@@ -364,11 +401,12 @@ export async function trialBalance(from, to, businessId = bid()) {
   });
   const totalDebit = round2(mapped.reduce((s, r) => s + r.debit, 0));
   const totalCredit = round2(mapped.reduce((s, r) => s + r.credit, 0));
-  return { from, to, rows: mapped, totalDebit, totalCredit };
+  return { from: span.from, to: span.to, rows: mapped, totalDebit, totalCredit };
 }
 
 export async function profitAndLoss(from, to, businessId = bid()) {
-  const rows = await linesForPeriod(from, to, businessId);
+  const span = normalizeRange(from, to);
+  const rows = await linesForPeriod(span.from, span.to, businessId);
   let income = 0;
   let expense = 0;
   const incomeRows = [];
@@ -386,8 +424,8 @@ export async function profitAndLoss(from, to, businessId = bid()) {
     }
   }
   return {
-    from,
-    to,
+    from: span.from,
+    to: span.to,
     income: round2(income),
     expense: round2(expense),
     netProfit: round2(income - expense),
@@ -398,7 +436,8 @@ export async function profitAndLoss(from, to, businessId = bid()) {
 
 export async function balanceSheet(asOf, businessId = bid()) {
   const from = "2000-01-01";
-  const rows = await linesForPeriod(from, asOf, businessId);
+  const day = normalizeRange(asOf, asOf).to;
+  const rows = await linesForPeriod(from, day, businessId);
   const groups = { asset: [], liability: [], equity: [] };
   let assets = 0;
   let liabilities = 0;
@@ -421,10 +460,10 @@ export async function balanceSheet(asOf, businessId = bid()) {
       groups.equity.push({ code: r.code, name: r.name, balance: eb });
     }
   }
-  const pl = await profitAndLoss(from, asOf, businessId);
+  const pl = await profitAndLoss(from, day, businessId);
   equity = round2(equity + pl.netProfit);
   return {
-    asOf,
+    asOf: day,
     assets: round2(assets),
     liabilities: round2(liabilities),
     equity: round2(equity),
@@ -433,26 +472,43 @@ export async function balanceSheet(asOf, businessId = bid()) {
   };
 }
 
-export async function cashBook(from, to, businessId = bid()) {
+export async function cashBook(from, to, businessId = bid(), book = "all") {
+  const span = normalizeRange(from, to);
+  const codes = cashBookCodes(book);
+  const bookKey = CASH_BOOKS[String(book || "all").trim().toLowerCase()] ? String(book || "all").trim().toLowerCase() : "all";
+  const ph = codes.map(() => "?").join(",");
+  const eventDate = journalEventDateSql();
+  const openingRows = await query(
+    `SELECT COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0) AS opening
+     FROM journal_lines l
+     JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+     ${journalEventJoins()}
+     JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
+     WHERE l.business_id = ? AND ${eventDate} < ? AND ${journalInForceSql()} AND a.code IN (${ph})`,
+    [businessId, span.from, ...codes],
+  );
+  const opening = round2(openingRows[0]?.opening);
   const rows = await query(
-    `SELECT j.voucher_no, j.voucher_date, j.voucher_type, j.narration,
+    `SELECT j.voucher_no, ${eventDate} AS voucher_date, j.voucher_type, j.narration,
             a.code, a.name, l.debit, l.credit
      FROM journal_lines l
-     JOIN journal_entries j ON j.id = l.journal_id
-     JOIN chart_of_accounts a ON a.id = l.account_id
-     WHERE l.business_id = ? AND j.voucher_date BETWEEN ? AND ?
-       AND a.code IN ('1001','1002','1003')
-     ORDER BY j.voucher_date, j.voucher_no, a.code`,
-    [businessId, from, to],
+     JOIN journal_entries j ON j.id = l.journal_id AND j.business_id = l.business_id
+     ${journalEventJoins()}
+     JOIN chart_of_accounts a ON a.id = l.account_id AND a.business_id = l.business_id
+     WHERE l.business_id = ? AND ${eventDate} >= ? AND ${eventDate} < DATE_ADD(?, INTERVAL 1 DAY)
+       AND ${journalInForceSql()}
+       AND a.code IN (${ph})
+     ORDER BY ${eventDate}, j.voucher_no, a.code`,
+    [businessId, span.from, span.to, ...codes],
   );
-  let balance = 0;
+  let balance = opening;
   const entries = rows.map((r) => {
     const debit = round2(r.debit);
     const credit = round2(r.credit);
     balance = round2(balance + debit - credit);
     return { ...r, debit, credit, balance };
   });
-  return { from, to, entries, closingBalance: balance };
+  return { from: span.from, to: span.to, book: bookKey, openingBalance: opening, entries, closingBalance: balance };
 }
 
 export function isCashAccount(code) {

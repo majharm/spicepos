@@ -220,6 +220,7 @@ async function saveSettings(shopId, patch) {
     max_stay: num(patch.max_stay, cur.max_stay || 30),
     booking_policy: clip(patch.booking_policy ?? cur.booking_policy, 2000),
     late_checkout_fee: num(patch.late_checkout_fee, cur.late_checkout_fee),
+    show_online_orders: flag(patch.show_online_orders ?? cur.show_online_orders),
   };
   await query(
     `INSERT INTO resort_settings (business_id, settings_json) VALUES (?,?)
@@ -518,6 +519,16 @@ export function registerResortPublic(app) {
       res.status(err.status || 500).json({ error: String(err.message) });
     }
   });
+}
+
+export async function resortMenuFlags(shopId, business) {
+  if (!R().isResortShop(business || {})) return { show_online_orders: 0 };
+  try {
+    const settings = await settingsOf(shopId);
+    return { show_online_orders: flag(settings.show_online_orders) };
+  } catch {
+    return { show_online_orders: 0 };
+  }
 }
 
 export function registerResortStaff(app) {

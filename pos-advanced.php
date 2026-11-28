@@ -974,28 +974,42 @@ function pos_units_per_pack($item) {
   return $explicit > 0 ? $explicit : 1;
 }
 
+function pos_stores_base_pieces($item) {
+  if (pos_is_strip_loose_item($item)) return false;
+  $base = strtoupper(preg_replace("/[^A-Z0-9]/", "", (string) ($item["base_unit"] ?? $item["unit"] ?? "")));
+  if (in_array($base, ["GM", "KG", "MG", "LTR", "ML", "M", "CM", "MM", "FT", "IN", "SQM", "SQFT"], true)) return false;
+  $pack = strtoupper(preg_replace("/[^A-Z0-9]/", "", (string) ($item["pack_unit"] ?? "")));
+  $upp = (int) ($item["units_per_pack"] ?? 0);
+  $packs = ["BOX", "CTN", "CARTON", "PKT", "PACKET", "PACK", "BAG", "CASE", "DOZ", "TIN", "JAR", "ROLL", "SET"];
+  return $upp > 1 && in_array($pack, $packs, true);
+}
+
 function pos_loose_sale_rate($item, $customerType = "b2c") {
   $pack = ($customerType === "b2b")
     ? (float) ($item["b2b_rate"] ?? $item["retail_rate"] ?? 0)
     : (float) ($item["retail_rate"] ?? 0);
+  if (pos_stores_base_pieces($item)) return $pack;
   $upp = pos_units_per_pack($item);
   return $upp > 1 ? pos_adv_round2($pack / $upp) : $pack;
 }
 
 function pos_loose_mrp($item) {
   $mrp = (float) ($item["mrp"] ?? $item["retail_rate"] ?? 0);
+  if (pos_stores_base_pieces($item)) return $mrp;
   $upp = pos_units_per_pack($item);
   return ($upp > 1 && $mrp > 0) ? pos_adv_round2($mrp / $upp) : $mrp;
 }
 
 function pos_loose_cost_rate($item) {
   $cost = (float) ($item["purchase_rate"] ?? 0);
+  if (pos_stores_base_pieces($item)) return $cost;
   $upp = pos_units_per_pack($item);
   return ($upp > 1 && $cost > 0) ? pos_adv_round2($cost / $upp) : $cost;
 }
 
 function pos_pack_stock_qty($item, $looseQty) {
   $qty = (float) $looseQty;
+  if (pos_stores_base_pieces($item)) return $qty;
   $upp = pos_units_per_pack($item);
   if ($upp <= 1) return $qty;
   return round($qty / $upp, 3);
@@ -1336,9 +1350,10 @@ function pos_create_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $i
     $first["barcodes"] = $rows;
     return $first;
   }
-  $row = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, "", $baseNo, $expiry, $mrp, "batch", $lineIn);
+  $shared = trim((string) ($lineIn["product_barcode"] ?? $lineIn["productBarcode"] ?? ""));
+  $row = pos_insert_purchase_batch($bid, $branchId, $uid, $purchase, $lineId, $item, $qty, $rate, $shared, $baseNo, $expiry, $mrp, "batch", $lineIn);
   try {
-    pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$row["batch_no"], $row["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
+    pos_q("UPDATE purchase_lines SET batch_no = ?, barcode = ?, expiry_date = ?, mrp = ? WHERE id = ?", "sssds", [$row["batch_no"], $shared !== "" ? $shared : $row["barcode"], $expiry !== "" ? $expiry : null, $mrp, $lineId]);
   } catch (Exception $e) { /* optional */ }
   return $row;
 }

@@ -12,15 +12,15 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <title>ATAV POS</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./css/pos.css?v=20261117stk3" />
+    <link rel="stylesheet" href="./css/pos.css?v=20261125unit1" />
     <link rel="stylesheet" href="./css/online-store.css?v=20261116storemenu1" />
     <link rel="stylesheet" href="./css/ecommerce.css?v=20261117ecom1" />
     <link rel="stylesheet" href="./css/crm.css?v=20261117crm6" />
     <link rel="stylesheet" href="./css/barcode-desk.css?v=20261024bcdesk1" />
     <link rel="stylesheet" href="./css/saas.css?v=20261031welcome1" />
     <link rel="stylesheet" href="./css/bar.css?v=20261011bar2" />
-    <link rel="stylesheet" href="./css/resort.css?v=20261011resort1" />
-    <link rel="stylesheet" href="./css/mobile-app.css?v=20261118pwa2" />
+    <link rel="stylesheet" href="./css/resort.css?v=20261127room3" />
+    <link rel="stylesheet" href="./css/mobile-app.css?v=20261127out1" />
     <link rel="stylesheet" href="./css/item-master.css?v=20261103items1" />
     <link rel="stylesheet" href="./css/customer-master.css?v=20261027cust1" />
     <link rel="stylesheet" href="./css/supplier-master.css?v=20261117sup1" />
@@ -110,9 +110,6 @@
             <button class="nav-btn" type="button" data-view="prescriptions" data-hub-kind="pharmacy"><span class="nav-icon" aria-hidden="true">▦</span>Prescription</button>
             <button class="nav-btn" type="button" data-view="expiry" data-hub-kind="pharmacy,grocery"><span class="nav-icon" aria-hidden="true">⏳</span>Batch / Expiry</button>
             <button class="nav-btn classic-bill-only" type="button" data-view="returns" data-hub-kind="pharmacy,apparel,footwear"><span class="nav-icon" aria-hidden="true">↺</span>Returns</button>
-            <button class="nav-btn" type="button" data-view="kot" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▣</span>KOT / Kitchen</button>
-            <button class="nav-btn" type="button" data-view="qr-orders" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▦</span>QR Ordering</button>
-            <button class="nav-btn" type="button" data-view="online-orders" data-hub-kind="restaurant,bar"><span class="nav-icon" aria-hidden="true">▢</span>Online orders</button>
             <button class="nav-btn" type="button" data-view="items" data-hub-kind="apparel,footwear"><span class="nav-icon" aria-hidden="true">◫</span>Size / Colour</button>
             <button class="nav-btn" type="button" data-view="barcodes" data-hub-kind="electronics"><span class="nav-icon" aria-hidden="true">▦</span>Serial / IMEI</button>
             <button class="nav-btn" type="button" data-view="items" data-hub-kind="services"><span class="nav-icon" aria-hidden="true">◫</span>Services</button>
@@ -135,13 +132,26 @@
             <button class="nav-btn bar-only" type="button" data-view="bar-stock" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">☰</span>Bar stock</button>
             <button class="nav-btn bar-only" type="button" data-view="bar-reports" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">▦</span>Bar reports</button>
             <button class="nav-btn bar-only" type="button" data-view="bar-settings" data-hub-kind="bar"><span class="nav-icon" aria-hidden="true">⚙</span>Bar settings</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-board" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▣</span>Resort desk</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-rooms" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▤</span>Rooms</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-bookings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▦</span>Bookings</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-desk" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">◉</span>Front desk</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-housekeeping" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">☰</span>Housekeeping</button>
-            <button class="nav-btn resort-only" type="button" data-view="resort-settings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">⚙</span>Resort settings</button>
           </div>
+          <details class="nav-sub" id="nav-restaurant-sub">
+            <summary class="nav-sub-summary"><span class="nav-icon" aria-hidden="true">▣</span>Restaurant</summary>
+            <div class="nav-sub-list">
+              <button class="nav-btn" type="button" data-view="kot" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▣</span>KOT / Kitchen</button>
+              <button class="nav-btn" type="button" data-view="online-orders" data-hub-kind="restaurant,bar"><span class="nav-icon" aria-hidden="true">▢</span>Online orders</button>
+              <button class="nav-btn" type="button" data-view="qr-orders" data-hub-kind="restaurant"><span class="nav-icon" aria-hidden="true">▦</span>QR Ordering</button>
+            </div>
+          </details>
+          <details class="nav-sub resort-only" id="nav-resort-group" hidden>
+            <summary class="nav-sub-summary"><span class="nav-icon" aria-hidden="true">▣</span>Resort</summary>
+            <div class="nav-sub-list">
+              <button class="nav-btn resort-only" type="button" data-view="resort-board" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▣</span>Resort desk</button>
+              <button class="nav-btn resort-only" type="button" data-view="resort-rooms" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▤</span>Rooms</button>
+              <button class="nav-btn resort-only" type="button" data-view="resort-bookings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">▦</span>Bookings</button>
+              <button class="nav-btn resort-only" type="button" data-view="resort-desk" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">◉</span>Front desk</button>
+              <button class="nav-btn resort-only" type="button" data-view="resort-housekeeping" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">☰</span>Housekeeping</button>
+              <button class="nav-btn resort-only" type="button" data-view="resort-settings" data-hub-kind="resort"><span class="nav-icon" aria-hidden="true">⚙</span>Resort settings</button>
+            </div>
+          </details>
           <div class="nav-group">
             <p class="nav-group-label" data-i18n="nav.admin">Admin</p>
             <button class="nav-btn" type="button" data-view="staff"><span class="nav-icon" aria-hidden="true">◉</span><span data-i18n="nav.staff">Staff</span></button>
@@ -218,9 +228,12 @@
                 <span class="m-home-mark" id="m-home-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 16.2 26.8 7.2c.8-.3 1.6.5 1.3 1.3L20.2 28c-.4.9-1.6.8-1.9-.1l-2.8-10-10.2-3.2c-.9-.3-1-1.6-.3-1.5z" fill="#12b8a6"/><path d="M15.4 17.8 26.7 8.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg></span>
                 <h2 id="m-home-shop">Your shop</h2>
               </div>
-              <button type="button" class="m-icon-btn" id="m-home-notify" aria-label="Notifications">
+              <div class="m-home-tools">
+                <button type="button" class="m-logout" data-logout>Logout</button>
+                <button type="button" class="m-icon-btn" id="m-home-notify" aria-label="Notifications">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 17h12l-1.2-2.1V10a4.8 4.8 0 1 0-9.6 0v4.9L6 17z"/><path d="M10 17a2 2 0 0 0 4 0"/></svg>
-              </button>
+                </button>
+              </div>
             </header>
             <div class="m-kpis">
               <button type="button" data-m-view="orders"><span>Total invoices</span><strong id="m-kpi-total">0</strong><em>Last 24 hours</em></button>
@@ -232,6 +245,7 @@
               <button type="button" data-m-view="orders"><span class="m-tile-ico is-inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 3.5h8l4 4V20H7z"/><path d="M15 3.5V8h4"/><path d="M12 11v6M10 13.2h3.2a1.6 1.6 0 1 1 0 3.2H10"/></svg></span>Advance invoice</button>
               <button type="button" data-m-view="customers"><span class="m-tile-ico is-cust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="2.6"/><path d="M4.2 18.2c.6-2.8 2.8-4.4 4.8-4.4s4.2 1.6 4.8 4.4"/><circle cx="16.6" cy="9" r="2.1"/><path d="M15.4 13.8c1.8.4 3.3 1.8 3.8 3.8"/></svg></span>Customers</button>
               <button type="button" data-m-view="items"><span class="m-tile-ico is-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8.2 12 4.4l8 3.8-8 3.8-8-3.8z"/><path d="M4 8.2v7.4L12 19.4l8-3.8V8.2"/><path d="M12 12v7.4"/></svg></span>Items / Services</button>
+              <button type="button" data-m-view="purchases"><span class="m-tile-ico is-buy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h16v11H4z"/><path d="M8 8V6.5A2.5 2.5 0 0 1 10.5 4h3A2.5 2.5 0 0 1 16 6.5V8"/><path d="M8 13h8"/></svg></span>Purchase</button>
               <button type="button" data-m-view="expenses"><span class="m-tile-ico is-exp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3.5h8l.8 2H19a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1h2.2L8 3.5z"/><path d="M9 11h6M9 14.5h4"/></svg></span>Expenses</button>
               <button type="button" data-m-view="payments"><span class="m-tile-ico is-inc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="7" width="17" height="11.5" rx="2.2"/><path d="M3.5 11h17"/><circle cx="16.2" cy="14.6" r="1.3"/></svg></span>Income</button>
               <button type="button" data-m-view="online-store" data-online-store hidden><span class="m-tile-ico is-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8.2 12 4.4l8 3.8-8 3.8-8-3.8z"/><path d="M4 8.2v7.4L12 19.4l8-3.8V8.2"/></svg></span>Online Store</button>
@@ -765,6 +779,22 @@
                 <fieldset class="item-block printing-only" id="item-print-meta" hidden>
                   <legend>Printing</legend>
                   <p class="hint">Counter bills Width × Height using this item’s unit and rate. Choose Sq. Ft., Sq. Meter, Inch, or a custom unit. GST applies on the calculated amount after discount.</p>
+                </fieldset>
+                <fieldset class="item-block" id="item-unit-convert" hidden>
+                  <legend>Box and piece</legend>
+                  <p class="hint">Stock is kept in pieces. 1 Box = 20 Pieces means a purchase or sale of 1 box moves 20 pieces. Retail and purchase rates stay per piece.</p>
+                  <label>Pack unit
+                    <select id="item-conv-unit">
+                      <option value="">Piece only</option>
+                      <option value="Box">Box</option>
+                      <option value="Packet">Packet</option>
+                      <option value="Carton">Carton</option>
+                      <option value="Pack">Pack</option>
+                      <option value="Bag">Bag</option>
+                      <option value="Case">Case</option>
+                    </select>
+                  </label>
+                  <label>Pieces in one pack <input id="item-conv-factor" type="number" min="1" step="1" value="1" /></label>
                 </fieldset>
                 <fieldset class="item-block pharmacy-only" id="item-pharmacy-pack" hidden>
                   <legend>Pack, batch &amp; expiry</legend>
@@ -1728,14 +1758,18 @@
           </div>
         </section>
         <section class="view view-finance resort-only" id="view-resort-rooms" hidden>
-          <div class="items-desk">
+          <div class="items-desk room-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
                 <p class="items-kicker">Inventory</p>
                 <h3>Rooms</h3>
-                <p class="lede">Room numbers, categories, occupancy, rates, and physical status. Deactivating a room keeps historical bookings.</p>
+                <p class="lede">Room numbers, categories, rates, and readiness. Tap a room to change it. Turning a room off keeps past bookings.</p>
               </div>
+              <button class="btn primary" type="button" id="resort-room-new">New room</button>
             </header>
+            <div id="resort-rooms-grid" class="resort-grid"></div>
+            <details class="room-editor" id="resort-room-editor">
+              <summary>Add or edit a room</summary>
             <form id="resort-room-form" class="resort-form">
               <input type="hidden" id="rr-id" />
               <label>Room no <input id="rr-number" required /></label>
@@ -1770,53 +1804,71 @@
               <button class="btn primary" type="submit">Save room</button>
             </form>
             <p class="hint" id="resort-room-hint"></p>
-            <div id="resort-rooms-grid" class="resort-grid"></div>
+            </details>
           </div>
         </section>
         <section class="view view-finance resort-only" id="view-resort-bookings" hidden>
-          <div class="items-desk">
+          <div class="items-desk room-book-desk">
             <header class="items-hero">
               <div class="items-hero-copy">
-                <p class="items-kicker">Reservations</p>
-                <h3>Bookings</h3>
-                <p class="lede">Walk-in, website, and pending reservations. Date changes re-check availability before they save.</p>
+                <p class="items-kicker">Room booking</p>
+                <h3>Room booking</h3>
+                <p class="lede">A stay desk for this resort, separate from the restaurant counter. Pick a room, guest, and dates. The list shows arrivals, in-house guests, and pending stays.</p>
               </div>
             </header>
-            <label>Filter
-              <select id="resort-book-filter">
-                <option value="all">All bookings</option>
-                <option value="arrivals">Today's arrivals</option>
-                <option value="departures">Today's departures</option>
-                <option value="in_house">In-house</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="pending">Pending confirmations</option>
-                <option value="pending_payment">Pending payments</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="no_show">No-show</option>
-              </select>
-            </label>
-            <form id="resort-walkin-form" class="resort-form">
-              <label>Room id <input id="rb-room" required /></label>
-              <label>Check-in <input id="rb-in" type="date" required /></label>
-              <label>Check-out <input id="rb-out" type="date" required /></label>
-              <label>Adults <input id="rb-adults" type="number" value="2" /></label>
-              <label>Children <input id="rb-children" type="number" value="0" /></label>
-              <label>Guest <input id="rb-guest" required /></label>
-              <label>Mobile <input id="rb-mobile" required /></label>
-              <label>Email <input id="rb-email" type="email" /></label>
-              <label>Advance <input id="rb-advance" type="number" min="0" value="0" /></label>
-              <label>Payment
-                <select id="rb-pay">
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                  <option value="card">Card</option>
-                  <option value="pay_on_arrival">Pay on arrival</option>
+            <div class="room-book-layout">
+              <form id="resort-walkin-form" class="resort-form room-book-form">
+                <h4 class="full">New stay</h4>
+                <label class="full">Room
+                  <select id="rb-room" required>
+                    <option value="">Choose a room</option>
+                  </select>
+                </label>
+                <label>Check-in <input id="rb-in" type="date" required /></label>
+                <label>Check-out <input id="rb-out" type="date" required /></label>
+                <label>Adults <input id="rb-adults" type="number" min="1" value="2" /></label>
+                <label>Children <input id="rb-children" type="number" min="0" value="0" /></label>
+                <label class="full">Guest <input id="rb-guest" required placeholder="Guest name" /></label>
+                <label>Mobile <input id="rb-mobile" required inputmode="tel" placeholder="10-digit mobile" /></label>
+                <label>Email <input id="rb-email" type="email" placeholder="Optional" /></label>
+                <label>Advance <input id="rb-advance" type="number" min="0" value="0" /></label>
+                <label>Payment
+                  <select id="rb-pay">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="card">Card</option>
+                    <option value="pay_on_arrival">Pay on arrival</option>
+                  </select>
+                </label>
+                <button class="btn primary full" type="submit">Save room booking</button>
+              </form>
+              <div class="room-book-list">
+                <div class="room-book-filters" id="resort-book-filters">
+                  <button type="button" class="is-on" data-book-filter="all">All</button>
+                  <button type="button" data-book-filter="arrivals">Arrivals</button>
+                  <button type="button" data-book-filter="departures">Departures</button>
+                  <button type="button" data-book-filter="in_house">In-house</button>
+                  <button type="button" data-book-filter="upcoming">Upcoming</button>
+                  <button type="button" data-book-filter="pending">Pending</button>
+                  <button type="button" data-book-filter="pending_payment">Payment due</button>
+                  <button type="button" data-book-filter="cancelled">Cancelled</button>
+                  <button type="button" data-book-filter="no_show">No-show</button>
+                </div>
+                <select id="resort-book-filter" class="room-book-filter-native" aria-label="Booking filter">
+                  <option value="all">All bookings</option>
+                  <option value="arrivals">Today's arrivals</option>
+                  <option value="departures">Today's departures</option>
+                  <option value="in_house">In-house</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="pending">Pending confirmations</option>
+                  <option value="pending_payment">Pending payments</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="no_show">No-show</option>
                 </select>
-              </label>
-              <button class="btn primary" type="submit">Create walk-in booking</button>
-            </form>
-            <p class="hint" id="resort-book-hint"></p>
-            <div class="table-wrap" id="resort-bookings-table"></div>
+                <p class="hint" id="resort-book-hint"></p>
+                <div id="resort-bookings-table"></div>
+              </div>
+            </div>
           </div>
         </section>
         <section class="view view-finance resort-only" id="view-resort-desk" hidden>
@@ -2717,8 +2769,18 @@
             <button class="btn acc-tab" type="button" data-acc-tab="profit-loss">P&amp;L</button>
             <button class="btn acc-tab" type="button" data-acc-tab="balance-sheet">Balance sheet</button>
             <button class="btn acc-tab" type="button" data-acc-tab="cash-book">Cash book</button>
+            <button class="btn acc-tab" type="button" data-acc-tab="bank-book">Bank book</button>
           </div>
           <form class="report-toolbar" id="acc-period-form">
+            <div class="reports-range-chips" id="acc-range-chips">
+              <button class="btn" type="button" data-acc-preset="today">Today</button>
+              <button class="btn" type="button" data-acc-preset="yesterday">Yesterday</button>
+              <button class="btn" type="button" data-acc-preset="last_7">Last 7 Days</button>
+              <button class="btn" type="button" data-acc-preset="last_30">Last 30 Days</button>
+              <button class="btn" type="button" data-acc-preset="month">This Month</button>
+              <button class="btn" type="button" data-acc-preset="last_month">Last Month</button>
+              <button class="btn" type="button" data-acc-preset="custom">Custom</button>
+            </div>
             <label>FY year
               <select id="acc-fy-year" aria-label="Financial year"></select>
             </label>
@@ -2755,6 +2817,7 @@
           <div id="acc-pane-profit-loss" class="acc-pane" hidden><div class="table-wrap" id="acc-pl-table"></div></div>
           <div id="acc-pane-balance-sheet" class="acc-pane" hidden><div class="table-wrap" id="acc-bs-table"></div></div>
           <div id="acc-pane-cash-book" class="acc-pane" hidden><div class="table-wrap" id="acc-cash-table"></div></div>
+          <div id="acc-pane-bank-book" class="acc-pane" hidden><div class="table-wrap" id="acc-bank-table"></div></div>
         </section>
         <section class="view view-finance" id="view-expenses" hidden>
           <h2 class="visually-hidden">Expenses</h2>
@@ -2788,6 +2851,15 @@
           </form>
           <div class="hint" id="exp-hint"></div>
           <form class="report-toolbar" id="exp-filter">
+            <div class="reports-range-chips" id="exp-range-chips">
+              <button class="btn" type="button" data-exp-preset="today">Today</button>
+              <button class="btn" type="button" data-exp-preset="yesterday">Yesterday</button>
+              <button class="btn" type="button" data-exp-preset="last_7">Last 7 Days</button>
+              <button class="btn" type="button" data-exp-preset="last_30">Last 30 Days</button>
+              <button class="btn" type="button" data-exp-preset="month">This Month</button>
+              <button class="btn" type="button" data-exp-preset="last_month">Last Month</button>
+              <button class="btn" type="button" data-exp-preset="custom">Custom</button>
+            </div>
             <label>FY year
               <select id="exp-fy-year" aria-label="Financial year"></select>
             </label>
@@ -2921,8 +2993,10 @@
               <div class="m-chips m-rep-range">
                 <button type="button" data-m-range="today">Today</button>
                 <button type="button" data-m-range="yesterday">Yesterday</button>
-                <button type="button" data-m-range="week">This week</button>
-                <button type="button" class="is-on" data-m-range="month">This month</button>
+                <button type="button" data-m-range="last_7">Last 7 Days</button>
+                <button type="button" data-m-range="last_30">Last 30 Days</button>
+                <button type="button" class="is-on" data-m-range="month">This Month</button>
+                <button type="button" data-m-range="last_month">Last Month</button>
                 <button type="button" data-m-range="fy">This FY</button>
               </div>
               <div class="m-kpis m-rep-kpis">
@@ -2958,9 +3032,11 @@
               <div class="reports-range-chips" id="rep-range-chips">
                 <button class="btn" type="button" data-rep-preset="today">Today</button>
                 <button class="btn" type="button" data-rep-preset="yesterday">Yesterday</button>
-                <button class="btn" type="button" data-rep-preset="week">This Week</button>
+                <button class="btn" type="button" data-rep-preset="last_7">Last 7 Days</button>
+                <button class="btn" type="button" data-rep-preset="last_30">Last 30 Days</button>
                 <button class="btn" type="button" data-rep-preset="month">This Month</button>
-                <button class="btn" type="button" data-rep-preset="custom">Custom Date</button>
+                <button class="btn" type="button" data-rep-preset="last_month">Last Month</button>
+                <button class="btn" type="button" data-rep-preset="custom">Custom</button>
               </div>
               <label>FY year
                 <select id="rep-fy-year" aria-label="Financial year"></select>
@@ -3266,7 +3342,7 @@
             <div class="settings-pane" id="settings-pane-automation" hidden>
               <form id="shop-automation-form" class="item-composer">
                 <p class="item-mode">Automation</p>
-                <p class="item-composer-note">Tick a report and save. It then runs at the time below for this shop. WhatsApp stays in test mode until Master Admin turns it off.</p>
+                <p class="item-composer-note">Tick a report and save. It then runs at the time below for this shop. Low stock goes to the business admin's WhatsApp. The other reports go to the business owner's number.</p>
                 <fieldset class="item-block">
                   <legend>Reports for this shop</legend>
                   <label class="full"><input type="checkbox" name="low_stock" /> Low stock alerts</label>
@@ -3989,6 +4065,7 @@
     <script src="./js/session-pulse.js?v=20261030live1" defer></script>
     <script src="./js/admin-heartbeat.js?v=20261118pwa1" defer></script>
     <script src="./js/units.js?v=20261026poscam1" defer></script>
+    <script src="./js/unit-convert.js?v=20261118unit1" defer></script>
     <script src="./js/footwear.js?v=20261012print1" defer></script>
     <script src="./js/garment-purchase.js?v=20261023stk1" defer></script>
     <script src="./js/garment-counter.js?v=20261023col1" defer></script>
@@ -4004,17 +4081,18 @@
     <script src="./js/dev-mode.js?v=20260905deploy136" defer></script>
     <script src="./js/invoice.js?v=20261103bill1" defer></script>
     <script src="./js/invoice-share.js?v=20261023cemail1" defer></script>
-    <script src="./js/support.js?v=20260920deploy199" defer></script>
+    <script src="./js/support.js?v=20261120dock1" defer></script>
     <script src="./js/qrcode.iife.js?v=20260905qr1" defer></script>
     <script src="./js/qr-notify.js?v=20260922deploy205" defer></script>
     <script src="./js/payment-methods.js?v=20260918pay1" defer></script>
     <script src="./js/tax-master.js?v=20261030tax1" defer></script>
+    <script src="./js/date-range.js?v=20261120day1" defer></script>
     <script src="./js/offer-profit.js?v=20261107profit2" defer></script>
     <script src="./js/purchase-item-report.js?v=20261116pir1" defer></script>
     <script src="./js/sales-item-report.js?v=20261117sir1" defer></script>
     <script src="./js/item-oversell-report.js?v=20261117osr1" defer></script>
     <script src="./js/biz-hub.js?v=20261117ecom1" defer></script>
-    <script src="./js/biz-hub-ui.js?v=20261116qrmod1" defer></script>
+    <script src="./js/biz-hub-ui.js?v=20261124room3" defer></script>
     <script src="./js/salon.js?v=20260919salon1" defer></script>
     <script src="./js/salon-ui.js?v=20260919salon1" defer></script>
     <script src="./js/print.js?v=20261016sales1" defer></script>
@@ -4023,8 +4101,8 @@
     <script src="./js/gym-ui.js?v=20261008gym5" defer></script>
     <script src="./js/bar.js?v=20261011lounge1" defer></script>
     <script src="./js/bar-ui.js?v=20261012table1" defer></script>
-    <script src="./js/resort.js?v=20261011resort1" defer></script>
-    <script src="./js/resort-ui.js?v=20261011resort1" defer></script>
+    <script src="./js/resort.js?v=20261124room4" defer></script>
+    <script src="./js/resort-ui.js?v=20261127room3" defer></script>
     <script src="./js/item-master.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master.js?v=20261023cemail1" defer></script>
     <script src="./js/due-reminders.js?v=20261027dues1" defer></script>
@@ -4033,17 +4111,17 @@
     <script src="./js/stock-desk.js?v=20261117stock0" defer></script>
     <script src="./js/crm.js?v=20261117crm6" defer></script>
     <script src="./js/security-login.js?v=20261118sec1" defer></script>
-    <script src="./js/app.js?v=20261117stock0" defer></script>
+    <script src="./js/app.js?v=20261126mob1" defer></script>
     <script src="./js/online-store-desk.js?v=20261116store1" defer></script>
     <script src="./js/ecommerce-desk.js?v=20261117ecom1" defer></script>
-    <script src="./js/automation-shop.js?v=20261031auto1" defer></script>
+    <script src="./js/automation-shop.js?v=20261123auto1" defer></script>
     <script src="./js/recurring-ui.js?v=20261027rec3" defer></script>
     <script src="./js/quotations-ui.js?v=20261105edit1" defer></script>
     <script src="./js/crm-ui.js?v=20261117crm7" defer></script>
     <script src="./js/due-reminders-ui.js?v=20261027dues1" defer></script>
     <script src="./js/item-master-ui.js?v=20261012brand1" defer></script>
     <script src="./js/customer-master-ui.js?v=20261027cust1" defer></script>
-    <script src="./js/mobile-app.js?v=20261107profit1" defer></script>
+    <script src="./js/mobile-app.js?v=20261126mob1" defer></script>
     <script src="./js/growth.js?v=20261117adv1" defer></script>
     <script src="./js/offers-ui.js?v=20261116qrmod1" defer></script>
   </body>

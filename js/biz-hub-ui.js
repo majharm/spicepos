@@ -244,6 +244,19 @@
     }
   }
 
+  function roomBookingCard() {
+    if (!hub()?.kindsFor?.(biz())?.includes("resort")) return "";
+    return `<section class="saas-card" data-widget="room-booking">
+      <header class="saas-card-head"><h3>Room booking</h3><button type="button" class="saas-link" data-dash-view="resort-bookings">Open</button></header>
+      <div class="saas-chip-row">
+        <button type="button" class="saas-chip" data-dash-view="resort-bookings">Room booking</button>
+        <button type="button" class="saas-chip" data-dash-view="resort-rooms">Rooms</button>
+        <button type="button" class="saas-chip" data-dash-view="resort-desk">Front desk</button>
+      </div>
+      <p class="hint">Stays and check-in live in this menu. The restaurant counter stays separate.</p>
+    </section>`;
+  }
+
   function industryHtml(kind, h, d) {
     if (kind === "restaurant") {
       return `<section class="saas-card" data-widget="industry">
@@ -429,6 +442,7 @@
           ${listRows(recent, "No recent bills.")}
         </section>
         ${industryHtml(kind, h, d)}
+        ${roomBookingCard()}
       </div>`;
     document.querySelectorAll("#dash-kpis [data-widget]").forEach((el) => {
       if (hide.has(el.dataset.widget)) el.hidden = true;
@@ -1142,6 +1156,12 @@
       const any = [...group.querySelectorAll(".nav-btn")].some((b) => !b.hidden);
       group.hidden = !any;
     }
+    document.querySelectorAll("details.nav-sub").forEach((box) => {
+      const buttons = [...box.querySelectorAll(".nav-btn")];
+      const any = buttons.some((b) => !b.hidden);
+      box.hidden = !any;
+      if (any && buttons.some((b) => !b.hidden && b.classList.contains("active"))) box.open = true;
+    });
     const label = $("nav-industry-label");
     if (label) {
       const names = {

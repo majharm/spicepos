@@ -183,9 +183,17 @@ function pos_php_till_dispatch($path, $method, $body) {
           [$bid]
         );
     } catch (Exception $e) { /* optional */ }
+    $resortMenu = ["show_online_orders" => 0];
+    try {
+      if ($business && function_exists("pos_is_resort_shop") && pos_is_resort_shop($business)) {
+        if (is_file(__DIR__ . "/pos-resort.php")) require_once __DIR__ . "/pos-resort.php";
+        if (function_exists("pos_resort_menu_flags")) $resortMenu = pos_resort_menu_flags($bid);
+      }
+    } catch (Exception $e) { /* keep online orders hidden for a resort */ }
     pos_send(200, [
       "company" => $coRow,
       "business" => $business,
+      "resortMenu" => $resortMenu,
       "plan" => $plan,
       "support" => pos_shop_support($bid),
       "notes" => $notes,

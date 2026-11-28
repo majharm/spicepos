@@ -48,7 +48,15 @@ function pos_resort_defaults() {
     "max_stay" => 30,
     "booking_policy" => "",
     "late_checkout_fee" => 0,
+    "show_online_orders" => 0,
   ];
+}
+
+function pos_resort_menu_flags($bid) {
+  $settings = pos_resort_settings($bid);
+  $on = $settings["show_online_orders"] ?? 0;
+  $show = ($on === true || $on === 1 || $on === "1" || $on === "on" || $on === "true" || $on === "yes") ? 1 : 0;
+  return ["show_online_orders" => $show];
 }
 
 function pos_resort_settings($bid) {

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import "../js/discount.js";
 import "../js/loyalty.js";
 import "../js/units.js";
+import "../js/unit-convert.js";
 import "../js/footwear.js";
 import "../js/barcode.js";
 import "../js/print.js";
@@ -980,9 +981,10 @@ export async function onPurchaseLineSaved(conn, ctx) {
     }
     return { id: rows[0].id, batch_no: rows[0].batch_no, barcode: rows[0].barcode, barcodes: rows };
   }
-  const row = await insertPurchaseBatch(conn, ctx, "", baseNo, ctx.qty, "batch");
+  const shared = barcodeText(ctx.product_barcode || ctx.productBarcode || "");
+  const row = await insertPurchaseBatch(conn, ctx, shared, baseNo, ctx.qty, "batch");
   try {
-    await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.barcode, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
+    await conn.query("UPDATE purchase_lines SET batch_no=?, barcode=?, expiry_date=?, mrp=? WHERE id=?", [row.batch_no, row.barcode || shared, ctx.expiry || null, Number(ctx.mrp ?? ctx.item?.mrp ?? ctx.item?.retail_rate) || 0, ctx.lineId]);
   } catch {
     /* optional */
   }

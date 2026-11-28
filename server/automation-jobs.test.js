@@ -13,6 +13,7 @@ import {
   salesMessage,
   salesSummary,
   shouldSendLowStock,
+  shopAutomationPatch,
   shopClockReached,
   reportDayForSchedule,
 } from "./automation-jobs.js";
@@ -166,7 +167,15 @@ test("retries back off and stop after four attempts", () => {
   assert.equal(nextRetryAt(4, now), null);
 });
 
-test("test mode sends only to the approved number and consent is required for customers", () => {
+test("owner reports go to the business owner, not the platform number", () => {
+  assert.equal(
+    deliverMobile({ mobile: "9876543210", audience: "owner", testMode: true, testNumber: "9112090347" }).mobile,
+    "9876543210",
+  );
+  assert.equal(
+    deliverMobile({ mobile: "", audience: "owner", testMode: true, testNumber: "9112090347" }).reason,
+    "invalid-mobile",
+  );
   assert.deepEqual(deliverMobile({ mobile: "9876543210", testMode: true, testNumber: "9123456780" }), {
     mobile: "9123456780",
     test: true,
@@ -228,8 +237,56 @@ test("the PHP runner reuses WAMaster, locks the tick, and does not count credit 
   assert.match(php, /function pos_auto_probe/);
   assert.match(php, /test-number/);
   assert.match(php, /provider_note, ''\) <> 'forced'/);
-  assert.match(read("js/master.js"), /Test WhatsApp sent to the saved test number/);
-  assert.match(read("master.html"), /master\.js\?v=20261118close1/);
+  assert.match(read("js/master.js"), /WhatsApp sent to the business owner/);
+  assert.match(read("master.html"), /master\.js\?v=20261128close1/);
+  assert.match(php, /function pos_auto_owner_mobile/);
+  assert.doesNotMatch(php, /\$mobile = \$testNumber;/);
   assert.doesNotMatch(read("api/cron/index.php"), /lastError/);
-  assert.match(php, /if \(\$testMode\) \{\s*\$mobile = \$testNumber;/);
+  assert.match(read("pos-alerts.php"), /function pos_business_admin_phones/);
+  assert.match(php, /function pos_auto_admin_mobile/);
+  assert.match(php, /job_key"\] \?\? ""\) === "low_stock"/);
+});
+
+test("shop automation save keeps the ticked reports and times", () => {
+  const saved = shopAutomationPatch(
+    {
+      low_stock: 0,
+      daily_sales: 0,
+      collections: 1,
+      overdue: 0,
+      eod: 0,
+      channel_whatsapp: 1,
+      channel_in_app: 1,
+      close_time: "21:00",
+      report_time: "21:00",
+      low_stock_hours: 24,
+    },
+    {
+      low_stock: 1,
+      daily_sales: 1,
+      collections: 0,
+      overdue: 1,
+      eod: 1,
+      channel_whatsapp: 1,
+      channel_in_app: 0,
+      close_time: "22:30",
+      report_time: "9:15",
+      low_stock_hours: 0,
+    },
+  );
+  assert.equal(saved.low_stock, 1);
+  assert.equal(saved.daily_sales, 1);
+  assert.equal(saved.collections, 0);
+  assert.equal(saved.overdue, 1);
+  assert.equal(saved.eod, 1);
+  assert.equal(saved.channel_whatsapp, 1);
+  assert.equal(saved.channel_in_app, 0);
+  assert.equal(saved.close_time, "22:30");
+  assert.equal(saved.report_time, "09:15");
+  assert.equal(saved.low_stock_hours, 1);
+  assert.equal(shopAutomationPatch(saved, {}).daily_sales, 1);
+  assert.match(read("server/index.js"), /registerAutomationSettings\(app\)/);
+  assert.match(read("server/automation-settings.js"), /app\.post\("\/api\/automation\/settings"/);
+  assert.match(read("js/automation-shop.js"), /Unknown API/);
+  assert.match(read("index.html"), /automation-shop\.js\?v=20261123auto1/);
 });

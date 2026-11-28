@@ -129,6 +129,44 @@ export function reportDayForSchedule(ymd, hm) {
   return `${y}-${m}-${d}`;
 }
 
+const SHOP_AUTO_FLAGS = ["low_stock", "daily_sales", "collections", "overdue", "eod", "channel_whatsapp", "channel_in_app"];
+
+export function automationFlag(value, fallback = 0) {
+  if (value == null || value === "") return fallback ? 1 : 0;
+  const v = String(value).trim().toLowerCase();
+  return ["0", "false", "no", "off"].includes(v) ? 0 : 1;
+}
+
+export function automationHm(value, fallback = "21:00") {
+  const parsed = parseHm(value);
+  if (parsed == null) return fallback;
+  const h = Math.floor(parsed / 60);
+  const m = parsed % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+export function automationHours(value, fallback = 24) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(168, Math.max(1, Math.round(n)));
+}
+
+export function shopAutomationPatch(current, body) {
+  const cur = current || {};
+  const src = body || {};
+  const on = (key) =>
+    Object.prototype.hasOwnProperty.call(src, key) ? automationFlag(src[key], 0) : automationFlag(cur[key], 0);
+  const next = {};
+  for (const key of SHOP_AUTO_FLAGS) next[key] = on(key);
+  next.close_time = automationHm(Object.prototype.hasOwnProperty.call(src, "close_time") ? src.close_time : cur.close_time, "21:00");
+  next.report_time = automationHm(Object.prototype.hasOwnProperty.call(src, "report_time") ? src.report_time : cur.report_time, "21:00");
+  next.low_stock_hours = automationHours(
+    Object.prototype.hasOwnProperty.call(src, "low_stock_hours") ? src.low_stock_hours : cur.low_stock_hours,
+    24,
+  );
+  return next;
+}
+
 export function shopClockReached(now, timeZone, hm) {
   const target = parseHm(hm);
   if (target == null) return false;
@@ -279,8 +317,13 @@ export function withPending(summary, pending, supplierDue) {
   return { ...summary, pending: round2(pending), supplierDue: round2(supplierDue) };
 }
 
-export function deliverMobile({ mobile, optOut, testMode, testNumber, consent }) {
+export function deliverMobile({ mobile, optOut, testMode, testNumber, consent, audience = "customer" }) {
   if (optOut) return { skip: true, reason: "opt-out" };
+  if (audience === "owner") {
+    const owner = normalizeMobile(mobile);
+    if (!owner) return { skip: true, reason: "invalid-mobile" };
+    return { mobile: owner, test: false };
+  }
   if (consent === 0 || consent === false) return { skip: true, reason: "no-consent" };
   if (testMode) {
     const test = normalizeMobile(testNumber);

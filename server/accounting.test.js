@@ -205,6 +205,13 @@ test("receipts and payments can be altered after save", () => {
   assert.match(app, /modal-alter-voucher/);
   assert.match(app, /\/api\/accounts\/receipts\/\$\{entry\.id\}/);
   assert.match(app, /payment_date: paymentDate/);
+  assert.match(app, /id="pay-acc-date"/);
+  const createPay = accounts.slice(accounts.indexOf('app.post("/api/accounts/payments"'), accounts.indexOf('app.put("/api/accounts/payments/:id"'));
+  assert.match(createPay, /payment_date: paymentDate/);
+  const payStart = app.indexOf("function showPaymentModal");
+  const payModal = app.slice(payStart, app.indexOf("\nasync function ", payStart + 10));
+  assert.match(payModal, /id="pay-acc-date"/);
+  assert.match(payModal, /payment_date: paymentDate/);
   assert.match(accounts, /function clipPaymentDate/);
   assert.match(accounts, /payment_date: paymentDate/);
   assert.match(core, /function pos_clip_payment_date/);

@@ -30,6 +30,31 @@
     const label = R()?.physicalLabel?.(id) || R()?.categoryLabel?.(id) || id;
     return `<span class="resort-badge status-${escapeHtml(id)}">${escapeHtml(label)}</span>`;
   }
+  function readinessLabel(status) {
+    const id = R()?.statusId?.(status) || "ready";
+    const row = (R()?.HOUSEKEEPING_STATUSES || []).find((item) => item.id === id);
+    return row?.label || "Ready";
+  }
+  function rateText(amount) {
+    const value = Number(amount) || 0;
+    const whole = Math.abs(value - Math.round(value)) < 0.001;
+    return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: whole ? 0 : 2, minimumFractionDigits: whole ? 0 : 2 })}`;
+  }
+  function roomHead() {
+    return `<div class="room-head" aria-hidden="true"><span>Room</span><span>Category</span><span>Rate</span><span>Readiness</span></div>`;
+  }
+  function roomCard(room) {
+    const category = R()?.categoryLabel?.(room.category) || room.category || "Room";
+    const name = String(room.name || "").trim();
+    const inactive = Number(room.active) === 0;
+    const extra = name && name.toLowerCase() !== String(category).toLowerCase() ? `<span>${escapeHtml(name)}</span>` : "";
+    return `<button type="button" class="resort-card room-row${inactive ? " is-off" : ""}" data-room="${escapeHtml(room.id)}">
+      <span class="room-no">${escapeHtml(room.number || "—")}</span>
+      <span class="room-cat"><strong>${escapeHtml(category)}</strong>${extra}${badge(room.physical_status)}</span>
+      <span class="room-rate">${rateText(room.rate)}</span>
+      <span class="room-ready is-${escapeHtml(R()?.statusId?.(room.hk_status) || "ready")}">${escapeHtml(readinessLabel(room.hk_status))}${inactive ? `<em>Off</em>` : ""}</span>
+    </button>`;
+  }
   function tableHtml(rows, keys) {
     if (!rows?.length) return `<p class="hint">No rows yet.</p>`;
     const cols = keys || Object.keys(rows[0]).filter((k) => !/json|password|id_number/.test(k)).slice(0, 8);
@@ -68,23 +93,40 @@
     const d = await api("/api/resort/rooms");
     const roomSel = $("rb-room");
     if (roomSel) {
-      roomSel.innerHTML = (d.rooms || []).map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} · ${escapeHtml(r.name || r.category)}</option>`).join("");
+      const current = roomSel.value;
+      roomSel.innerHTML = `<option value="">Choose a room</option>${(d.rooms || [])
+        .map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.number)} · ${escapeHtml(R().categoryLabel(r.category))}${r.name ? ` · ${escapeHtml(r.name)}` : ""}</option>`)
+        .join("")}`;
+      if (current) roomSel.value = current;
     }
-    el.innerHTML = (d.rooms || [])
-      .map(
-        (r) => `<button type="button" class="resort-card" data-room="${escapeHtml(r.id)}">
-          <span>${escapeHtml(r.number)}</span>
-          <strong>${escapeHtml(r.name || R().categoryLabel(r.category))}</strong>
-          ${badge(r.physical_status)} ${badge(r.hk_status || "ready")}
-          <span>${money(r.rate)}</span>
-        </button>`,
-      )
-      .join("") || `<p class="hint">Add rooms to start taking bookings.</p>`;
+    el.innerHTML = (d.rooms || []).length ? `${roomHead()}${(d.rooms || []).map(roomCard).join("")}` : `<p class="hint">Add rooms to start taking bookings.</p>`;
     el.querySelectorAll("[data-room]").forEach((btn) => {
       btn.onclick = () => fillRoom(d.rooms.find((r) => r.id === btn.dataset.room));
     });
   }
 
+  function openRoomEditor() {
+    const editor = $("resort-room-editor");
+    if (editor) editor.open = true;
+    editor?.scrollIntoView?.({ block: "nearest" });
+  }
+  function markRoom(id) {
+    document.querySelectorAll("#resort-rooms-grid [data-room]").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.room === id);
+    });
+  }
+  function blankRoom() {
+    const form = $("resort-room-form");
+    form?.reset();
+    if ($("rr-id")) $("rr-id").value = "";
+    if ($("rr-adults")) $("rr-adults").value = "2";
+    if ($("rr-children")) $("rr-children").value = "1";
+    if ($("rr-active")) $("rr-active").checked = true;
+    markRoom("");
+    hint("resort-room-hint", "");
+    openRoomEditor();
+    $("rr-number")?.focus();
+  }
   function fillRoom(room) {
     if (!room || !$("resort-room-form")) return;
     $("rr-id").value = room.id;
@@ -96,6 +138,8 @@
     $("rr-children").value = room.max_children || 1;
     $("rr-status").value = room.physical_status || "available";
     $("rr-active").checked = Number(room.active) !== 0;
+    markRoom(room.id);
+    openRoomEditor();
   }
 
   async function saveRoom(ev) {
@@ -122,12 +166,72 @@
     }
   }
 
+  function bookingLabel(status) {
+    const id = R()?.statusId?.(status) || String(status || "");
+    const row = (R()?.BOOKING_STATUSES || []).find((item) => item.id === id);
+    if (row?.label) return row.label;
+    return id.replace(/_/g, " ") || "Booking";
+  }
+
+  function stayBadge(status) {
+    const id = R()?.statusId?.(status) || status || "";
+    return `<span class="resort-badge status-${escapeHtml(id)}">${escapeHtml(bookingLabel(id))}</span>`;
+  }
+
+  function payLabel(status) {
+    const words = String(status || "pending").replace(/_/g, " ");
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+
+  function stayCard(booking) {
+    const nights = Number(R()?.nightsBetween?.(booking.check_in, booking.check_out) || 0);
+    const due = Number(booking.due);
+    const nightText = nights > 0 ? ` · ${nights} night${nights === 1 ? "" : "s"}` : "";
+    return `<article class="stay-card">
+      <div class="stay-card-top">
+        <strong>${escapeHtml(booking.guest_name || "Guest")}</strong>
+        ${stayBadge(booking.status)}
+      </div>
+      <span class="stay-meta">${escapeHtml(booking.booking_no || "Walk-in")} · Room ${escapeHtml(booking.room_no || "unassigned")}</span>
+      <span class="stay-meta">${escapeHtml(booking.check_in || "")} → ${escapeHtml(booking.check_out || "")}${nightText}</span>
+      <span class="stay-meta">${escapeHtml(payLabel(booking.payment_status))} · Due ${money(Number.isFinite(due) ? due : 0)}</span>
+    </article>`;
+  }
+
+  function seedStayDates() {
+    const inn = $("rb-in");
+    const out = $("rb-out");
+    if (!inn || !out || inn.value) return;
+    const today = R()?.ymdInZone?.(new Date(), "Asia/Kolkata") || "";
+    if (!today) return;
+    inn.value = today;
+    out.value = R()?.addDays?.(today, 1) || "";
+  }
+
+  function paintBookingFilter(q) {
+    document.querySelectorAll("[data-book-filter]").forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.bookFilter === q);
+    });
+  }
+
   async function loadBookings(filter) {
     const el = $("resort-bookings-table");
     if (!el || !isResort()) return;
+    const roomSel = $("rb-room");
+    if (roomSel && roomSel.options.length < 2) {
+      try {
+        await loadRooms();
+      } catch {
+        /* the stay list can still open */
+      }
+    }
+    seedStayDates();
     const q = filter || $("resort-book-filter")?.value || "all";
+    if ($("resort-book-filter")) $("resort-book-filter").value = q;
+    paintBookingFilter(q);
     const d = await api(`/api/resort/bookings?filter=${encodeURIComponent(q)}`);
-    el.innerHTML = tableHtml(d.bookings || [], ["booking_no", "guest_name", "room_no", "check_in", "check_out", "status", "payment_status", "due"]);
+    const rows = d.bookings || [];
+    el.innerHTML = rows.length ? rows.map(stayCard).join("") : `<p class="hint">No stays in this list.</p>`;
     paintInhouseSelect(d.in_house || d.bookings || []);
   }
 
@@ -231,6 +335,7 @@
       <label>Hold minutes <input name="hold_minutes" type="number" value="${escapeHtml(s.hold_minutes || 10)}" /></label>
       <label>Tax % <input name="tax_rate" type="number" value="${escapeHtml(s.tax_rate || 12)}" /></label>
       <label class="full"><input type="checkbox" name="pay_on_arrival" ${s.pay_on_arrival ? "checked" : ""} /> Allow payment on arrival</label>
+      <label class="full"><input type="checkbox" name="show_online_orders" ${s.show_online_orders ? "checked" : ""} /> Show Online orders in the menu</label>
       <label class="full">Booking policy <textarea name="booking_policy">${escapeHtml(s.booking_policy || "")}</textarea></label>
       <button class="btn primary" type="submit">Save property settings</button>
     </form>`;
@@ -249,9 +354,14 @@
           hold_minutes: form.hold_minutes.value,
           tax_rate: form.tax_rate.value,
           pay_on_arrival: form.pay_on_arrival.checked,
+          show_online_orders: form.show_online_orders.checked ? 1 : 0,
           booking_policy: form.booking_policy.value,
         },
       });
+      root.state = root.state || {};
+      root.state.resortMenu = { show_online_orders: form.show_online_orders.checked ? 1 : 0 };
+      root.applyNav?.();
+      if (!form.show_online_orders.checked && root.state.currentView === "online-orders") root.showView?.("dashboard");
     };
   }
 
@@ -277,8 +387,14 @@
     if (report) loadReport(report.dataset.resortReport);
   });
   $("resort-room-form")?.addEventListener("submit", saveRoom);
+  $("resort-room-new")?.addEventListener("click", blankRoom);
   $("resort-walkin-form")?.addEventListener("submit", saveWalkIn);
   $("resort-book-filter")?.addEventListener("change", () => loadBookings());
+  document.addEventListener("click", (ev) => {
+    const chip = ev.target.closest?.("[data-book-filter]");
+    if (!chip || !$("view-resort-bookings") || $("view-resort-bookings").hidden) return;
+    loadBookings(chip.dataset.bookFilter);
+  });
   $("counter-resort-folio")?.addEventListener("change", () => {
     root.state = root.state || {};
     root.state.activeResortStay = $("counter-resort-folio")?.value || "";

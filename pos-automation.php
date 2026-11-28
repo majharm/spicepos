@@ -219,8 +219,7 @@ function pos_auto_platform($key, $default = "") {
 }
 
 function pos_auto_test_mode() {
-  $raw = pos_auto_platform("automation_test_mode", "1");
-  return $raw === "" ? true : pos_auto_flag($raw);
+  return pos_auto_flag(pos_auto_platform("automation_test_mode", "0"));
 }
 
 function pos_auto_jobs() {
@@ -279,8 +278,65 @@ function pos_auto_test_number() {
   return pos_auto_mobile(pos_auto_platform("automation_test_number", ""));
 }
 
+function pos_auto_owner_mobile($bid, $biz = []) {
+  $mobile = pos_auto_mobile($biz["mobile"] ?? "");
+  if ($mobile === "" && $bid !== "") {
+    try {
+      $rows = pos_auto_q("SELECT mobile FROM businesses WHERE id = ? LIMIT 1", "s", [$bid]);
+      $mobile = pos_auto_mobile($rows[0]["mobile"] ?? "");
+    } catch (Throwable $e) {
+      $mobile = "";
+    }
+  }
+  if ($mobile === "" && $bid !== "") {
+    try {
+      $rows = pos_auto_q("SELECT phone FROM company_settings WHERE business_id = ? LIMIT 1", "s", [$bid]);
+      $mobile = pos_auto_mobile($rows[0]["phone"] ?? "");
+    } catch (Throwable $e) {
+      $mobile = "";
+    }
+  }
+  if ($mobile === "" && $bid !== "") {
+    try {
+      $rows = pos_auto_q("SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin' ORDER BY created_at LIMIT 1", "s", [$bid]);
+      $mobile = pos_auto_mobile($rows[0]["mobile"] ?? "");
+    } catch (Throwable $e) {
+      try {
+        $rows = pos_auto_q("SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin' LIMIT 1", "s", [$bid]);
+        $mobile = pos_auto_mobile($rows[0]["mobile"] ?? "");
+      } catch (Throwable $e2) {
+        $mobile = "";
+      }
+    }
+  }
+  return $mobile;
+}
+
+function pos_auto_admin_mobile($bid) {
+  if ($bid === "") return "";
+  $rows = [];
+  try {
+    $rows = pos_auto_q(
+      "SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin' AND COALESCE(status,'active') <> 'deleted' ORDER BY created_at",
+      "s",
+      [$bid]
+    );
+  } catch (Throwable $e) {
+    try {
+      $rows = pos_auto_q("SELECT mobile FROM staff_users WHERE business_id = ? AND role = 'business_admin'", "s", [$bid]);
+    } catch (Throwable $e2) {
+      $rows = [];
+    }
+  }
+  foreach ($rows as $row) {
+    $mobile = pos_auto_mobile($row["mobile"] ?? "");
+    if ($mobile !== "") return $mobile;
+  }
+  return pos_auto_owner_mobile($bid, []);
+}
+
 function pos_auto_wa_held() {
-  return pos_auto_test_mode() && pos_auto_test_number() === "";
+  return false;
 }
 
 function pos_auto_save_shop($bid, $body) {
@@ -815,14 +871,10 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
         $body = pos_auto_low_message($owner, $items, pos_auto_out_count($biz["id"]));
         $chunks = function_exists("pos_split_alert_messages") ? pos_split_alert_messages($body, 3500) : [$body];
         if (!$chunks) $chunks = [$body];
-        $adminPhone = "";
-        if (function_exists("pos_business_admin_alert_contacts")) {
-          $admin = pos_business_admin_alert_contacts($biz["id"]);
-          $adminPhone = $admin["phones"][0] ?? "";
-        }
+        $adminMobile = pos_auto_admin_mobile($biz["id"]);
         foreach ($chunks as $i => $chunk) {
           $partScope = $sig . $stamp . (count($chunks) > 1 ? "|p" . ($i + 1) : "");
-          $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $partScope, $shop, "Low stock alert", $chunk, $adminPhone, $forceShop);
+          $enqueued += pos_auto_queue_report("low_stock", $biz["id"], $partScope, $shop, "Low stock alert", $chunk, $adminMobile, $forceShop);
         }
         $waOn = (int) ($shop["channel_whatsapp"] ?? 0) === 1;
         if (!$probe && (!$waOn || !pos_auto_wa_held())) {
@@ -831,6 +883,7 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
       }
     }
   }
+  $ownerMobile = pos_auto_owner_mobile($biz["id"], $biz);
   $reportTime = $shop["report_time"] ?? "21:00";
   $closeTime = $shop["close_time"] ?? "21:00";
   $salesDay = pos_auto_report_day($zone, $reportTime);
@@ -848,7 +901,7 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
     $sales = pos_auto_sales_summary($orders, $returns, $sold["qty"]);
     $col = pos_auto_collections(pos_auto_receipts($biz["id"], $salesDay), $orders, $refunds);
     $body = pos_auto_sales_message($shopName, $salesDay, $sales, $col["collected"]);
-    $enqueued += pos_auto_queue_report("daily_sales", $biz["id"], $salesDay . $stamp, $shop, "Daily sales " . $salesDay, $body, "", $forceShop);
+    $enqueued += pos_auto_queue_report("daily_sales", $biz["id"], $salesDay . $stamp, $shop, "Daily sales " . $salesDay, $body, $ownerMobile, $forceShop);
   }
   if ($want("collections") && ($forceJob === "collections" || $payDue)) {
     $orders = pos_auto_orders($biz["id"], $ymd);
@@ -857,7 +910,7 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
     $col["pending"] = pos_auto_outstanding($biz["id"]);
     $col["supplierDue"] = pos_auto_supplier_due($biz["id"]);
     $body = pos_auto_collection_message($shopName, $ymd, $col);
-    $enqueued += pos_auto_queue_report("collections", $biz["id"], $ymd . $stamp, $shop, "Collections " . $ymd, $body, "", $forceShop);
+    $enqueued += pos_auto_queue_report("collections", $biz["id"], $ymd . $stamp, $shop, "Collections " . $ymd, $body, $ownerMobile, $forceShop);
   }
   if ($want("overdue") && ($forceJob === "overdue" || $dueDue)) {
     $enqueued += pos_auto_enqueue_overdue($biz, $shop, $ymd, $forceShop, $stamp);
@@ -895,7 +948,7 @@ function pos_automation_consider($biz, $shop, $forceJob, $forceShop = false, $pr
       "profitSupported" => $profit["cost"] > 0.004,
     ];
     $body = pos_auto_eod_message($shopName, $eodDay, $report);
-    $enqueued += pos_auto_queue_report("eod", $biz["id"], $eodDay . $stamp, $shop, "Day-end " . $eodDay, $body, "", $forceShop);
+    $enqueued += pos_auto_queue_report("eod", $biz["id"], $eodDay . $stamp, $shop, "Day-end " . $eodDay, $body, $ownerMobile, $forceShop);
   }
   return $enqueued;
 }
@@ -907,9 +960,11 @@ function pos_auto_probe($job, $biz) {
   $n = pos_automation_consider($biz, $shop, $job, true, true);
   if ($n > 0) return $n;
   $name = trim((string) ($biz["name"] ?? "Shop"));
+  $ownerMobile = pos_auto_owner_mobile($biz["id"], $biz);
+  if ($ownerMobile === "") return 0;
   $body = "ATAV POS test\n\n" . $name . "\nJob: " . $job . "\n\nNo matching rows for this report. This WhatsApp confirms delivery.\n\nTeam ATAV POS";
   $scope = "probe" . gmdate("YmdHis") . bin2hex(random_bytes(2));
-  return pos_auto_enqueue($job, $biz["id"], $scope, "whatsapp", "Test " . $job, $body, "", true) ? 1 : 0;
+  return pos_auto_enqueue($job, $biz["id"], $scope, "whatsapp", "Test " . $job, $body, $ownerMobile, true) ? 1 : 0;
 }
 
 function pos_auto_enqueue_overdue($biz, $shop, $today, $forceShop = false, $scopeSuffix = "") {
@@ -961,8 +1016,6 @@ function pos_automation_drain($deadline) {
   $sent = 0;
   $failed = 0;
   $lastError = "";
-  $testMode = pos_auto_test_mode();
-  $testNumber = pos_auto_mobile(pos_auto_platform("automation_test_number", ""));
   $cfg = function_exists("pos_alert_settings") ? pos_alert_settings() : [];
   $guard = 0;
   $whatsapp = 0;
@@ -995,37 +1048,20 @@ function pos_automation_drain($deadline) {
         $biz = $bizRows[0] ?? [];
         $optOut = (int) ($biz["whatsapp_opt_out"] ?? 0) === 1;
         $mobile = "";
-        if ($row["job_key"] === "overdue") {
-          if ($optOut && !$testMode) $error = "opt-out";
-          elseif ($testMode) {
-            $mobile = $testNumber;
-            if ($mobile === "") $error = "test-number-missing";
-          } else {
-            $mobile = pos_auto_mobile($row["recipient"]);
-            if ($mobile === "") $error = "invalid-mobile";
-          }
+        $ownerReport = ($row["job_key"] ?? "") !== "overdue";
+        if ($optOut) {
+          $error = "opt-out";
+        } elseif ($ownerReport) {
+          $mobile = ($row["job_key"] ?? "") === "low_stock"
+            ? pos_auto_admin_mobile($row["business_id"])
+            : pos_auto_owner_mobile($row["business_id"], $biz);
+          if ($mobile === "") $error = "invalid-mobile";
         } else {
-          if ($testMode) {
-            $mobile = $testNumber;
-            if ($mobile === "") $error = "test-number-missing";
-          } elseif ($optOut) {
-            $error = "opt-out";
-          } else {
-            $mobile = "";
-            if (($row["job_key"] ?? "") === "low_stock") {
-              $mobile = pos_auto_mobile($row["recipient"] ?? "");
-              if ($mobile === "" && function_exists("pos_business_admin_alert_contacts")) {
-                $admin = pos_business_admin_alert_contacts($row["business_id"]);
-                $mobile = pos_auto_mobile($admin["phones"][0] ?? "");
-              }
-            }
-            if ($mobile === "") $mobile = pos_auto_mobile($biz["mobile"] ?? "");
-            if ($mobile === "") $error = "invalid-mobile";
-          }
+          $mobile = pos_auto_mobile($row["recipient"]);
+          if ($mobile === "") $error = "invalid-mobile";
         }
         if ($error === "" && function_exists("pos_wa_send_one")) {
           $text = $row["body"];
-          if ($testMode) $text = "[TEST " . $row["business_id"] . "]\n" . $text;
           $whatsapp++;
           $result = pos_wa_send_one($cfg, $mobile, $text, "");
           $ok = !empty($result["ok"]);
@@ -1104,17 +1140,15 @@ function pos_automation_tick($opts = []) {
       }
     }
     if ($forceJob !== "" && $forceBiz === "" && $enqueued === 0 && pos_auto_test_mode()) {
-      if (pos_auto_test_number() === "") {
-        $lastError = "Add a test WhatsApp number, then run the test again.";
-      } elseif ($shops) {
+      if ($shops) {
         try {
           $enqueued += pos_auto_probe($forceJob, $shops[0]);
-          $scope = "test-number";
-          if ($enqueued === 0) $lastError = "The test message could not be queued.";
+          $scope = "owner";
+          if ($enqueued === 0) $lastError = "This shop has no owner WhatsApp number.";
         } catch (Throwable $e) {
           error_log("automation probe: " . $e->getMessage());
           $lastError = "The test report could not be prepared.";
-          $scope = "test-number";
+          $scope = "owner";
         }
       } else {
         $lastError = "No active shop is available for a test report.";

@@ -637,6 +637,10 @@
     return item?.pack_unit || "Unit";
   }
 
+  function keepsPieceStock(item) {
+    return Boolean(globalThis.POSUnitConvert?.storesBasePieces?.(item));
+  }
+
   function packSaleRate(item, customerType) {
     if (customerType === "b2b") {
       return Number(item?.b2b_rate || item?.retail_rate) || 0;
@@ -646,18 +650,21 @@
 
   function looseSaleRate(item, customerType) {
     const packRate = packSaleRate(item, customerType);
+    if (keepsPieceStock(item)) return packRate;
     const upp = unitsPerPack(item);
     return upp > 1 ? round2(packRate / upp) : packRate;
   }
 
   function looseMrp(item) {
     const mrp = Number(item?.mrp || item?.retail_rate) || 0;
+    if (keepsPieceStock(item)) return mrp;
     const upp = unitsPerPack(item);
     return upp > 1 && mrp > 0 ? round2(mrp / upp) : mrp;
   }
 
   function looseCostRate(item) {
     const cost = Number(item?.purchase_rate) || 0;
+    if (keepsPieceStock(item)) return cost;
     const upp = unitsPerPack(item);
     return upp > 1 && cost > 0 ? round2(cost / upp) : cost;
   }
@@ -665,6 +672,7 @@
   /** Convert loose tablet qty into pack/strip stock units (2 tablets of a 10-strip → 0.2). */
   function packStockQty(item, looseQty) {
     const qty = Number(looseQty) || 0;
+    if (keepsPieceStock(item)) return qty;
     const upp = unitsPerPack(item);
     if (upp <= 1) return qty;
     return round3(qty / upp);

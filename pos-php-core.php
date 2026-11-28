@@ -148,6 +148,33 @@ function pos_shop_tz_offset() {
   return pos_env("POS_TZ_OFFSET", "+05:30");
 }
 
+function pos_shop_today() {
+  $zone = pos_shop_timezone();
+  try {
+    return (new DateTime("now", new DateTimeZone($zone)))->format("Y-m-d");
+  } catch (Exception $e) {
+    return (new DateTime("now", new DateTimeZone("Asia/Kolkata")))->format("Y-m-d");
+  }
+}
+
+function pos_ymd($value) {
+  $s = trim((string) $value);
+  if (preg_match("/^(\d{4}-\d{2}-\d{2})/", $s, $m)) return $m[1];
+  return "";
+}
+
+function pos_normalize_range($from, $to, $today = "") {
+  $day = pos_ymd($today) ?: pos_shop_today();
+  $start = pos_ymd($from) ?: $day;
+  $end = pos_ymd($to) ?: $start;
+  if ($start > $end) {
+    $swap = $start;
+    $start = $end;
+    $end = $swap;
+  }
+  return [$start, $end];
+}
+
 function pos_timezone_options() {
   return [
     ["Asia/Kolkata", "India (IST, UTC+5:30)", "+05:30"],
@@ -2379,6 +2406,9 @@ function pos_ensure_purchase_line_columns() {
   pos_ensure_columns("purchase_lines", [
     "discount" => "DECIMAL(20,8) NOT NULL DEFAULT 0",
     "free_qty" => "DECIMAL(14,3) NOT NULL DEFAULT 0",
+    "purchase_unit" => "VARCHAR(32) NULL",
+    "conversion" => "DECIMAL(14,3) NOT NULL DEFAULT 1",
+    "purchase_qty" => "DECIMAL(14,3) NOT NULL DEFAULT 0",
   ]);
   pos_ensure_columns("purchases", [
     "status" => "VARCHAR(32) NOT NULL DEFAULT 'posted'",
@@ -4404,6 +4434,11 @@ function pos_php_dispatch($path, $method, $rawBody) {
 
     $auth = pos_require_master($path);
 
+    if ((strpos($path, "master/support-tickets") === 0 || strpos($path, "master/support-chat") === 0) && is_file(__DIR__ . "/pos-support-tickets.php")) {
+      require_once __DIR__ . "/pos-support-tickets.php";
+      if (function_exists("pos_support_ticket_dispatch") && pos_support_ticket_dispatch($path, $method, $body, "", $auth)) return;
+    }
+
     if (strpos($path, "master/online-store") === 0) {
       require_once __DIR__ . "/pos-online-store.php";
       if (pos_online_store_master_dispatch($path, $method, $body)) return;
@@ -5610,6 +5645,12 @@ function pos_php_dispatch($path, $method, $rawBody) {
           if (is_file(__DIR__ . "/pos-crm.php")) {
             require_once __DIR__ . "/pos-crm.php";
             if (function_exists("pos_crm_dispatch") && pos_crm_dispatch($path, $method, $body, $bid, $auth)) {
+              return;
+            }
+          }
+          if (is_file(__DIR__ . "/pos-support-tickets.php")) {
+            require_once __DIR__ . "/pos-support-tickets.php";
+            if (function_exists("pos_support_ticket_dispatch") && pos_support_ticket_dispatch($path, $method, $body, $bid, $auth)) {
               return;
             }
           }

@@ -112,6 +112,7 @@
     cancellation_hours: 24,
     booking_policy: "",
     late_checkout_fee: 0,
+    show_online_orders: false,
   };
 
   function round2(n) {

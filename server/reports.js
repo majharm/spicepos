@@ -1,6 +1,7 @@
 import { query } from "./db.js";
 import { bid } from "./context.js";
 import { createdBetween } from "./sql-time.js";
+import { normalizeRange } from "./date-range.js";
 import {
   aggregateGstByRate,
   round2,
@@ -89,9 +90,8 @@ function taxCodeLabel(biz) {
 }
 
 function range(from, to) {
-  const end = to || new Date().toISOString().slice(0, 10);
-  const start = from || "2000-01-01";
-  return { start, end };
+  const span = normalizeRange(from, to);
+  return { start: span.from, end: span.to };
 }
 
 export function payModeBucket(method) {
@@ -364,7 +364,7 @@ export async function buildReports(from, to) {
   const { start, end } = range(from, to);
   const tenant = bid();
   const salesWhere = `business_id = ? AND ${createdBetween()}`;
-  const poWhere = "business_id = ? AND purchase_date BETWEEN ? AND ?";
+  const poWhere = "business_id = ? AND purchase_date >= ? AND purchase_date < DATE_ADD(?, INTERVAL 1 DAY)";
 
   const hsnExpr = "COALESCE(NULLIF(TRIM(i.hsn), ''), NULLIF(TRIM(i.code), ''), '-')";
   const rangeParams = [tenant, start, end];
@@ -477,13 +477,13 @@ export async function buildReports(from, to) {
     query(
       `SELECT expense_number, expense_date, category, account_code, amount, gst, payment_method, notes,
               (amount + gst) AS total
-       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?
+       FROM expenses WHERE business_id = ? AND expense_date >= ? AND expense_date < DATE_ADD(?, INTERVAL 1 DAY)
        ORDER BY expense_date`,
       rangeParams,
     ),
     query(
       `SELECT COALESCE(SUM(amount),0) AS amount, COALESCE(SUM(gst),0) AS gst, COUNT(*) AS bills
-       FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?`,
+       FROM expenses WHERE business_id = ? AND expense_date >= ? AND expense_date < DATE_ADD(?, INTERVAL 1 DAY)`,
       rangeParams,
     ),
     query(
@@ -510,7 +510,7 @@ export async function buildReports(from, to) {
        FROM purchase_lines l
        JOIN purchases p ON p.id = l.purchase_id
        LEFT JOIN suppliers s ON s.id = p.supplier_id
-       WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?`,
+       WHERE p.business_id = ? AND p.purchase_date >= ? AND p.purchase_date < DATE_ADD(?, INTERVAL 1 DAY)`,
       rangeParams,
     ),
     query(
@@ -637,7 +637,7 @@ export async function buildReports(from, to) {
        FROM purchase_lines l
        JOIN purchases p ON p.id = l.purchase_id
        LEFT JOIN items i ON i.id = l.item_id
-       WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
+       WHERE p.business_id = ? AND p.purchase_date >= ? AND p.purchase_date < DATE_ADD(?, INTERVAL 1 DAY)
        ORDER BY p.purchase_date, l.item_name`,
       rangeParams,
     );

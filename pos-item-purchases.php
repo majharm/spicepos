@@ -260,7 +260,7 @@ function pos_pir_line_sql($flags) {
      JOIN purchases p ON p.id = pl.purchase_id AND p.business_id = pl.business_id
      LEFT JOIN items i ON i.id = pl.item_id AND i.business_id = p.business_id
      $branchJoin
-     WHERE p.business_id = ? AND p.purchase_date BETWEEN ? AND ?
+     WHERE p.business_id = ? AND p.purchase_date >= ? AND p.purchase_date < DATE_ADD(?, INTERVAL 1 DAY)
      $statusWhere";
 }
 

@@ -253,8 +253,44 @@
     transform: none;
     opacity: 1;
     pointer-events: auto;
-    z-index: 30;
+    z-index: 60;
     box-shadow: 16px 0 48px rgba(0, 0, 0, 0.35);
+  }
+  body.m-app .nav-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    padding-bottom: 140px;
+  }
+  body.m-app .nav-foot {
+    position: fixed;
+    left: 0;
+    bottom: calc(var(--m-tab-h) + env(safe-area-inset-bottom));
+    width: min(280px, 88vw);
+    z-index: 70;
+    margin: 0;
+    padding: 8px 12px;
+    box-sizing: border-box;
+    display: block;
+    background: #0b1f3a;
+  }
+  body.m-app.counter-mode .nav-foot {
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+  body.m-app .nav-foot .btn-logout[hidden] {
+    display: none !important;
+  }
+  body.m-app .nav-foot [data-logout] {
+    display: flex;
+    width: 100%;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    color: #0f172a;
+    border: 0;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 800;
   }
   body.m-app .app.nav-collapsed .nav {
     transform: translateX(-100%);
@@ -555,6 +591,23 @@
 }
 .m-home-mark svg { width: 20px; height: 20px; display: block; }
 .m-home-kicker { display: none; }
+.m-home-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.m-logout {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
 .m-icon-btn {
   width: 40px;
   height: 40px;
@@ -637,6 +690,7 @@
 .m-tile-ico.is-cust { background: #e8f1ff; color: #2563eb; }
 .m-tile-ico.is-item { background: #fde8dc; color: #c2410c; }
 .m-tile-ico.is-exp { background: #ffe4e6; color: #e11d48; }
+.m-tile-ico.is-buy { background: #e0f2fe; color: #0369a1; }
 .m-tile-ico.is-inc { background: #dcfce7; color: #15803d; }
 
 .m-recent {
@@ -1057,4 +1111,169 @@
   color: var(--m-muted, #64748b);
   font-size: 13px;
   line-height: 1.4;
+}
+
+/* Phone billing and purchase: thumb-sized fields, one card per line. */
+@media (max-width: 980px) {
+  body.m-app .counter-topbar {
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  body.m-app .counter-lane {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 8px;
+  }
+  body.m-app .scan-lane {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 48px;
+  }
+  body.m-app .scan-lane input {
+    font-size: 16px;
+  }
+  body.m-app .counter-lane .select,
+  body.m-app .counter-lane #counter-mobile,
+  body.m-app .counter-lane #counter-add-item,
+  body.m-app .counter-lane .quick-customer-wrap > summary {
+    flex: 1 1 calc(50% - 8px);
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    min-height: 44px;
+    height: 44px;
+    font-size: 15px;
+  }
+  body.m-app .stage.is-counter .qty {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  body.m-app .stage.is-counter .sale-unit {
+    flex: 1 1 100%;
+    max-width: none;
+    min-height: 44px;
+    margin: 6px 0 0;
+    border-radius: 12px;
+    font-size: 16px;
+  }
+  body.m-app #view-purchases {
+    padding-bottom: calc(var(--m-tab-h) + 16px);
+  }
+  body.m-app .po-table-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    padding: 0 0 8px;
+  }
+  body.m-app .po-table {
+    display: block;
+    min-width: 0;
+  }
+  body.m-app .po-table thead {
+    display: none;
+  }
+  body.m-app .po-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+  body.m-app .po-table tr[data-po-row] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 10px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid #e8eef4;
+    border-radius: 16px;
+    background: #fff;
+  }
+  body.m-app .po-table tr[data-po-row] td {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.m-app .po-table tr[data-po-row] td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+  body.m-app .po-table tr[data-po-row] td.po-check,
+  body.m-app .po-table tr[data-po-row] td.po-name {
+    grid-column: 1 / -1;
+  }
+  body.m-app .po-table tr[data-po-row] td.po-check {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  body.m-app .po-table tr[data-po-row] td.po-check::before,
+  body.m-app .po-table tr[data-po-row] td.po-name::before,
+  body.m-app .po-table tr[data-po-row] td.po-hsn {
+    display: none;
+  }
+  body.m-app .po-table tr[data-po-row] td.po-name {
+    font-size: 16px;
+    font-weight: 800;
+  }
+  body.m-app .po-table tr[data-po-row] td.po-unit,
+  body.m-app .po-table tr[data-po-row] td.po-rate,
+  body.m-app .po-table tr[data-po-row] td.po-exp,
+  body.m-app .po-table tr[data-po-row] td.po-amt {
+    grid-column: 1 / -1;
+  }
+  body.m-app .po-rate-cell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+  body.m-app .po-rate-cell input,
+  body.m-app .po-table tr[data-po-row] td.po-qty input,
+  body.m-app .po-table tr[data-po-row] td.po-free input,
+  body.m-app .po-table tr[data-po-row] td.po-gst input,
+  body.m-app .po-table tr[data-po-row] td.po-disc input {
+    width: 100%;
+    max-width: none;
+  }
+  body.m-app .po-conv {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+  body.m-app .po-table tr[data-po-row] input,
+  body.m-app .po-table tr[data-po-row] select,
+  body.m-app .po-pack-cell .po-add-unit {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  body.m-app .po-pack-cell {
+    min-width: 0;
+  }
+  body.m-app .po-conv input {
+    width: 88px;
+    max-width: 88px;
+    flex: 0 0 88px;
+    min-height: 44px;
+  }
+  body.m-app .po-pack-cell .po-add-unit {
+    width: 100%;
+  }
+  body.m-app .item-block input,
+  body.m-app .item-block select,
+  body.m-app #item-unit-convert input,
+  body.m-app #item-unit-convert select {
+    min-height: 44px;
+    font-size: 16px;
+  }
 }

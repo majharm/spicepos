@@ -79,7 +79,7 @@
     return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`;
   }
 
-  function presetRange(preset, today) {
+  function presetRangeLocal(preset, today) {
     const day = dayKey(today) || dayKey(new Date());
     const key = String(preset || "custom").toLowerCase().replace(/[\s-]+/g, "_");
     if (key === "today") return { preset: "today", from: day, to: day };
@@ -98,6 +98,11 @@
       return { preset: "month", from: `${day.slice(0, 8)}01`, to: day };
     }
     return { preset: "custom", from: "", to: "" };
+  }
+
+  function presetRange(preset, today) {
+    if (globalThis.POSDateRange?.presetRange) return globalThis.POSDateRange.presetRange(preset, today);
+    return presetRangeLocal(preset, today);
   }
 
   function offerCode(offer) {
@@ -855,9 +860,11 @@
         <div class="reports-range-chips">
           ${chip("today", "Today")}
           ${chip("yesterday", "Yesterday")}
-          ${chip("week", "This Week")}
+          ${chip("last_7", "Last 7 Days")}
+          ${chip("last_30", "Last 30 Days")}
           ${chip("month", "This Month")}
-          ${chip("custom", "Custom Date")}
+          ${chip("last_month", "Last Month")}
+          ${chip("custom", "Custom")}
         </div>
         <label>From <input id="op-from" type="date" value="${esc(report?.from || "")}" required /></label>
         <label>To <input id="op-to" type="date" value="${esc(report?.to || "")}" required /></label>
